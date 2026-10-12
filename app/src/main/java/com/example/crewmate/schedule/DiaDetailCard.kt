@@ -1,0 +1,368 @@
+package com.example.crewmate.schedule
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import java.util.Locale
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.crewmate.data.remote.xcrew.DiaDetailResponse
+import com.example.crewmate.data.remote.xcrew.DiaDetailSegment
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+
+@Composable
+fun DiaDetailCard(
+    schedule: WorkSchedule,
+    detail: DiaDetailResponse,
+    workDate: LocalDate? = null,
+) {
+    val diaPrefix = if (schedule.isContinuation) "~" else ""
+    val diaText = "$diaPrefix${schedule.diaNo.orEmpty()}"
+
+    val computedStartTime = schedule.startTime?.takeIf { it.isNotBlank() }
+        ?: detail.segments.mapNotNull { it.dptTm?.trim()?.takeIf(String::isNotEmpty) }.firstOrNull()
+    val computedEndTime = schedule.endTime?.takeIf { it.isNotBlank() }
+        ?: detail.segments.mapNotNull { it.arvTm?.trim()?.takeIf(String::isNotEmpty) }.lastOrNull()
+
+    val startTimeStr = computedStartTime.toDisplayTime() ?: ""
+    val endTimeStr = computedEndTime.toDisplayTime() ?: ""
+    val timeInfo = when {
+        startTimeStr.isNotEmpty() && endTimeStr.isNotEmpty() -> "출근 $startTimeStr / 퇴근 $endTimeStr"
+        startTimeStr.isNotEmpty() -> "출근 $startTimeStr"
+        endTimeStr.isNotEmpty() -> "퇴근 $endTimeStr"
+        else -> ""
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${diaText} DIA",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (timeInfo.isNotEmpty()) {
+                    Text(
+                        text = timeInfo,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (detail.segments.isEmpty()) {
+                Text(
+                    text = "상세 구간이 없습니다.",
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val prefs = remember { context.getSharedPreferences("crewmate_prefs", android.content.Context.MODE_PRIVATE) }
+                    val hideSandwichedGamsi = prefs.getBoolean("hide_sandwiched_gamsi", false)
+
+                    val categorizedSegments = categorizeSegments(detail.segments, workDate)
+
+                    var showHiddenDetails by remember { mutableStateOf(false) }
+
+                    categorizedSegments.forEachIndexed { index, item ->
+                        val seg = item.segment
+                        val rawCat = item.name
+                        val cat = when {
+                            rawCat.contains("편승") -> "편승"
+                            rawCat.contains("승무") -> "승무"
+                            else -> rawCat
+                        }
+                        var trn = seg.trnNo?.trim()?.takeIf(String::isNotEmpty) ?: ""
+                        if (cat == "편승" && trn == "도") trn = "도보"
+                        
+                        val isRank3 = item.rank == 3
+                        val isRank1 = item.rank == 1
+                        
+                        // 구분선 (준비, 출고준비 위) - 단 이전 항목이 준비/출고준비가 아닐 때만
+                        val isPrep = rawCat.contains("준비") || rawCat.contains("출고준비")
+                        val prevCat = if (index > 0) categorizedSegments[index-1].name else ""
+                        val prevIsPrep = prevCat.contains("준비") || prevCat.contains("출고준비")
+                        
+                        if (isPrep && !prevIsPrep && index > 0) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                        }
+
+                        val isSandwiched = item.isSandwichedGamsi && hideSandwichedGamsi
+                        val isHiddenItem = isRank3 || isSandwiched
+
+                        if (isHiddenItem) {
+                            AnimatedVisibility(visible = showHiddenDetails) {
+                                SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex)
+                            }
+                        } else {
+                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex)
+                        }
+                    }
+                    
+                    val hasHiddenItems = categorizedSegments.any { it.rank == 3 || (it.isSandwichedGamsi && hideSandwichedGamsi) }
+                    if (hasHiddenItems) {
+                        TextButton(onClick = { showHiddenDetails = !showHiddenDetails }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (showHiddenDetails) "상세 구간 접기" else "상세 구간 더보기", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+
+                    // 사업시간/거리 요약 정보
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                    var showSummary by remember { mutableStateOf(false) }
+                    TextButton(onClick = { showSummary = !showSummary }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (showSummary) "사업시간/거리 요약 접기" else "사업시간/거리 요약 보기", color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
+                    }
+                    
+                    AnimatedVisibility(visible = showSummary) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
+                            // 운용요일, 시행기간 표출
+                            val runDays = detail.extractRunDays()
+                            val effectiveTerm = detail.extractEffectiveTermStr()
+                            
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("운용요일", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(runDays, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("시행기간", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(effectiveTerm, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+
+                            // 표출할 정보: 준비, 운전/승무, 감시, 휴게, 승계, 총사업시간, 총사업거리
+                            val prepTime = detail.summaries.find { it.pjtHrDvNm?.contains("준비") == true }?.pjtTnum ?: 0
+                            val driveTime = detail.summaries.filter { it.pjtHrDvNm?.contains("운전") == true || it.pjtHrDvNm?.contains("승무") == true }.sumOf { it.pjtTnum ?: 0 }
+                            val monitorTime = detail.summaries.find { it.pjtHrDvNm?.contains("감시") == true }?.pjtTnum ?: 0
+                            val restTime = detail.summaries.find { it.pjtHrDvNm?.contains("휴게") == true }?.pjtTnum ?: 0
+                            val transferTime = detail.summaries.find { it.pjtHrDvNm?.contains("승계") == true }?.pjtTnum ?: 0
+                            
+                            val totalTime = detail.summaries.firstOrNull()?.totWrkTnum ?: 0
+                            val totalDist = detail.summaries.firstOrNull()?.totPjtDst ?: 0.0
+
+                            fun Int.toHourMin() = String.format(Locale.US, "%02d:%02d", this / 60, this % 60)
+
+                            SummaryRow("준비", prepTime.toHourMin())
+                            SummaryRow("운전/승무", driveTime.toHourMin())
+                            SummaryRow("감시", monitorTime.toHourMin())
+                            SummaryRow("휴게", restTime.toHourMin())
+                            SummaryRow("승계", transferTime.toHourMin())
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                            SummaryRow("총사업시간", totalTime.toHourMin(), isTotal = true)
+                            SummaryRow("총사업거리", String.format(Locale.US, "%.1f km", totalDist), isTotal = true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String, isTotal: Boolean = false) {
+    val fw = if (isTotal) FontWeight.ExtraBold else FontWeight.Medium
+    val color = if (isTotal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp, horizontal = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 12.sp, fontWeight = fw, color = color)
+        Text(value, fontSize = 12.sp, fontWeight = fw, color = color)
+    }
+}
+
+// --- Data & Logic Helpers ---
+
+data class CategorizedSegment(val segment: DiaDetailSegment, val name: String, val rank: Int, val isCurrent: Boolean = false, val isSandwichedGamsi: Boolean = false)
+
+private fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: LocalDate?): List<CategorizedSegment> {
+    val categorized = segments.map { seg ->
+        val name = seg.pjtHrDvNm?.trim() ?: ""
+        val rank = when {
+            name.contains("운전") || name.contains("승무") || name.contains("출고준비") || name.contains("입환") -> 1
+            name.contains("준비") || name.contains("감시") || name.contains("편승") -> 2
+            name.contains("승계") || name.contains("휴게") || name.contains("정리") || name.contains("입고정리") -> 3
+            else -> 3
+        }
+        val isCurrent = isCurrentSegment(seg, workDate)
+        CategorizedSegment(seg, name, rank, isCurrent, false)
+    }.toMutableList()
+
+    for (i in 0 until categorized.size) {
+        val curr = categorized[i]
+        if (curr.name.contains("감시")) {
+            var prevValid: CategorizedSegment? = null
+            for (j in i - 1 downTo 0) {
+                if (categorized[j].rank != 3) {
+                    prevValid = categorized[j]
+                    break
+                }
+            }
+            var nextValid: CategorizedSegment? = null
+            for (j in i + 1 until categorized.size) {
+                if (categorized[j].rank != 3) {
+                    nextValid = categorized[j]
+                    break
+                }
+            }
+            if ((prevValid?.name?.contains("운전") == true || prevValid?.name?.contains("승무") == true) && 
+                (nextValid?.name?.contains("운전") == true || nextValid?.name?.contains("승무") == true)) {
+                categorized[i] = curr.copy(isSandwichedGamsi = true)
+            }
+        }
+    }
+
+    // 3순위(휴게/정리 등) 항목에 현재시간 강조가 잡혀 접힌 상태에서 강조가 보이지 않는 문제 방지
+    // 3순위(또는 숨겨진 감시)일 경우, 아래에서 가장 가까운 2순위/1순위에 강조 전달
+    val currentIndex = categorized.indexOfFirst { it.isCurrent }
+    if (currentIndex != -1) {
+        val currentItem = categorized[currentIndex]
+        val isHiddenByRank = currentItem.rank == 3 || currentItem.isSandwichedGamsi
+        if (isHiddenByRank) {
+            var targetIndex = -1
+            // 1. 아래로 가장 가까운 2순위/1순위 찾기
+            for (i in currentIndex + 1 until categorized.size) {
+                val candidate = categorized[i]
+                if (candidate.rank != 3 && !candidate.isSandwichedGamsi) {
+                    targetIndex = i
+                    break
+                }
+            }
+            // 2. 아래에 없으면 위로 가장 가까운 2순위/1순위 찾기
+            if (targetIndex == -1) {
+                for (i in currentIndex - 1 downTo 0) {
+                    val candidate = categorized[i]
+                    if (candidate.rank != 3 && !candidate.isSandwichedGamsi) {
+                        targetIndex = i
+                        break
+                    }
+                }
+            }
+            if (targetIndex != -1) {
+                categorized[currentIndex] = currentItem.copy(isCurrent = false)
+                categorized[targetIndex] = categorized[targetIndex].copy(isCurrent = true)
+            }
+        }
+    }
+
+    return categorized
+}
+
+@Composable
+private fun SegmentRow(
+    item: CategorizedSegment,
+    isRank1: Boolean,
+    isRank3: Boolean,
+    cat: String,
+    trn: String,
+    isLast: Boolean
+) {
+    val seg = item.segment
+    val isCurrent = item.isCurrent
+    val rowBg = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else if (isRank1) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
+    val fw = if (isCurrent) FontWeight.ExtraBold else if (isRank1) FontWeight.Bold else if (isRank3) FontWeight.Normal else FontWeight.Medium
+    val textColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else if (isRank3) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(rowBg).padding(vertical = 4.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(cat, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = fw, color = textColor)
+            Text(trn, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = fw, color = textColor)
+            Row(modifier = Modifier.weight(2.6f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                val dptStn = seg.dptStnNm?.trim() ?: ""
+                val dptTm = seg.dptTm.toDisplayTime() ?: ""
+                Text("$dptStn $dptTm", fontSize = 12.sp, fontWeight = fw, color = textColor)
+                val arvStn = seg.arvStnNm?.trim() ?: ""
+                val arvTm = seg.arvTm.toDisplayTime() ?: ""
+                Text("$arvStn $arvTm", fontSize = 12.sp, fontWeight = fw, color = textColor)
+            }
+        }
+        if (!isLast) {
+            HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+        }
+    }
+}
+
+
+
+private fun isCurrentSegment(segment: DiaDetailSegment, workDate: LocalDate?): Boolean {
+    if (workDate == null) return false
+    val now = LocalDateTime.now()
+    if (now.toLocalDate() != workDate) return false
+
+    val startStr = segment.dptTm.toDisplayTime() ?: return false
+    val endStr = segment.arvTm.toDisplayTime() ?: return false
+
+    try {
+        val formatter = DateTimeFormatter.ofPattern("HH:mm")
+        val startTime = LocalTime.parse(startStr, formatter)
+        val endTime = LocalTime.parse(endStr, formatter)
+        val currentTime = now.toLocalTime()
+
+        // 시작 시간 <= 종료 시간 (당일)
+        if (startTime.isBefore(endTime) || startTime == endTime) {
+            return (currentTime == startTime || currentTime.isAfter(startTime)) && currentTime.isBefore(endTime)
+        }
+        // 시작 시간 > 종료 시간 (자정 넘어감)
+        else {
+            return currentTime.isAfter(startTime) || currentTime.isBefore(endTime)
+        }
+    } catch (e: Exception) {
+        return false
+    }
+}
+
+private fun String?.toDisplayTime(): String? {
+    val value = this?.trim() ?: return null
+    if (value.length == 5 && value[2] == ':' && value.take(2).all(Char::isDigit) && value.takeLast(2).all(Char::isDigit)) return value
+    if (value.length != 4 || !value.all(Char::isDigit)) return null
+    return "${value.substring(0, 2)}:${value.substring(2, 4)}"
+}
