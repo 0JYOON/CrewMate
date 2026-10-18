@@ -25,8 +25,8 @@ import kotlin.coroutines.resume
 
 private const val TAG = "XcrewWebViewXHR"
 private const val XCREW_XHR_URL =
-    "https://xcrew.korail.com/extrCrewMg/searchExtrRltmCrewWrkPstt.do"
-private const val XCREW_XHR_PATH = "/extrCrewMg/searchExtrRltmCrewWrkPstt.do"
+    "https://xcrew.korail.com/extrCrewMg/searchExtrIndCrewWrk.do"
+private const val XCREW_XHR_PATH = "/extrCrewMg/searchExtrIndCrewWrk.do"
 private const val XCREW_DIA_DETAIL_URL = "https://xcrew.korail.com/extrCrewMg/searchExtrCrewDia.do"
 private const val XCREW_DIA_DETAIL_PATH = "/extrCrewMg/searchExtrCrewDia.do"
 private const val XCREW_CREW_WORK_STATUS_URL = "https://xcrew.korail.com/extrCrewMg/searchExtrCrewWrkPstt.do"
@@ -45,7 +45,6 @@ class XcrewWebViewSession {
     @Volatile
     var webView: WebView? = null
         private set
-    private val pageReady = CompletableDeferred<Unit>()
     private val recoveryGate = SessionRecoveryGate()
     private val authEpoch = AtomicLong(0L)
     private val authLock = Any()
@@ -79,6 +78,9 @@ class XcrewWebViewSession {
         }
     }
 
+    @Volatile
+    private var pageReady = CompletableDeferred<Unit>()
+
     fun attach(webView: WebView) {
         this.webView = webView
     }
@@ -87,10 +89,41 @@ class XcrewWebViewSession {
         pageReady.complete(Unit)
     }
 
+    fun resetPageReady() {
+        pageReady = CompletableDeferred()
+    }
+
     suspend fun awaitPageReady() {
-        if (pageReady.isCompleted) return
-        if (withTimeoutOrNull(10_000L) { pageReady.await() } == null) {
+        val current = pageReady
+        if (current.isCompleted) return
+        if (withTimeoutOrNull(10_000L) { current.await() } == null) {
             throw MissingXcrewWebViewException()
+        }
+    }
+
+    suspend fun prepareForLogin() {
+        withContext(Dispatchers.Main.immediate) {
+            _userInfo.value = null
+            _authenticationExpired.value = false
+            webView?.let { view ->
+                resetPageReady()
+                view.stopLoading()
+                view.loadUrl("https://xcrew.korail.com/loginView.do")
+            }
+        }
+    }
+
+    suspend fun refreshWebViewPage(targetUrl: String = "https://xcrew.korail.com/extrCrewMg/extrRltmCrewWrkPstt.do") {
+        withContext(Dispatchers.Main.immediate) {
+            val view = webView ?: return@withContext
+            resetPageReady()
+            view.stopLoading()
+            view.loadUrl(targetUrl)
+        }
+        runCatching {
+            withTimeout(12_000L) {
+                awaitPageReady()
+            }
         }
     }
 
@@ -112,22 +145,73 @@ class XcrewWebViewXhrDataSource(
         require(month.matches(Regex("\\d{6}"))) { "Month must be yyyyMM" }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
-        val xhrResponse = request(
-            webView = webView,
-            path = XCREW_XHR_PATH,
-            url = XCREW_XHR_URL,
-            fields = listOf("pjtYm" to month),
-            logLabel = "month=$month",
-        )
-        val responseText = xhrResponse.requireJsonResponse(XCREW_XHR_URL)
 
-        val parsedResponse = withContext(Dispatchers.Default) {
+        val empNm = session.userInfo.value?.first?.trim().orEmpty()
+        val (path, url, fields) = if (empNm.isNotEmpty()) {
+            Triple(
+                XCREW_IND_CREW_WRK_PATH,
+                XCREW_IND_CREW_WRK_URL,
+                listOf("pjtYm" to month, "pjtDt" to "${month}01", "empNm" to empNm)
+            )
+        } else {
+            Triple(
+                XCREW_XHR_PATH,
+                XCREW_XHR_URL,
+                listOf("pjtYm" to month)
+            )
+        }
+
+        val xhrResponse = try {
+            request(
+                webView = webView,
+                path = path,
+                url = url,
+                fields = fields,
+                logLabel = "month=$month empNm=$empNm",
+            )
+        } catch (e: Exception) {
+            if (empNm.isNotEmpty()) {
+                request(
+                    webView = webView,
+                    path = XCREW_XHR_PATH,
+                    url = XCREW_XHR_URL,
+                    fields = listOf("pjtYm" to month),
+                    logLabel = "fallback month=$month",
+                )
+            } else {
+                throw e
+            }
+        }
+
+        var responseText = xhrResponse.requireJsonResponse(url)
+
+        var parsedResponse = withContext(Dispatchers.Default) {
             try {
                 parser.parse(responseText)
             } catch (error: XcrewResponseException) {
-                throw error
+                if (path != XCREW_XHR_PATH) null else throw error
             } catch (error: RuntimeException) {
-                throw UnexpectedXcrewResponseException()
+                if (path != XCREW_XHR_PATH) null else throw UnexpectedXcrewResponseException()
+            }
+        }
+
+        if (parsedResponse == null) {
+            val fallbackXhr = request(
+                webView = webView,
+                path = XCREW_XHR_PATH,
+                url = XCREW_XHR_URL,
+                fields = listOf("pjtYm" to month),
+                logLabel = "fallback month=$month",
+            )
+            responseText = fallbackXhr.requireJsonResponse(XCREW_XHR_URL)
+            parsedResponse = withContext(Dispatchers.Default) {
+                try {
+                    parser.parse(responseText)
+                } catch (error: XcrewResponseException) {
+                    throw error
+                } catch (error: RuntimeException) {
+                    throw UnexpectedXcrewResponseException()
+                }
             }
         }
 

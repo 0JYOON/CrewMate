@@ -31,6 +31,16 @@ class XcrewLoginRepository(
         password: String,
         diagnosticsEnabled: Boolean = true,
     ): Pair<String, String> = withContext(Dispatchers.IO) {
+        // Clear stale session cookies before starting login attempt
+        withContext(Dispatchers.Main.immediate) {
+            suspendCancellableCoroutine<Unit> { cont ->
+                cookieManager.removeAllCookies {
+                    cookieManager.flush()
+                    if (cont.isActive) cont.resume(Unit)
+                }
+            }
+        }
+
         // Each attempt starts without cookies left by an earlier success or failed attempt.
         // Its temporary cookies are committed to WebView only after the confirmed success redirect.
         val attemptCookies = LoginAttemptCookieJar()

@@ -31,6 +31,11 @@ private val LightCrewMateColors = lightColorScheme(
     outline = Color(0xFFCBD5E1),
     outlineVariant = Color(0xFFE2E8F0),
     error = Color(0xFFD32F2F),
+    errorContainer = Color(0xFFFFEBEE),
+    onErrorContainer = Color(0xFFC62828),
+    tertiary = Color(0xFF0F766E), // Dark Teal for specific highlights
+    tertiaryContainer = Color(0xFFCCFBF1),
+    onTertiaryContainer = Color(0xFF115E59)
 )
 
 private val DarkCrewMateColors = darkColorScheme(
@@ -51,6 +56,11 @@ private val DarkCrewMateColors = darkColorScheme(
     outline = Color(0xFF334155),
     outlineVariant = Color(0xFF263345),
     error = Color(0xFFF87171),
+    errorContainer = Color(0xFF451A1A), // Deep dark red for error backgrounds
+    onErrorContainer = Color(0xFFFCA5A5), // Soft red text for error containers
+    tertiary = Color(0xFF2DD4BF),
+    tertiaryContainer = Color(0xFF134E4A),
+    onTertiaryContainer = Color(0xFF99F6E4)
 )
 
 @Composable
@@ -68,6 +78,8 @@ fun CrewMateTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = Typography,
+        shapes = Shapes,
         content = content,
     )
 }

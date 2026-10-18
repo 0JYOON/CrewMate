@@ -12,6 +12,7 @@ import com.example.crewmate.database.MemoRepository
 class ScheduleViewModelFactory(
     private val xcrewSession: XcrewWebViewSession,
     private val context: Context,
+    private val isOfflineModeProvider: () -> Boolean = { false }
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -21,7 +22,7 @@ class ScheduleViewModelFactory(
 
         val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
         val database = CrewMateDatabase.getInstance(context)
-        val repository = WorkScheduleRepositoryImpl(dataSource, WorkScheduleParser(), database.workScheduleDao())
+        val repository = WorkScheduleRepositoryImpl(dataSource, WorkScheduleParser(), database.workScheduleDao(), isOfflineModeProvider)
         val memoRepository = MemoRepository(database.memoDao())
         return ScheduleViewModel(repository, memoRepository) as T
     }

@@ -344,42 +344,47 @@ private fun TrainCrewResultTable(
                 val crewText = result.crewMembers.joinToString("·").ifEmpty { "정보 없음" }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 다이아
                     Column(modifier = Modifier.weight(1.3f)) {
                         Text(
                             text = "${result.pdiaNo} DIA",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable { onDiaClick(result.pdiaNo) }
                         )
                         if (isPreviousDay) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = "전일 출근",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFD32F2F),
-                                modifier = Modifier.background(Color(0xFFFFEBEE), RoundedCornerShape(2.dp)).padding(horizontal = 3.dp, vertical = 1.dp)
-                            )
+                            Spacer(Modifier.height(4.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "전일 출근",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
                     // 열번
-                    Text(trainNo, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(trainNo, modifier = Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                     // 운행 구간
                     Column(modifier = Modifier.weight(2.2f)) {
-                        Text("$dptStn $dptTime", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                        Text("$dptStn $dptTime", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                         Text("→ $arvStn $arvTime", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     // 승무원
-                    Text(crewText, modifier = Modifier.weight(1.2f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(crewText, modifier = Modifier.weight(1.2f), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                 }
                 
                 if (index < results.lastIndex) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
                 }
             }
         }

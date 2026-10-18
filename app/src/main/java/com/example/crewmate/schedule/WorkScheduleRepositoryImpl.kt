@@ -8,9 +8,34 @@ import com.example.crewmate.database.WorkScheduleEntity
 class WorkScheduleRepositoryImpl(
     private val dataSource: XcrewDataSource,
     private val parser: WorkScheduleParser,
-    private val workScheduleDao: WorkScheduleDao
+    private val workScheduleDao: WorkScheduleDao,
+    private val isOfflineModeProvider: () -> Boolean = { false }
 ) : WorkScheduleRepository {
     override suspend fun getSchedules(month: String): WorkScheduleMonth {
+        if (isOfflineModeProvider()) {
+            val cachedEntities = workScheduleDao.getSchedulesForMonth(month)
+            val cachedSchedules = cachedEntities.map { entity ->
+                WorkSchedule(
+                    workDate = entity.date,
+                    diaNo = entity.diaNo,
+                    trainNo = entity.trainNo,
+                    trainNo2 = entity.trainNo2,
+                    startTime = entity.startTime,
+                    endTime = entity.endTime,
+                    nonActiveType = entity.nonActiveType,
+                    isContinuation = entity.isContinuation,
+                    isHoliday = entity.isHoliday,
+                    alcSpecDvCd = entity.alcSpecDvCd,
+                    hldyYn = entity.hldyYn,
+                    isChanged = entity.isChanged
+                )
+            }
+            return WorkScheduleMonth(
+                month = month,
+                schedules = cachedSchedules,
+            )
+        }
+
         return try {
             val response = dataSource.getWorkSchedules(month)
             val domainSchedules = parser.toDomain(response.data)
@@ -28,6 +53,8 @@ class WorkScheduleRepositoryImpl(
                     nonActiveType = schedule.nonActiveType,
                     isContinuation = schedule.isContinuation,
                     isHoliday = schedule.isHoliday,
+                    alcSpecDvCd = schedule.alcSpecDvCd,
+                    hldyYn = schedule.hldyYn,
                     isChanged = schedule.isChanged
                 )
             }
@@ -39,7 +66,9 @@ class WorkScheduleRepositoryImpl(
                 schedules = domainSchedules,
             )
         } catch (e: Exception) {
-            // Fallback to local DB
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            
+            // Fallback to local DB on network/server errors
             val cachedEntities = workScheduleDao.getSchedulesForMonth(month)
             val cachedSchedules = cachedEntities.map { entity ->
                 WorkSchedule(
@@ -52,6 +81,8 @@ class WorkScheduleRepositoryImpl(
                     nonActiveType = entity.nonActiveType,
                     isContinuation = entity.isContinuation,
                     isHoliday = entity.isHoliday,
+                    alcSpecDvCd = entity.alcSpecDvCd,
+                    hldyYn = entity.hldyYn,
                     isChanged = entity.isChanged
                 )
             }

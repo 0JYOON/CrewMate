@@ -206,6 +206,7 @@ class LoginViewModel(
     ) {
         try {
             if (!isAutoLogin && !rememberLogin) credentialStore.clear()
+            xcrewSession.prepareForLogin()
             val userInfo = loginRepository.login(employeeNumber, password, diagnosticsEnabled = !isAutoLogin)
             if (userInfo.first.isNotEmpty() || userInfo.second.isNotEmpty()) {
                 xcrewSession.setUserInfo(userInfo.first, userInfo.second)
@@ -215,6 +216,9 @@ class LoginViewModel(
                 if (rememberLogin) credentialStore.save(employeeNumber, password)
                 else credentialStore.clear()
             }
+
+            // Refresh WebView page with newly flushed cookies before starting preflight XHR
+            xcrewSession.refreshWebViewPage()
 
             val currentMonth = withContext(Dispatchers.Default) {
                 YearMonth.now().format(DateTimeFormatter.ofPattern("yyyyMM"))

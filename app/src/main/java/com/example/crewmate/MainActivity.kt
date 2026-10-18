@@ -1,6 +1,7 @@
 package com.example.crewmate
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,8 +17,16 @@ import com.example.crewmate.ui.theme.AppThemeMode
 import com.example.crewmate.ui.theme.CrewMateTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val initialRouteState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        initialRouteState.value = intent?.getStringExtra("target_route")
+        if (intent?.getBooleanExtra("stopAlarmService", false) == true) {
+            com.example.crewmate.alarm.AlarmLoopService.stop(this)
+        }
+
         setContent {
             val context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
@@ -37,10 +46,23 @@ class MainActivity : ComponentActivity() {
             }
 
             val appThemeMode = AppThemeMode.entries.find { it.name == themeModeName } ?: AppThemeMode.SYSTEM
+            val targetRoute by initialRouteState
 
             CrewMateTheme(appThemeMode = appThemeMode) {
-                AppNavigation()
+                AppNavigation(initialTargetRoute = targetRoute)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("stopAlarmService", false)) {
+            com.example.crewmate.alarm.AlarmLoopService.stop(this)
+        }
+        val route = intent.getStringExtra("target_route")
+        if (!route.isNullOrBlank()) {
+            initialRouteState.value = route
         }
     }
 }

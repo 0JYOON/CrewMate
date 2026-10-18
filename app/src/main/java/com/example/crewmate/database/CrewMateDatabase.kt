@@ -13,9 +13,13 @@ import androidx.room.TypeConverters
         AnnualLeaveEntity::class, 
         CarriedOverLeaveEntity::class,
         WorkScheduleEntity::class,
-        CrewAssignmentEntity::class
+        CrewAssignmentEntity::class,
+        DiaDetailEntity::class,
+        AlarmHistoryEntity::class,
+        DiaCensusEntity::class,
+        AttendanceStatusEntity::class
     ],
-    version = 3,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -24,6 +28,10 @@ abstract class CrewMateDatabase : RoomDatabase() {
     abstract fun leaveDao(): LeaveDao
     abstract fun workScheduleDao(): WorkScheduleDao
     abstract fun crewAssignmentDao(): CrewAssignmentDao
+    abstract fun diaDetailDao(): DiaDetailDao
+    abstract fun alarmHistoryDao(): AlarmHistoryDao
+    abstract fun diaCensusDao(): DiaCensusDao
+    abstract fun attendanceStatusDao(): AttendanceStatusDao
 
     companion object {
         @Volatile

@@ -21,5 +21,7 @@ data class WorkScheduleEntity(
     val nonActiveType: String?,
     val isContinuation: Boolean,
     val isHoliday: Boolean,
+    val alcSpecDvCd: String? = null,
+    val hldyYn: String? = null,
     val isChanged: Boolean
 )

@@ -65,6 +65,14 @@ fun CrewMateLogo(
             size = Size(w, h),
         )
 
+        // 1b. Thin stroke outline following exact logo squircle shape
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.5f),
+            cornerRadius = CornerRadius(w * 0.24f, h * 0.24f),
+            size = Size(w, h),
+            style = Stroke(width = 0.8.dp.toPx())
+        )
+
         // 2. Aerodynamic KTX Upper Roof Crest (상단 흰색 유선형 루프 라인)
         val roofCrest = Path().apply {
             moveTo(w * 0.35f, h * 0.34f)

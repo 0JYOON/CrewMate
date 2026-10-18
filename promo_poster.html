@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewMate (크루메이트) 카카오톡 홍보 카드뉴스</title>
+    <!-- Pretendard WebFont -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <!-- html2canvas CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0B111E;
+            --card-bg: #0F172A;
+            --surface-bg: #1E293B;
+            --surface-variant: #334155;
+            --teal-primary: #0D9488;
+            --teal-light: #14B8A6;
+            --teal-bright: #2DD4BF;
+            --blue-accent: #0284C7;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --border-color: #334155;
+            --error-red: #EF4444;
+            --warning-amber: #F59E0B;
+            --success-green: #10B981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .header-bar {
+            text-align: center;
+            margin-bottom: 30px;
+            max-width: 800px;
+        }
+
+        .header-bar h1 {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--teal-bright);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .header-bar p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .batch-download-btn {
+            margin-top: 16px;
+            background: linear-gradient(135deg, var(--teal-primary), var(--blue-accent));
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 15px;
+            font-weight: 700;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(13, 148, 136, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .batch-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(13, 148, 136, 0.6);
+        }
+
+        .gallery-container {
+            display: flex;
+            flex-direction: column;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .card-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 540px;
+            padding: 0 4px;
+        }
+
+        .card-number-badge {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--teal-bright);
+            background: rgba(13, 148, 136, 0.15);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(45, 212, 191, 0.3);
+        }
+
+        .download-btn {
+            background-color: var(--surface-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .download-btn:hover {
+            background-color: var(--teal-primary);
+            border-color: var(--teal-light);
+            color: white;
+        }
+
+        /* 540px x 675px Card News Canvas Spec */
+        .card-canvas {
+            width: 540px;
+            height: 675px;
+            background-color: var(--card-bg);
+            border-radius: 24px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 28px;
+            justify-content: space-between;
+        }
+
+        /* Common Elements inside Cards */
+        .badge-top {
+            align-self: flex-start;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--teal-bright);
+            background: rgba(13, 148, 136, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(45, 212, 191, 0.4);
+            margin-bottom: 12px;
+            letter-spacing: -0.2px;
+        }
+
+        .title-group h2 {
+            font-size: 23px;
+            font-weight: 800;
+            line-height: 1.35;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .title-group h2 .highlight {
+            color: var(--teal-bright);
+            background: linear-gradient(180deg, transparent 65%, rgba(13, 148, 136, 0.4) 65%);
+        }
+
+        .sub-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        /* Mockup Base Container */
+        .mockup-box {
+            background-color: var(--surface-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mockup-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .logo-svg {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Card 1 Specifics */
+        .card1-hero {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(135deg, rgba(13, 148, 136, 0.15), rgba(2, 132, 199, 0.15));
+            border: 1px solid rgba(45, 212, 191, 0.25);
+            padding: 14px;
+            border-radius: 16px;
+            margin-bottom: 14px;
+        }
+
+        .card1-hero-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--teal-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
+        }
+
+        .segment-chip {
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .segment-drive {
+            background-color: rgba(2, 132, 199, 0.25);
+            border: 1px solid rgba(2, 132, 199, 0.5);
+            color: #38BDF8;
+        }
+
+        .segment-active {
+            background-color: var(--teal-primary);
+            color: white;
+            box-shadow: 0 0 12px rgba(13, 148, 136, 0.6);
+            border: 1px solid var(--teal-light);
+        }
+
+        .segment-deadhead {
+            background-color: rgba(148, 163, 184, 0.15);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        /* Card 2 Specifics */
+        .security-badge-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 10px 14px;
+            border-radius: 12px;
+            color: #34D399;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* Card 3 Specifics */
+        .rule-switch-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--surface-variant);
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .switch-toggle {
+            width: 34px;
+            height: 18px;
+            background: var(--teal-primary);
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .switch-toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Card 4 Specifics */
+        .crew-card {
+            background: var(--surface-variant);
+            border-radius: 12px;
+            padding: 12px;
+            border-left: 4px solid var(--teal-light);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .crew-names {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--teal-bright);
+        }
+
+        /* Card 5 Specifics */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            text-align: center;
+            font-size: 10px;
+            margin-top: 6px;
+        }
+
+        .calendar-cell {
+            padding: 6px 2px;
+            background: var(--surface-variant);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .calendar-cell.active {
+            border: 1px solid var(--teal-bright);
+            background: rgba(13, 148, 136, 0.2);
+        }
+
+        .dia-tag {
+            font-size: 9px;
+            font-weight: 800;
+            background: var(--teal-primary);
+            color: white;
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+
+        .bottom-banner {
+            background: linear-gradient(135deg, var(--teal-primary), var(--blue-accent));
+            border-radius: 14px;
+            padding: 12px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 800;
+            color: white;
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-bar">
+        <h1>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 15.5C4 16.3284 4.67157 17 5.5 17H18.5C19.3284 17 20 16.3284 20 15.5V8.5C20 6.01472 17.9853 4 15.5 4H8.5C6.01472 4 4 6.01472 4 8.5V15.5Z" stroke="#2DD4BF" stroke-width="2"/>
+                <path d="M6 10H18" stroke="#2DD4BF" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="8" cy="13.5" r="1.5" fill="#2DD4BF"/>
+                <circle cx="16" cy="13.5" r="1.5" fill="#2DD4BF"/>
+                <path d="M7 17L5 20M17 17L19 20" stroke="#2DD4BF" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            CrewMate 홍보 카드뉴스 갤러리
+        </h1>
+        <p>철도 승무원 동료분들에게 전달할 5장의 카드뉴스입니다.<br>각 카드 상단의 <strong>[고화질 이미지(PNG)로 저장]</strong> 버튼을 클릭하면 KakaoTalk에 공유하기 적합한 고해상도(1080x1350) 이미지로 바로 저장됩니다.</p>
+        <button class="batch-download-btn" onclick="downloadAllCards()">📂 5장 전체 고화질 이미지 한 번에 다운로드</button>
+    </div>
+
+    <div class="gallery-container">
+
+        <!-- CARD 1 -->
+        <div class="card-wrapper">
+            <div class="card-actions">
+                <span class="card-number-badge">1 / 5 장 (표지 포스터)</span>
+                <button class="download-btn" onclick="downloadCard('card-1', 'card_1.png')">📷 고화질 이미지(PNG)로 저장</button>
+            </div>
+            <div class="card-canvas" id="card-1">
+                <div>
+                    <div class="badge-top">✨ 철도 승무원을 위한 스마트 워크 파트너</div>
+                    <div class="title-group">
+                        <h2>번거로운 Xcrew 접속은 그만,<br>이제 <span class="highlight">CrewMate</span>로 한 번에!</h2>
+                        <p class="sub-text">원터치 자동 로그인부터 지능형 정밀 승무 알람,<br>1초 동료 검색까지 내 손안에서 완벽하게!</p>
+                    </div>
+
+                    <div class="card1-hero">
+                        <div class="card1-hero-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <path d="M4 15.5C4 16.3284 4.67157 17 5.5 17H18.5C19.3284 17 20 16.3284 20 15.5V8.5C20 6.01472 17.9853 4 15.5 4H8.5C6.01472 4 4 6.01472 4 8.5V15.5Z" stroke="white" stroke-width="2"/>
+                                <path d="M6 10H18" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                                <circle cx="8" cy="13.5" r="1.5" fill="white"/>
+                                <circle cx="16" cy="13.5" r="1.5" fill="white"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-size: 15px; font-weight: 800; color: white;">CrewMate 스마트 앱</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">철도 승무원 실무 맞춤형 올인원 플랫폼</div>
+                        </div>
+                    </div>
+
+                    <div class="mockup-box">
+                        <div class="mockup-header-bar">
+                            <span>📅 오늘의 근무 (16014 DIA)</span>
+                            <span style="color: var(--teal-bright); font-weight: 800;">출무 완료</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--teal-bright); font-weight: 700; background: rgba(13, 148, 136, 0.15); padding: 6px 10px; border-radius: 8px;">
+                            ⏰ 오늘의 예정 정밀 알람 3건
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                            <div class="segment-chip segment-drive">
+                                <span>🚆 06:43 안산 출발 (K4501 운전)</span>
+                                <span>06:43 ~ 08:25</span>
+                            </div>
+                            <div class="segment-chip segment-active">
+                                <span>⚡ 08:30 청량리 (실시간 현재 운행 구간)</span>
+                                <span>08:30 ~ 09:40</span>
+                            </div>
+                            <div class="segment-chip segment-deadhead">
+                                <span>🚶 10:15 광운대 (편승/도보)</span>
+                                <span>10:15 ~ 11:00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); pt: 12px; font-size: 11px; color: var(--text-muted);">
+                    <span>#철도승무원 #근무표 #다이아조회 #정밀알람</span>
+                    <span style="color: var(--teal-bright); font-weight: 700;">CrewMate App</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 2 -->
+        <div class="card-wrapper">
+            <div class="card-actions">
+                <span class="card-number-badge">2 / 5 장 (핵심 기능 1)</span>
+                <button class="download-btn" onclick="downloadCard('card-2', 'card_2.png')">📷 고화질 이미지(PNG)로 저장</button>
+            </div>
+            <div class="card-canvas" id="card-2">
+                <div>
+                    <div class="badge-top">🔒 원터치 자동 로그인 & 오프라인 지원</div>
+                    <div class="title-group">
+                        <h2>로그인은 딱 한 번만!<br><span class="highlight">오프라인</span>에서도 끊김 없이</h2>
+                        <p class="sub-text">매번 비밀번호 입력하던 귀찮음은 이제 끝.<br>지하 터널이나 네트워크 단절 구간에서도 안심 확인!</p>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                        <div class="security-badge-box">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0110 0v4"/>
+                            </svg>
+                            <span>AES-256 안드로이드 키스토어 하드웨어 보안 암호화</span>
+                        </div>
+
+                        <div class="mockup-box">
+                            <div class="mockup-header-bar">
+                                <span>🔑 SecureCredentialStore</span>
+                                <span style="color: var(--success-green); font-weight: 800;">● 자동 세션 복구</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-primary); line-height: 1.6;">
+                                • 사번과 비밀번호는 스마트폰 내 **보안 금고**에만 보관<br>
+                                • 앱을 켜면 귀찮은 입력 없이 즉시 **오늘의 근무** 진입<br>
+                                • 세션이 만료되어도 백그라운드에서 **자동 재로그인**
+                            </div>
+                        </div>
+
+                        <div class="mockup-box" style="border-color: rgba(2, 132, 199, 0.4); background: rgba(15, 23, 42, 0.8);">
+                            <div class="mockup-header-bar">
+                                <span style="color: #38BDF8;">✈️ 오프라인 모드 스냅샷 기술</span>
+                                <span style="font-size: 11px; background: rgba(2, 132, 199, 0.2); padding: 2px 6px; border-radius: 4px; color: #38BDF8;">비행기모드 OK</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+                                오프라인 모드 전환 시 내장 DB에 스냅샷 저장!<br>
+                                **지하 구간, 터널, 음영 지역**에서도 내 근무표와 다이아, 출무 시각을 언제든 끊김 없이 확인합니다.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; font-size: 12px; font-weight: 700; color: var(--text-secondary);">
+                    💡 보안성과 편의성을 동시에 잡은 차세대 승무 포털
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 3 -->
+        <div class="card-wrapper">
+            <div class="card-actions">
+                <span class="card-number-badge">3 / 5 장 (핵심 기능 2)</span>
+                <button class="download-btn" onclick="downloadCard('card-3', 'card_3.png')">📷 고화질 이미지(PNG)로 저장</button>
+            </div>
+            <div class="card-canvas" id="card-3">
+                <div>
+                    <div class="badge-top">⏰ 승무원 맞춤 정밀 알람 엔진</div>
+                    <div class="title-group">
+                        <h2>내 스케줄을 알아서 이해하는<br><span class="highlight">똑똑한 승무 정밀 알람</span></h2>
+                        <p class="sub-text">시각 맞춰 일일이 알람 맞추던 시대는 지났습니다.<br>다이아 일정에 따라 정밀 알람이 자동 예약됩니다.</p>
+                    </div>
+
+                    <div class="mockup-box">
+                        <div class="mockup-header-bar">
+                            <span>⚙️ 정밀 알람 세부 규칙 자동 적용</span>
+                            <span style="color: var(--teal-bright);">ON</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <div class="rule-switch-row">
+                                <span>🚩 출근 60분 전 / 출무 5분 전 알람</span>
+                                <div class="switch-toggle"></div>
+                            </div>
+                            <div class="rule-switch-row">
+                                <span>🚆 운전 / 출고준비 / 입환 10분 전 알람</span>
+                                <div class="switch-toggle"></div>
+                            </div>
+                            <div class="rule-switch-row">
+                                <span>🚶 편승 10분 전 알람 (연속 근무 시 자동 예외)</span>
+                                <div class="switch-toggle"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 10px;" class="mockup-box">
+                        <div style="font-size: 12px; font-weight: 800; color: var(--teal-bright); display: flex; justify-content: space-between;">
+                            <span>🔔 예정 알람 팝업 및 지능형 스킵</span>
+                            <span style="color: var(--success-green);">✅ 출무 완료 자동 스킵</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; background: var(--surface-variant); padding: 8px; border-radius: 8px;">
+                            • ⏰ **10.15 (수) 07:55** | 출무 5분 전 알람<br>
+                            • **실제 출무 완료 시** 불필요한 출무 알람 알아서 건너뜀!<br>
+                            • 안드로이드 정식 **시계 알람 규격(`setAlarmClock`)**으로 초절전 모드·재부팅 후에도 오차 없이 우렁차게 발동
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; font-size: 12px; font-weight: 700; color: var(--text-secondary);">
+                    📱 잠금화면 전체화면 알람 & 상단 알림바 [알람 해제] 원터치 지원
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 4 -->
+        <div class="card-wrapper">
+            <div class="card-actions">
+                <span class="card-number-badge">4 / 5 장 (핵심 기능 3)</span>
+                <button class="download-btn" onclick="downloadCard('card-4', 'card_4.png')">📷 고화질 이미지(PNG)로 저장</button>
+            </div>
+            <div class="card-canvas" id="card-4">
+                <div>
+                    <div class="badge-top">🔍 초고속 승무원 & 다이아 검색</div>
+                    <div class="title-group">
+                        <h2>"오늘 이 열차 누구랑 타지?"<br><highlight>1초 만에 끝나는 승무원 조회</highlight></h2>
+                        <p class="sub-text">대기 시간 없이 즉시 확인하는 동료 탐색.<br>사업소 전체 근무 현황부터 비실동 내역까지 한눈에!</p>
+                    </div>
+
+                    <div class="mockup-box">
+                        <div style="display: flex; gap: 8px;">
+                            <div style="flex: 1; background: var(--surface-variant); padding: 8px 12px; border-radius: 8px; font-size: 12px; color: var(--text-secondary);">
+                                운행일자: 2026.10.15
+                            </div>
+                            <div style="flex: 1; background: var(--surface-variant); padding: 8px 12px; border-radius: 8px; font-size: 12px; color: white; border: 1px solid var(--teal-bright); font-weight: 700;">
+                                열차번호: K4501
+                            </div>
+                        </div>
+
+                        <div class="crew-card">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 11px; font-weight: 800; background: rgba(13, 148, 136, 0.3); color: var(--teal-bright); padding: 2px 6px; border-radius: 4px;">16014 DIA (안산승무)</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">출근 06:03 / 퇴근 17:07</span>
+                            </div>
+                            <div class="crew-names">
+                                <span>👥 승무원: 윤영준, 홍길동</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">
+                                🚆 K4501 (운전) | 06:43 안산 출발 ➔ 08:25 청량리 도착
+                            </div>
+                        </div>
+
+                        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; padding-top: 4px;">
+                            ⚡ 사전 인덱싱 기술로 로딩 대기 시간 제로!<br>
+                            소속 승무원 일자별 현황 및 비실동(교육·출장·연차) 내역 즉시 조회
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; font-size: 12px; font-weight: 700; color: var(--teal-bright);">
+                    🎯 정확한 열차번호만 치면 동료 승무원이 1초 만에 짠!
+                </div>
+            </div>
+        </div>
+
+        <!-- CARD 5 -->
+        <div class="card-wrapper">
+            <div class="card-actions">
+                <span class="card-number-badge">5 / 5 장 (디테일 편의 기능)</span>
+                <button class="download-btn" onclick="downloadCard('card-5', 'card_5.png')">📷 고화질 이미지(PNG)로 저장</button>
+            </div>
+            <div class="card-canvas" id="card-5">
+                <div>
+                    <div class="badge-top">🎁 현엽 승무원 맞춤 디테일</div>
+                    <div class="title-group">
+                        <h2>현업 승무원이 진짜 원하던<br><highlight>디테일 편의 기능 모음</highlight></h2>
+                        <p class="sub-text">실무에서 꼭 필요한 자정 경과 보정과 눈부심 방지 다크모드까지!</p>
+                    </div>
+
+                    <div class="mockup-box">
+                        <div class="mockup-header-bar">
+                            <span>📅 월간 달력 & 자정 경과 야간근무 보정</span>
+                        </div>
+                        <div class="calendar-grid">
+                            <div class="calendar-cell"><span>12</span><span style="font-size:8px; color:var(--text-muted);">비실동</span></div>
+                            <div class="calendar-cell active"><span>13</span><span class="dia-tag">16012</span></div>
+                            <div class="calendar-cell active"><span>14</span><span class="dia-tag">16014</span></div>
+                            <div class="calendar-cell active"><span>15</span><span class="dia-tag">~16014</span></div>
+                            <div class="calendar-cell"><span>16</span><span style="font-size:8px; color:#F43F5E;">연차</span></div>
+                            <div class="calendar-cell"><span>17</span><span style="font-size:8px; color:var(--text-muted);">휴무</span></div>
+                            <div class="calendar-cell"><span>18</span><span class="dia-tag">16001</span></div>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                            • 자정을 넘기는 **2일 차 야간/연속 근무(`~16014`)**도 실시간 타임라인으로 정확히 연동 표시
+                        </div>
+                    </div>
+
+                    <div class="mockup-box" style="margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700;">
+                            <span>🌙 눈부신 새벽 근무를 위한 다크모드</span>
+                            <span style="color: var(--teal-bright);">적용됨</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; margin-top: 6px;">
+                            <span>👁️ 주요 항목 사이 '감시' 숨기기 옵션</span>
+                            <span style="color: var(--teal-bright);">ON</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bottom-banner">
+                    🚀 지금 바로 APK 설치 파일을 내려받아 사용해 보세요!<br>
+                    <span style="font-size: 10px; font-weight: 500; opacity: 0.9;">(동료 여러분의 자유로운 피드백과 소중한 의견을 환영합니다)</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function downloadCard(cardId, fileName) {
+            const cardElement = document.getElementById(cardId);
+            if (!cardElement) return;
+
+            // html2canvas high quality rendering options
+            html2canvas(cardElement, {
+                scale: 2, // 2x scale: 540x675 -> 1080x1350 high resolution
+                useCORS: true,
+                backgroundColor: '#0F172A',
+                logging: false
+            }).then(canvas => {
+                const image = canvas.toDataURL("image/png");
+                const link = document.createElement("a");
+                link.href = image;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }).catch(err => {
+                console.error("Card capture failed:", err);
+                alert("이미지 저장 중 오류가 발생했습니다. 브라우저 콘솔을 확인해 주세요.");
+            });
+        }
+
+        function downloadAllCards() {
+            const cards = [
+                { id: 'card-1', name: 'card_1.png' },
+                { id: 'card-2', name: 'card_2.png' },
+                { id: 'card-3', name: 'card_3.png' },
+                { id: 'card-4', name: 'card_4.png' },
+                { id: 'card-5', name: 'card_5.png' }
+            ];
+
+            let delay = 0;
+            cards.forEach(card => {
+                setTimeout(() => {
+                    downloadCard(card.id, card.name);
+                }, delay);
+                delay += 800; // 800ms delay between downloads to prevent browser blocking multiple downloads
+            });
+        }
+    </script>
+</body>
+</html>

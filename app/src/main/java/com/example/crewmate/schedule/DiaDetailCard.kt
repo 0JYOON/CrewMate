@@ -2,6 +2,9 @@ package com.example.crewmate.schedule
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -65,9 +71,9 @@ fun DiaDetailCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -104,9 +110,9 @@ fun DiaDetailCard(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val prefs = remember { context.getSharedPreferences("crewmate_prefs", android.content.Context.MODE_PRIVATE) }
-                    val hideSandwichedGamsi = prefs.getBoolean("hide_sandwiched_gamsi", false)
+                    val hideSandwichedGamsi = prefs.getBoolean("hide_sandwiched_gamsi", true)
 
-                    val categorizedSegments = categorizeSegments(detail.segments, workDate)
+                    val categorizedSegments = remember(detail.segments, workDate) { categorizeSegments(detail.segments, workDate) }
 
                     var showHiddenDetails by remember { mutableStateOf(false) }
 
@@ -222,7 +228,10 @@ private fun SummaryRow(label: String, value: String, isTotal: Boolean = false) {
 data class CategorizedSegment(val segment: DiaDetailSegment, val name: String, val rank: Int, val isCurrent: Boolean = false, val isSandwichedGamsi: Boolean = false)
 
 private fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: LocalDate?): List<CategorizedSegment> {
-    val categorized = segments.map { seg ->
+    val segmentDateTimes = computeSegmentDateTimes(segments, workDate)
+    val now = LocalDateTime.now()
+
+    val categorized = segments.mapIndexed { idx, seg ->
         val name = seg.pjtHrDvNm?.trim() ?: ""
         val rank = when {
             name.contains("운전") || name.contains("승무") || name.contains("출고준비") || name.contains("입환") -> 1
@@ -230,7 +239,11 @@ private fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: Local
             name.contains("승계") || name.contains("휴게") || name.contains("정리") || name.contains("입고정리") -> 3
             else -> 3
         }
-        val isCurrent = isCurrentSegment(seg, workDate)
+        val dt = segmentDateTimes.getOrNull(idx)
+        val isCurrent = if (dt?.startDateTime != null && dt.endDateTime != null) {
+            (now == dt.startDateTime || now.isAfter(dt.startDateTime)) && now.isBefore(dt.endDateTime)
+        } else isCurrentSegment(seg, workDate)
+
         CategorizedSegment(seg, name, rank, isCurrent, false)
     }.toMutableList()
 
@@ -251,8 +264,7 @@ private fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: Local
                     break
                 }
             }
-            if ((prevValid?.name?.contains("운전") == true || prevValid?.name?.contains("승무") == true) && 
-                (nextValid?.name?.contains("운전") == true || nextValid?.name?.contains("승무") == true)) {
+            if (prevValid?.rank == 1 && nextValid?.rank == 1) {
                 categorized[i] = curr.copy(isSandwichedGamsi = true)
             }
         }
@@ -306,37 +318,226 @@ private fun SegmentRow(
     val seg = item.segment
     val isCurrent = item.isCurrent
     val rowBg = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else if (isRank1) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
-    val fw = if (isCurrent) FontWeight.ExtraBold else if (isRank1) FontWeight.Bold else if (isRank3) FontWeight.Normal else FontWeight.Medium
+    
+    val timelineColor = if (isRank1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val textColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else if (isRank3) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(rowBg).padding(vertical = 4.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+    val dptStn = seg.dptStnNm?.trim()?.takeIf { it.isNotEmpty() } ?: "-"
+    val arvStn = seg.arvStnNm?.trim()?.takeIf { it.isNotEmpty() } ?: "-"
+    val dptTime = seg.dptTm.toDisplayTime() ?: "-"
+    val arvTime = seg.arvTm.toDisplayTime() ?: "-"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(rowBg, RoundedCornerShape(8.dp))
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. 수직 노선도 (제일 왼쪽)
+        Box(
+            modifier = Modifier
+                .width(20.dp)
+                .height(36.dp)
+                .drawBehind {
+                    val strokeW = 3.dp.toPx()
+                    val circleR = 4.dp.toPx()
+                    val centerX = size.width / 2
+                    val centerY = size.height / 2
+                    
+                    // Top line (except first)
+                    drawLine(
+                        color = timelineColor,
+                        start = Offset(centerX, 0f),
+                        end = Offset(centerX, centerY - circleR),
+                        strokeWidth = strokeW,
+                        pathEffect = if (isRank3 || cat.contains("휴게")) PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f) else null
+                    )
+                    
+                    // Bottom line (except last)
+                    if (!isLast) {
+                        drawLine(
+                            color = timelineColor,
+                            start = Offset(centerX, centerY + circleR),
+                            end = Offset(centerX, size.height),
+                            strokeWidth = strokeW,
+                            pathEffect = if (isRank3 || cat.contains("휴게")) PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f) else null
+                        )
+                    }
+
+                    // Circle marker
+                    drawCircle(
+                        color = if (isCurrent) Color(0xFF60A5FA) else timelineColor,
+                        radius = if (isCurrent) 6.dp.toPx() else circleR,
+                        center = Offset(centerX, centerY)
+                    )
+                }
+        )
+
+        Spacer(Modifier.width(4.dp))
+
+        // 2. 열차번호 / 항목 뱃지 (Grid Column 1)
+        Box(
+            modifier = Modifier.weight(1.4f),
+            contentAlignment = Alignment.CenterStart
         ) {
-            Text(cat, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = fw, color = textColor)
-            Text(trn, modifier = Modifier.weight(1f), fontSize = 12.sp, fontWeight = fw, color = textColor)
-            Row(modifier = Modifier.weight(2.6f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                val dptStn = seg.dptStnNm?.trim() ?: ""
-                val dptTm = seg.dptTm.toDisplayTime() ?: ""
-                Text("$dptStn $dptTm", fontSize = 12.sp, fontWeight = fw, color = textColor)
-                val arvStn = seg.arvStnNm?.trim() ?: ""
-                val arvTm = seg.arvTm.toDisplayTime() ?: ""
-                Text("$arvStn $arvTm", fontSize = 12.sp, fontWeight = fw, color = textColor)
+            if (trn.isNotEmpty()) {
+                Surface(
+                    color = if (isRank1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "$trn $cat",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRank1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        maxLines = 1
+                    )
+                }
+            } else if (cat.isNotEmpty()) {
+                Text(
+                    text = cat,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor.copy(alpha = 0.8f),
+                    maxLines = 1
+                )
             }
         }
-        if (!isLast) {
-            HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+
+        // 3. 출발역 (Grid Column 2)
+        Box(
+            modifier = Modifier.weight(1.0f),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = dptStn,
+                fontSize = if (isCurrent || isRank1) 13.sp else 12.sp,
+                fontWeight = if (isCurrent || isRank1) FontWeight.Bold else FontWeight.Medium,
+                color = textColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
+
+        // 4. 출발시각 (Grid Column 3)
+        Box(
+            modifier = Modifier.weight(1.0f),
+            contentAlignment = Alignment.Center
+        ) {
+            if (dptTime != "-") {
+                Text(
+                    text = dptTime,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+
+        // 5. 화살표 (Grid Column 4 - Balanced center placement)
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (arvStn != "-" || arvTime != "-") {
+                Text(
+                    text = "→",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // 6. 도착역 (Grid Column 5)
+        Box(
+            modifier = Modifier.weight(1.0f),
+            contentAlignment = Alignment.Center
+        ) {
+            if (arvStn != "-" || arvTime != "-") {
+                Text(
+                    text = arvStn,
+                    fontSize = if (isCurrent || isRank1) 13.sp else 12.sp,
+                    fontWeight = if (isCurrent || isRank1) FontWeight.Bold else FontWeight.Medium,
+                    color = textColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+
+        // 7. 도착시각 (Grid Column 6)
+        Box(
+            modifier = Modifier.weight(1.0f),
+            contentAlignment = Alignment.Center
+        ) {
+            if (arvStn != "-" || arvTime != "-") {
+                if (arvTime != "-") {
+                    Text(
+                        text = arvTime,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 }
 
 
 
+private data class SegmentDateTime(
+    val startDateTime: LocalDateTime?,
+    val endDateTime: LocalDateTime?
+)
+
+private fun computeSegmentDateTimes(segments: List<DiaDetailSegment>, workDate: LocalDate?): List<SegmentDateTime> {
+    if (workDate == null) return segments.map { SegmentDateTime(null, null) }
+
+    var currentDate = workDate
+    var lastHour = -1
+    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+
+    return segments.map { seg ->
+        val startStr = seg.dptTm.toDisplayTime()
+        val endStr = seg.arvTm.toDisplayTime()
+
+        val startTime = runCatching { startStr?.let { LocalTime.parse(it, formatter) } }.getOrNull()
+        val endTime = runCatching { endStr?.let { LocalTime.parse(it, formatter) } }.getOrNull()
+
+        var startDateTime: LocalDateTime? = null
+        var endDateTime: LocalDateTime? = null
+
+        if (startTime != null) {
+            if (lastHour in 18..23 && startTime.hour in 0..12) {
+                currentDate = currentDate?.plusDays(1)
+            }
+            startDateTime = currentDate?.atTime(startTime)
+            lastHour = startTime.hour
+        }
+
+        if (endTime != null) {
+            if (lastHour in 18..23 && endTime.hour in 0..12) {
+                currentDate = currentDate?.plusDays(1)
+            }
+            endDateTime = currentDate?.atTime(endTime)
+            lastHour = endTime.hour
+        }
+
+        SegmentDateTime(startDateTime, endDateTime)
+    }
+}
+
 private fun isCurrentSegment(segment: DiaDetailSegment, workDate: LocalDate?): Boolean {
     if (workDate == null) return false
     val now = LocalDateTime.now()
-    if (now.toLocalDate() != workDate) return false
 
     val startStr = segment.dptTm.toDisplayTime() ?: return false
     val endStr = segment.arvTm.toDisplayTime() ?: return false

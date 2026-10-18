@@ -58,21 +58,27 @@ class XcrewWorkScheduleParser {
         )
     }
 
-    private fun JSONObject.toScheduleItem() = XcrewWorkScheduleItem(
-        pjtDt = optionalScalar("pjtDt"),
-        pdiaNo = optionalScalar("pdiaNo") ?: optionalScalar("crwPlnDvCd") ?: optionalScalar("alcSpecDvCd"), // fallback
-        repTrn1No = optionalScalar("repTrn1No"),
-        gwkTm = optionalScalar("gwkTm"),
-        loiwTm = optionalScalar("loiwTm"),
-        alcSpecDvCd = optionalScalar("alcSpecDvCd"),
-        nonAtulClsfCdNm = optionalScalar("nonAtulClsfCdNm") ?: optionalScalar("nonOpNm"),
-        totWrkTnum = optionalScalar("totWrkTnum"),
-        repTrn2No = optionalScalar("repTrn2No"),
-        hldyYn = optionalScalar("hldyYn"),
-        wkdyDvCd = optionalScalar("wkdyDvCd"),
-        hldyAt = optionalScalar("hldyAt"),
-        pjtChgPrsFlg = optionalScalar("pjtChgPrsFlg")
-    )
+    private fun JSONObject.toScheduleItem(): XcrewWorkScheduleItem {
+        val rawPdia = optionalScalar("pdiaNo") ?: optionalScalar("crwPlnDvCd")
+        val alcCode = optionalScalar("alcSpecDvCd")
+        val finalPdia = if (!rawPdia.isNullOrBlank()) rawPdia else if (alcCode == "02") "S" else null
+
+        return XcrewWorkScheduleItem(
+            pjtDt = optionalScalar("pjtDt"),
+            pdiaNo = finalPdia,
+            repTrn1No = optionalScalar("repTrn1No"),
+            gwkTm = optionalScalar("gwkTm"),
+            loiwTm = optionalScalar("loiwTm"),
+            alcSpecDvCd = alcCode,
+            nonAtulClsfCdNm = optionalScalar("nonAtulClsfCdNm") ?: optionalScalar("nonOpNm"),
+            totWrkTnum = optionalScalar("totWrkTnum"),
+            repTrn2No = optionalScalar("repTrn2No"),
+            hldyYn = optionalScalar("hldyYn"),
+            wkdyDvCd = optionalScalar("wkdyDvCd"),
+            hldyAt = optionalScalar("hldyAt"),
+            pjtChgPrsFlg = optionalScalar("pjtChgPrsFlg")
+        )
+    }
 
     /** Missing, null, and non-scalar optional values do not invalidate the full response. */
     private fun JSONObject.optionalScalar(name: String): String? {

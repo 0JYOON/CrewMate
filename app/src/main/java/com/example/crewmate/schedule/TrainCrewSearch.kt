@@ -108,6 +108,7 @@ object TrainCrewSearchMatcher {
 class TrainCrewSearchRepository(
     private val crewWorkStatusDataSource: CrewWorkStatusDataSource,
     private val diaDetailDataSource: DiaDetailDataSource,
+    private val isOfflineModeProvider: () -> Boolean = { false }
 ) {
     private val diaCache = ConcurrentHashMap<String, DiaDetailResponse>()
 
@@ -122,9 +123,13 @@ class TrainCrewSearchRepository(
             .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
 
         val (assignmentsToday, assignmentsPrev) = coroutineScope {
-            val todayDeferred = async { runCatching { crewWorkStatusDataSource.fetchCrewWorkStatus(pjtDt) }.getOrDefault(emptyList()) }
-            val prevDeferred = async { runCatching { crewWorkStatusDataSource.fetchCrewWorkStatus(prevDt) }.getOrDefault(emptyList()) }
-            Pair(todayDeferred.await(), prevDeferred.await())
+            if (isOfflineModeProvider()) {
+                Pair(emptyList(), emptyList())
+            } else {
+                val todayDeferred = async { runCatching { crewWorkStatusDataSource.fetchCrewWorkStatus(pjtDt) }.getOrDefault(emptyList()) }
+                val prevDeferred = async { runCatching { crewWorkStatusDataSource.fetchCrewWorkStatus(prevDt) }.getOrDefault(emptyList()) }
+                Pair(todayDeferred.await(), prevDeferred.await())
+            }
         }
 
         val assignmentsByDiaToday = assignmentsToday.groupBy(CrewAssignment::pdiaNo)
@@ -162,19 +167,23 @@ class TrainCrewSearchRepository(
         // 동시 호출 수(Semaphore) 대폭 제한: 3
         val semaphore = Semaphore(3)
         val fetchResults = coroutineScope {
-            val todayDeferreds = diaNumbersToday.map { pdiaNo ->
-                async { 
-                    kotlinx.coroutines.delay(20) // 미세 딜레이로 서버 핑 분산
-                    fetchDiaDetailWithCache(semaphore, pjtDt, pdiaNo) 
+            if (isOfflineModeProvider()) {
+                emptyList()
+            } else {
+                val todayDeferreds = diaNumbersToday.map { pdiaNo ->
+                    async { 
+                        kotlinx.coroutines.delay(20) // 미세 딜레이로 서버 핑 분산
+                        fetchDiaDetailWithCache(semaphore, pjtDt, pdiaNo) 
+                    }
                 }
-            }
-            val prevDeferreds = diaNumbersPrev.map { pdiaNo ->
-                async { 
-                    kotlinx.coroutines.delay(20)
-                    fetchDiaDetailWithCache(semaphore, prevDt, pdiaNo) 
+                val prevDeferreds = diaNumbersPrev.map { pdiaNo ->
+                    async { 
+                        kotlinx.coroutines.delay(20)
+                        fetchDiaDetailWithCache(semaphore, prevDt, pdiaNo) 
+                    }
                 }
+                todayDeferreds.awaitAll() + prevDeferreds.awaitAll()
             }
-            todayDeferreds.awaitAll() + prevDeferreds.awaitAll()
         }
         val detailsToday = fetchResults.filter { it.pjtDt == pjtDt }.mapNotNull { result -> result.detail?.let { result.pdiaNo to it } }
         val detailsPrev = fetchResults.filter { it.pjtDt == prevDt }.mapNotNull { result -> result.detail?.let { result.pdiaNo to it } }

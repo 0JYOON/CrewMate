@@ -7,9 +7,24 @@ import com.example.crewmate.database.CrewAssignmentEntity
 
 class CrewWorkStatusRepository(
     private val dataSource: CrewWorkStatusDataSource,
-    private val crewAssignmentDao: CrewAssignmentDao
+    private val crewAssignmentDao: CrewAssignmentDao,
+    private val isOfflineModeProvider: () -> Boolean = { false }
 ) {
     suspend fun getCrewWorkStatus(date: String): List<CrewAssignment> {
+        if (isOfflineModeProvider()) {
+            val cachedEntities = crewAssignmentDao.getAssignmentsForDate(date)
+            return cachedEntities.map { entity ->
+                CrewAssignment(
+                    pdiaNo = entity.pdiaNo,
+                    repTrn1No = entity.repTrn1No,
+                    repTrn2No = entity.repTrn2No,
+                    gwkTm = entity.gwkTm,
+                    loiwTm = entity.loiwTm,
+                    crewMembers = entity.crewMembers
+                )
+            }
+        }
+
         return try {
             val assignments = dataSource.fetchCrewWorkStatus(date)
             

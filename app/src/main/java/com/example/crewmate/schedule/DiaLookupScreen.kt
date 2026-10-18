@@ -90,6 +90,7 @@ class DiaLookupViewModelFactory(
 fun DiaLookupScreen(
     diaDetailDataSource: DiaDetailDataSource,
     defaultDiaPrefix: String = "",
+    censusManager: DiaCensusManager? = null,
     viewModel: DiaLookupViewModel = viewModel(factory = DiaLookupViewModelFactory(diaDetailDataSource, defaultDiaPrefix))
 ) {
     val date by viewModel.date.collectAsState()
@@ -97,6 +98,8 @@ fun DiaLookupScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     val context = LocalContext.current
+    val censusState = censusManager?.progressState?.collectAsState()?.value
+    val isRunningCensus = censusState is CensusProgressState.Running
 
     Column(
         Modifier
@@ -186,11 +189,13 @@ fun DiaLookupScreen(
                             onDone = { viewModel.search() },
                         ),
                         singleLine = true,
+                        enabled = !isRunningCensus,
                     )
                 }
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = viewModel::search,
+                    enabled = !isRunningCensus,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
@@ -218,13 +223,14 @@ fun DiaLookupScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Text(
                         text = "다이아 상세 정보를 불러오지 못했습니다.",
-                        modifier = Modifier.padding(18.dp),
+                        modifier = Modifier.padding(20.dp),
                         color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
@@ -232,13 +238,14 @@ fun DiaLookupScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Text(
                         text = "사업일자와 다이아 번호를 입력하여 조회하세요.",
-                        modifier = Modifier.padding(18.dp),
+                        modifier = Modifier.padding(20.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }

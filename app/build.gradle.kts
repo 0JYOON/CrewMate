@@ -10,11 +10,32 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.crewmate"
+        applicationId = "kr.crewmate.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("${rootDir}/crewmate-release-key.jks")
+            storePassword = "crewmate2026!"
+            keyAlias = "crewmate_key"
+            keyPassword = "crewmate2026!"
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     buildFeatures {

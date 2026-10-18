@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -42,17 +43,23 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun TodayWorkScreen(viewModel: TodayWorkViewModel, onBack: () -> Unit = {}) {
+fun TodayWorkScreen(
+    viewModel: TodayWorkViewModel,
+    onNavigateToAlarmSettings: () -> Unit = {},
+    onBack: () -> Unit = {}
+) {
     val state by viewModel.uiState.collectAsState()
-    TodayWorkContent(state, viewModel::retry)
+    TodayWorkContent(state, onNavigateToAlarmSettings, viewModel::retry)
 }
 
 @Composable
 private fun TodayWorkContent(
     state: TodayWorkUiState,
+    onNavigateToAlarmSettings: () -> Unit,
     onRetry: () -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
+    val overrideDate by com.example.crewmate.util.AppDateProvider.overrideDate.collectAsState()
+    val today = overrideDate ?: com.example.crewmate.util.AppDateProvider.today
 
     Column(
         Modifier
@@ -60,6 +67,35 @@ private fun TodayWorkContent(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
+        if (overrideDate != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+                    .clickable { com.example.crewmate.util.AppDateProvider.resetToRealToday() },
+                color = Color(0xFFDC2626),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "🧪 가상 날짜 모드: ${overrideDate?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd (E)", Locale.KOREAN))}",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "↺ 실제 오늘로 복구",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -80,15 +116,15 @@ private fun TodayWorkContent(
                     if (!result.isToday) {
                         val formatted = result.workDate.format(DateTimeFormatter.ofPattern("MM.dd"))
                         Surface(
-                            color = Color(0xFFFEE2E2),
-                            shape = RoundedCornerShape(999.dp)
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
                                 text = "$formatted 근무",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC81E1E)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
@@ -96,99 +132,226 @@ private fun TodayWorkContent(
             }
             
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(999.dp),
-                shadowElevation = 1.dp,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(8.dp),
             ) {
                 Text(
                     text = today.format(DISPLAY_DATE),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
-        when (state) {
-            TodayWorkUiState.Loading -> {
-                Column(
-                    Modifier.fillMaxWidth().padding(36.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CircularProgressIndicator(color = Color(0xFF1E6FB8))
-                    Spacer(Modifier.height(14.dp))
-                    Text("근무와 다이아 상세를 확인하고 있습니다.", color = Color(0xFF64748B))
-                }
-            }
-            TodayWorkUiState.NoUpcomingWork -> {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color.White,
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(
-                        text = "예정된 근무가 없습니다.",
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color(0xFF64748B),
-                    )
-                }
-            }
-            is TodayWorkUiState.Error -> {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color.White,
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text(state.message, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(10.dp))
-                        Button(onClick = onRetry) { Text("다시 시도") }
+        androidx.compose.animation.Crossfade(
+            targetState = state,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+        ) { targetState ->
+            when (targetState) {
+                TodayWorkUiState.Loading -> {
+                    Column(
+                        Modifier.fillMaxWidth().padding(40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(16.dp))
+                        Text("근무와 다이아 상세를 확인하고 있습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-            is TodayWorkUiState.Success -> {
-                val result = state.result
-                result.dias.forEachIndexed { index, item ->
-                    DiaDetailCard(
-                        schedule = item.schedule,
-                        detail = item.detail,
-                        workDate = result.workDate,
-                    )
-                    if (index < result.dias.lastIndex) Spacer(Modifier.height(14.dp))
+                TodayWorkUiState.NoUpcomingWork -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = MaterialTheme.shapes.large,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Text(
+                            text = "예정된 근무가 없습니다.",
+                            modifier = Modifier.padding(20.dp),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                
-                Spacer(Modifier.height(16.dp))
-                AttendanceStatusSection(result.attendanceStatusList)
+                is TodayWorkUiState.Error -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = MaterialTheme.shapes.large,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(Modifier.padding(20.dp)) {
+                            Text(targetState.message, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(10.dp))
+                            Button(onClick = onRetry) { Text("다시 시도") }
+                        }
+                    }
+                }
+                is TodayWorkUiState.Success -> {
+                    Column {
+                        val result = targetState.result
+                        result.dias.forEachIndexed { index, item ->
+                            DiaDetailCard(
+                                schedule = item.schedule,
+                                detail = item.detail,
+                                workDate = result.workDate,
+                            )
+                            if (index < result.dias.lastIndex) Spacer(Modifier.height(14.dp))
+                        }
+                        
+                        Spacer(Modifier.height(16.dp))
+                        AttendanceStatusSection(result.attendanceStatusList, targetState, onNavigateToAlarmSettings)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AttendanceStatusSection(attendanceList: List<AttendanceStatusDto>) {
+private fun AttendanceStatusSection(
+    attendanceList: List<AttendanceStatusDto>,
+    state: TodayWorkUiState,
+    onNavigateToAlarmSettings: () -> Unit
+) {
     var isExpanded by remember { mutableStateOf(false) }
+
+    // Move alarm chip right above Attendance Status Section
+    if (state is TodayWorkUiState.Success) {
+        val context = LocalContext.current
+        var upcomingAlarmsCount by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        var isAlarmEnabled by remember { mutableStateOf(false) }
+        var showUpcomingAlarmsDialog by remember { mutableStateOf(false) }
+        var upcomingAlarmsList by remember { mutableStateOf<List<com.example.crewmate.alarm.WorkAlarmItem>>(emptyList()) }
+
+        androidx.compose.runtime.LaunchedEffect(state) {
+            val db = com.example.crewmate.database.CrewMateDatabase.getInstance(context)
+            val alarmStore = com.example.crewmate.alarm.WorkAlarmSettingsStore(context)
+            val alarmSettings = alarmStore.loadSettings()
+            isAlarmEnabled = alarmSettings.alarmEnabled
+            
+            if (alarmSettings.alarmEnabled) {
+                val parser = com.example.crewmate.data.remote.xcrew.DiaDetailParser()
+                val allSegments = mutableListOf<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>()
+                state.result.dias.forEach { dia ->
+                    val key = "${state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"))}|${dia.schedule.diaNo.orEmpty()}"
+                    val cachedDetail = db.diaDetailDao().getDiaDetail(key)
+                    if (cachedDetail != null && cachedDetail.detailJson.isNotBlank()) {
+                        runCatching {
+                            val detailResponse = parser.parse(cachedDetail.detailJson)
+                            allSegments.addAll(detailResponse.segments)
+                        }
+                    }
+                }
+                val upcoming = com.example.crewmate.alarm.WorkAlarmRuleEvaluator.evaluate(
+                    segments = allSegments,
+                    workDate = state.result.workDate,
+                    settings = alarmSettings,
+                    attendanceStatuses = state.result.attendanceStatusList
+                )
+                upcomingAlarmsCount = upcoming.size
+                upcomingAlarmsList = upcoming
+            }
+        }
+
+        if (isAlarmEnabled) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showUpcomingAlarmsDialog = true },
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⏰ 오늘의 예정 정밀 알람 ${upcomingAlarmsCount}건",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (showUpcomingAlarmsDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showUpcomingAlarmsDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.extraLarge,
+                tonalElevation = 6.dp,
+                title = { Text("오늘의 예정 알람 (${upcomingAlarmsList.size}건)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (upcomingAlarmsList.isEmpty()) {
+                            Text("오늘 울릴 예정인 알람이 없거나 출무 정보가 조회되지 않았습니다.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            upcomingAlarmsList.forEach { item ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "⏰ ${item.triggerDateTime.format(DateTimeFormatter.ofPattern("MM.dd (E) HH:mm", Locale.KOREAN))} | ${item.ruleTitle}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = item.message,
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = { showUpcomingAlarmsDialog = false }) {
+                        Text("닫기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            )
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded },
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { isExpanded = !isExpanded },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "출무현황 확인하기",
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -300,5 +463,5 @@ private fun formatActualTime(raw: String?): String? {
 @Preview(showBackground = true)
 @Composable
 private fun TodayWorkContentPreview() {
-    TodayWorkContent(TodayWorkUiState.NoUpcomingWork, onRetry = {})
+    TodayWorkContent(TodayWorkUiState.NoUpcomingWork, {}, onRetry = {})
 }

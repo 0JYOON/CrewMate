@@ -5,10 +5,15 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,11 +22,40 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.crewmate.alarm.*
+import com.example.crewmate.database.CrewMateDatabase
 import com.example.crewmate.navigation.Routes
 import com.example.crewmate.ui.theme.AppThemeMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private fun checkAlarmPrerequisites(context: Context): Triple<Boolean, Boolean, Boolean> {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+
+    val hasNotif = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    } else true
+
+    val hasExact = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        alarmManager?.canScheduleExactAlarms() == true
+    } else true
+
+    val isIgnoringBattery = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+    } else true
+
+    return Triple(hasNotif, hasExact, isIgnoringBattery)
+}
 
 enum class MainScreenOption(val route: String, val title: String) {
     SCHEDULE(Routes.Schedule, "월별 승무근무표"),
@@ -43,6 +77,17 @@ enum class CalendarFontScaleOption(val scale: Float, val title: String) {
 fun SettingsScreen() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            WorkAlarmScheduler.scheduleTestAlarm(context)
+            android.widget.Toast.makeText(context, "3초 후 테스트 알람이 울립니다. 화면을 꺼두고 확인해 보세요.", android.widget.Toast.LENGTH_LONG).show()
+        } else {
+            android.widget.Toast.makeText(context, "알림 권한이 허용되지 않았습니다.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     
     var isSyncEnabled by remember { mutableStateOf(prefs.getBoolean("calendar_sync", false)) }
     
@@ -71,7 +116,7 @@ fun SettingsScreen() {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED)
     }
 
-    var hideSandwichedGamsi by remember { mutableStateOf(prefs.getBoolean("hide_sandwiched_gamsi", false)) }
+    var hideSandwichedGamsi by remember { mutableStateOf(prefs.getBoolean("hide_sandwiched_gamsi", true)) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         hasPermission = isGranted
@@ -84,12 +129,50 @@ fun SettingsScreen() {
         }
     }
 
+    val overrideDate by com.example.crewmate.util.AppDateProvider.overrideDate.collectAsState()
+
+    var adminTapCount by remember { mutableIntStateOf(0) }
+    var lastAdminTapTime by remember { mutableLongStateOf(0L) }
+    var showAdminAuthDialog by remember { mutableStateOf(false) }
+    var showAdminDateDialog by remember { mutableStateOf(false) }
+    var adminPasswordInput by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        if (overrideDate != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clickable { showAdminDateDialog = true },
+                color = Color(0xFFDC2626),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "🧪 가상 날짜 모드: ${overrideDate?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd (E)", Locale.KOREAN))}",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "관리자 설정 ⚙️",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
         Text(
             text = "설정",
             style = MaterialTheme.typography.headlineSmall,
@@ -100,8 +183,10 @@ fun SettingsScreen() {
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -147,8 +232,10 @@ fun SettingsScreen() {
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text("시작 화면 설정", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -172,9 +259,12 @@ fun SettingsScreen() {
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedBorderColor = MaterialTheme.colorScheme.outline,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
@@ -203,8 +293,10 @@ fun SettingsScreen() {
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text("캘린더 글자 크기 설정", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -228,9 +320,12 @@ fun SettingsScreen() {
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fontDropdownExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedBorderColor = MaterialTheme.colorScheme.outline,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
@@ -259,8 +354,10 @@ fun SettingsScreen() {
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -270,10 +367,10 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("운전 구간 사이 '감시' 숨기기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("주요 항목 사이 '감시' 숨기기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "운전과 운전 사이에 낀 '감시' 구간을 기본적으로 접어둡니다.",
+                        "운전, 출고준비, 입환, 승무 등 주요 항목 사이에 낀 '감시' 구간을 기본적으로 접어둡니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -296,9 +393,28 @@ fun SettingsScreen() {
         Spacer(Modifier.height(16.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    val now = System.currentTimeMillis()
+                    if (now - lastAdminTapTime < 2000) {
+                        adminTapCount++
+                    } else {
+                        adminTapCount = 1
+                    }
+                    lastAdminTapTime = now
+
+                    if (adminTapCount >= 5) {
+                        adminTapCount = 0
+                        adminPasswordInput = ""
+                        passwordError = false
+                        showAdminAuthDialog = true
+                    }
+                },
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text("앱 테마 설정", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -322,9 +438,12 @@ fun SettingsScreen() {
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeDropdownExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = MaterialTheme.colorScheme.onSurface,
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedBorderColor = MaterialTheme.colorScheme.outline,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
@@ -350,15 +469,16 @@ fun SettingsScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
-
         var showAppInfoDialog by remember { mutableStateOf(false) }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { showAppInfoDialog = true },
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -408,6 +528,115 @@ fun SettingsScreen() {
                 confirmButton = {
                     TextButton(onClick = { showAppInfoDialog = false }) {
                         Text("확인", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            )
+        }
+
+        if (showAdminAuthDialog) {
+            AlertDialog(
+                onDismissRequest = { showAdminAuthDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text("🔒 관리자 인증", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("가상 날짜 디버그 모드 진입을 위해 비밀번호를 입력해 주세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        OutlinedTextField(
+                            value = adminPasswordInput,
+                            onValueChange = {
+                                adminPasswordInput = it
+                                passwordError = false
+                            },
+                            label = { Text("비밀번호") },
+                            placeholder = { Text("비밀번호 4자리") },
+                            singleLine = true,
+                            isError = passwordError,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (passwordError) {
+                            Text("비밀번호가 올바르지 않습니다.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (adminPasswordInput.trim() == "5078") {
+                            showAdminAuthDialog = false
+                            showAdminDateDialog = true
+                        } else {
+                            passwordError = true
+                        }
+                    }) {
+                        Text("확인", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAdminAuthDialog = false }) {
+                        Text("취소")
+                    }
+                }
+            )
+        }
+
+        if (showAdminDateDialog) {
+            val currentVirtualDate = overrideDate ?: LocalDate.now()
+            AlertDialog(
+                onDismissRequest = { showAdminDateDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text("🧪 관리자 가상 날짜 설정", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = if (overrideDate != null) "현재 가상 날짜: ${overrideDate?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd (E)", Locale.KOREAN))}"
+                            else "현재 상태: 실제 오늘 날짜 사용 중 (${LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd (E)", Locale.KOREAN))})",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (overrideDate != null) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Button(
+                            onClick = {
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, day ->
+                                        val selected = LocalDate.of(year, month + 1, day)
+                                        com.example.crewmate.util.AppDateProvider.setCustomDate(selected)
+                                        android.widget.Toast.makeText(context, "가상 날짜가 ${selected}로 설정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                        showAdminDateDialog = false
+                                    },
+                                    currentVirtualDate.year,
+                                    currentVirtualDate.monthValue - 1,
+                                    currentVirtualDate.dayOfMonth
+                                ).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("📅 가상 날짜 선택 (DatePicker)", fontWeight = FontWeight.Bold)
+                        }
+
+                        if (overrideDate != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    com.example.crewmate.util.AppDateProvider.resetToRealToday()
+                                    android.widget.Toast.makeText(context, "실제 오늘 날짜로 복구되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                    showAdminDateDialog = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("↺ 실제 오늘 날짜로 복구", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAdminDateDialog = false }) {
+                        Text("닫기", fontWeight = FontWeight.Bold)
                     }
                 }
             )

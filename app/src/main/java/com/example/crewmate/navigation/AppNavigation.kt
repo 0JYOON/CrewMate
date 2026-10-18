@@ -1,42 +1,18 @@
 package com.example.crewmate.navigation
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.webkit.CookieManager
-import android.webkit.WebSettings
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -48,33 +24,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import com.example.crewmate.data.remote.xcrew.XcrewWebViewSession
 import com.example.crewmate.data.remote.xcrew.XcrewWebViewXhrDataSource
 import com.example.crewmate.data.remote.xcrew.XcrewWorkScheduleParser
+import com.example.crewmate.schedule.TrainCrewLookupV2Screen
 import com.example.crewmate.login.LoginScreen
 import com.example.crewmate.login.LoginViewModel
 import com.example.crewmate.login.LoginViewModelFactory
 import com.example.crewmate.login.SecureCredentialStore
-import com.example.crewmate.schedule.ScheduleScreen
-import com.example.crewmate.schedule.ScheduleViewModel
-import com.example.crewmate.schedule.ScheduleViewModelFactory
-import com.example.crewmate.schedule.TodayWorkRepository
-import com.example.crewmate.schedule.TodayWorkScreen
-import com.example.crewmate.schedule.TodayWorkViewModel
-import com.example.crewmate.schedule.TodayWorkViewModelFactory
-import com.example.crewmate.schedule.TrainCrewLookupScreen
-import com.example.crewmate.schedule.TrainCrewLookupViewModel
-import com.example.crewmate.schedule.TrainCrewLookupViewModelFactory
-import com.example.crewmate.schedule.TrainCrewSearchRepository
-import com.example.crewmate.schedule.WorkScheduleParser
-import com.example.crewmate.schedule.WorkScheduleRepositoryImpl
-import com.example.crewmate.settings.MainScreenOption
+import com.example.crewmate.schedule.*
 import com.example.crewmate.settings.SettingsScreen
 import com.example.crewmate.ui.theme.CrewMateLogo
+import kotlinx.coroutines.launch
+
+enum class MainScreenOption(val title: String, val route: String) {
+    SCHEDULE("월별 승무근무표", Routes.Schedule),
+    TODAY_WORK("오늘의 근무 다이아 확인", Routes.TodayWork),
+    TRAIN_CREW_LOOKUP("열차 승무원 조회", Routes.TrainCrewLookup),
+    DIA_LOOKUP("승무 다이아 조회", Routes.DiaLookup),
+    CREW_WORK_STATUS("소속 승무원 근무 현황", Routes.CrewWorkStatus),
+    NON_OP_STATUS("비실동 현황 조회", Routes.NonOpStatus)
+}
 
 object Routes {
     const val Login = "login"
@@ -86,19 +57,29 @@ object Routes {
     const val NonOpStatus = "non-op-status"
     const val PersonalSchedule = "personalSchedule"
     const val Settings = "settings"
+    const val WorkAlarmSettings = "work-alarm-settings"
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(initialTargetRoute: String? = null) {
     val navController = rememberNavController()
     val xcrewSession = remember { XcrewWebViewSession() }
     val appContext = LocalContext.current.applicationContext
     val credentialStore = remember(appContext) { SecureCredentialStore(appContext) }
     var skipAutoLoginOnLoginScreen by remember { mutableStateOf(false) }
+
     val prefs = appContext.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
     var isOfflineMode by remember { mutableStateOf(prefs.getBoolean("is_offline_mode", false)) }
+    val coroutineScope = rememberCoroutineScope()
+    var isPreFetchingOfflineData by remember { mutableStateOf(false) }
+
+    val globalCensusManager = remember(xcrewSession, appContext) {
+        val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+        val database = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
+        com.example.crewmate.schedule.DiaCensusManager(dataSource, dataSource, database.diaCensusDao())
+    }
     
-    var authRootRoute by remember { 
+    var authRootRoute by remember(isOfflineMode) { 
         mutableStateOf(
             MainScreenOption.entries.find { 
                 it.name == prefs.getString("main_screen", MainScreenOption.SCHEDULE.name) 
@@ -126,7 +107,15 @@ fun AppNavigation() {
     LaunchedEffect(isOfflineMode) {
         if (isOfflineMode && navController.currentDestination?.route == Routes.Login) {
             navController.navigate(authRootRoute) {
-                popUpTo(Routes.Login) { inclusive = true }
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(initialTargetRoute) {
+        if (!initialTargetRoute.isNullOrBlank()) {
+            navController.navigate(initialTargetRoute) {
                 launchSingleTop = true
             }
         }
@@ -172,7 +161,6 @@ fun AppNavigation() {
                     isOfflineMode = isOfflineMode,
                     onSelectMenu = navigateFromMenu,
                     onLogoClick = {
-                        val prefs = appContext.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
                         val mainScreenName = prefs.getString("main_screen", MainScreenOption.SCHEDULE.name)
                         val targetRoute = MainScreenOption.entries.find { it.name == mainScreenName }?.route ?: Routes.Schedule
                         navigateFromMenu(targetRoute)
@@ -180,8 +168,52 @@ fun AppNavigation() {
                     onLogout = { handleLogout(false) },
                     onReconnect = { handleLogout(true) },
                     onToggleOfflineMode = {
-                        isOfflineMode = !isOfflineMode
-                        prefs.edit().putBoolean("is_offline_mode", isOfflineMode).apply()
+                        if (!isOfflineMode) {
+                            coroutineScope.launch {
+                                isPreFetchingOfflineData = true
+                                runCatching {
+                                    val today = java.time.LocalDate.now()
+                                    val currentMonthStr = java.time.YearMonth.from(today).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMM", java.util.Locale.ROOT))
+                                    val todayStr = today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd", java.util.Locale.ROOT))
+                                    
+                                    val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                                    val database = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
+                                    
+                                    val workRepo = WorkScheduleRepositoryImpl(dataSource, WorkScheduleParser(), database.workScheduleDao()) { false }
+                                    workRepo.getSchedules(currentMonthStr)
+
+                                    val diaDetailRepo = com.example.crewmate.schedule.DiaDetailRepository(dataSource, database.diaDetailDao()) { false }
+                                    val crewStatusRepo = CrewWorkStatusRepository(dataSource, database.crewAssignmentDao()) { false }
+                                    
+                                    // 1. 실제 오늘 날짜(todayStr)의 소속 승무원 근무 현황 캐싱
+                                    crewStatusRepo.getCrewWorkStatus(todayStr)
+
+                                    // 2. 오늘의 근무 / 다가오는 가장 가까운 근무 다이아 조회 및 캐싱
+                                    val todayRepo = TodayWorkRepository(workRepo, diaDetailRepo, dataSource, crewStatusRepo, xcrewSession, appContext) { false }
+                                    val todayResult = todayRepo.getTodayOrNextWork(today)
+
+                                    val targetDate = todayResult?.workDate ?: today
+                                    val targetMonthStr = java.time.YearMonth.from(targetDate).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMM", java.util.Locale.ROOT))
+                                    if (targetMonthStr != currentMonthStr) {
+                                        workRepo.getSchedules(targetMonthStr)
+                                    }
+
+                                    // 3. 만약 다가오는 근무일자가 오늘과 다른 날짜라면 해당 날짜의 소속 승무원 현황도 추가 캐싱
+                                    if (targetDate != today) {
+                                        val targetDateStr = targetDate.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd", java.util.Locale.ROOT))
+                                        crewStatusRepo.getCrewWorkStatus(targetDateStr)
+                                    }
+                                }
+                                isOfflineMode = true
+                                prefs.edit().putBoolean("is_offline_mode", true).apply()
+                                isPreFetchingOfflineData = false
+                                android.widget.Toast.makeText(appContext, "오프라인 모드로 전환되었습니다. (데이터 저장 완료)", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            isOfflineMode = false
+                            prefs.edit().putBoolean("is_offline_mode", false).apply()
+                            android.widget.Toast.makeText(appContext, "온라인 모드로 전환되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }
@@ -202,7 +234,6 @@ fun AppNavigation() {
                     LaunchedEffect(state.isLoggedIn) {
                         if (state.isLoggedIn) {
                             skipAutoLoginOnLoginScreen = false
-                            val prefs = appContext.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
                             val mainScreenName = prefs.getString("main_screen", MainScreenOption.SCHEDULE.name)
                             val targetRoute = MainScreenOption.entries.find { it.name == mainScreenName }?.route ?: Routes.Schedule
 
@@ -226,8 +257,16 @@ fun AppNavigation() {
                         onEmployeeNumberChange = loginViewModel::setEmployeeNumber,
                         onPasswordChange = loginViewModel::setPassword,
                         onRememberLoginChange = loginViewModel::setRememberLogin,
-                        onLogin = loginViewModel::login,
-                        onRetryAutoLogin = loginViewModel::retryAutoLogin,
+                        onLogin = { empNo, pwd ->
+                            isOfflineMode = false
+                            prefs.edit().putBoolean("is_offline_mode", false).apply()
+                            loginViewModel.login(empNo, pwd)
+                        },
+                        onRetryAutoLogin = {
+                            isOfflineMode = false
+                            prefs.edit().putBoolean("is_offline_mode", false).apply()
+                            loginViewModel.retryAutoLogin()
+                        },
                         onSwitchToManualLogin = loginViewModel::switchToManualLogin,
                         onDeleteSavedLogin = loginViewModel::deleteSavedLogin,
                     )
@@ -236,106 +275,17 @@ fun AppNavigation() {
                     val diaDetailDataSource = remember(xcrewSession) {
                         XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
                     }
-                    val memoRepository = remember(appContext) {
-                        com.example.crewmate.database.MemoRepository(com.example.crewmate.database.CrewMateDatabase.getInstance(appContext).memoDao())
-                    }
-                    // 기존 레거시 ScheduleScreen 호출 코드는 주석 처리함
-                    // val scheduleViewModel: ScheduleViewModel = viewModel(
-                    //     factory = ScheduleViewModelFactory(xcrewSession, appContext),
-                    // )
-                    // ScheduleScreen(
-                    //     viewModel = scheduleViewModel,
-                    //     diaDetailDataSource = diaDetailDataSource,
-                    // )
-
-                    val personalViewModel: com.example.crewmate.schedule.PersonalScheduleViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                        factory = com.example.crewmate.schedule.PersonalScheduleViewModelFactory(
-                            diaDetailDataSource,
+                    val scheduleViewModel: ScheduleViewModel = viewModel(
+                        factory = ScheduleViewModelFactory(
                             xcrewSession,
-                            memoRepository
-                        )
+                            appContext,
+                            isOfflineModeProvider = { isOfflineMode }
+                        ),
                     )
-                    com.example.crewmate.schedule.PersonalScheduleScreen(
-                        viewModel = personalViewModel,
-                        diaDetailDataSource = diaDetailDataSource
-                    )
-                }
-                composable(Routes.TodayWork) {
-                    val database = remember(appContext) { com.example.crewmate.database.CrewMateDatabase.getInstance(appContext) }
-                    val todayWorkRepository = remember(xcrewSession, database) {
-                        val scheduleDataSource = XcrewWebViewXhrDataSource(
-                            xcrewSession,
-                            XcrewWorkScheduleParser(),
-                        )
-                        val scheduleRepository = WorkScheduleRepositoryImpl(
-                            scheduleDataSource,
-                            WorkScheduleParser(),
-                            database.workScheduleDao()
-                        )
-                        val crewWorkStatusRepository = com.example.crewmate.schedule.CrewWorkStatusRepository(
-                            scheduleDataSource,
-                            database.crewAssignmentDao()
-                        )
-                        TodayWorkRepository(scheduleRepository, scheduleDataSource, scheduleDataSource, crewWorkStatusRepository, xcrewSession)
-                    }
-                    val todayWorkViewModel: TodayWorkViewModel = viewModel(
-                        factory = TodayWorkViewModelFactory(todayWorkRepository),
-                    )
-                    TodayWorkScreen(
-                        viewModel = todayWorkViewModel,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable(Routes.TrainCrewLookup) {
-                    val repository = remember(xcrewSession) {
-                        val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                        com.example.crewmate.schedule.TrainCrewSearchRepository(dataSource, dataSource)
-                    }
-                    val lookupViewModel: com.example.crewmate.schedule.TrainCrewLookupViewModel = viewModel(
-                        factory = com.example.crewmate.schedule.TrainCrewLookupViewModelFactory(repository),
-                    )
-                    val diaDetailDataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
-
-                    com.example.crewmate.schedule.TrainCrewLookupScreen(
-                        viewModel = lookupViewModel,
+                    ScheduleScreen(
+                        viewModel = scheduleViewModel,
                         diaDetailDataSource = diaDetailDataSource,
-                        onBack = { navController.popBackStack() }
                     )
-                }
-                composable(Routes.DiaLookup) {
-                    val diaDetailDataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
-                    com.example.crewmate.schedule.DiaLookupScreen(
-                        diaDetailDataSource = diaDetailDataSource
-                    )
-                }
-                composable(Routes.CrewWorkStatus) {
-                    val crewWorkStatusDataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
-                    val database = remember(appContext) { com.example.crewmate.database.CrewMateDatabase.getInstance(appContext) }
-                    val crewWorkStatusRepository = remember(crewWorkStatusDataSource, database) {
-                        com.example.crewmate.schedule.CrewWorkStatusRepository(crewWorkStatusDataSource, database.crewAssignmentDao())
-                    }
-                    com.example.crewmate.schedule.CrewWorkStatusScreen(
-                        crewWorkStatusRepository = crewWorkStatusRepository,
-                        diaDetailDataSource = crewWorkStatusDataSource
-                    )
-                }
-                composable(Routes.NonOpStatus) {
-                    val dataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
-                    val leaveRepository = remember(appContext) {
-                        com.example.crewmate.database.LeaveRepository(com.example.crewmate.database.CrewMateDatabase.getInstance(appContext).leaveDao())
-                    }
-                    val viewModel: com.example.crewmate.schedule.NonOpStatusViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                        factory = com.example.crewmate.schedule.NonOpStatusViewModelFactory(dataSource, leaveRepository)
-                    )
-                    com.example.crewmate.schedule.NonOpStatusScreen(viewModel)
                 }
                 // composable(Routes.PersonalSchedule) {
                 //     val diaDetailDataSource = remember(xcrewSession) {
@@ -356,11 +306,128 @@ fun AppNavigation() {
                 //         diaDetailDataSource = diaDetailDataSource
                 //     )
                 // }
+                composable(Routes.TodayWork) {
+                    val database = remember(appContext) { com.example.crewmate.database.CrewMateDatabase.getInstance(appContext) }
+                    val todayWorkRepository = remember(xcrewSession, database, isOfflineMode) {
+                        val scheduleDataSource = XcrewWebViewXhrDataSource(
+                            xcrewSession,
+                            XcrewWorkScheduleParser(),
+                        )
+                        val scheduleRepository = WorkScheduleRepositoryImpl(
+                            scheduleDataSource,
+                            WorkScheduleParser(),
+                            database.workScheduleDao(),
+                            isOfflineModeProvider = { isOfflineMode }
+                        )
+                        val diaDetailRepository = com.example.crewmate.schedule.DiaDetailRepository(
+                            scheduleDataSource,
+                            database.diaDetailDao(),
+                            isOfflineModeProvider = { isOfflineMode }
+                        )
+                        val crewWorkStatusRepository = com.example.crewmate.schedule.CrewWorkStatusRepository(
+                            scheduleDataSource,
+                            database.crewAssignmentDao(),
+                            isOfflineModeProvider = { isOfflineMode }
+                        )
+                        TodayWorkRepository(
+                            scheduleRepository, 
+                            diaDetailRepository, 
+                            scheduleDataSource, 
+                            crewWorkStatusRepository, 
+                            xcrewSession,
+                            appContext,
+                            isOfflineModeProvider = { isOfflineMode }
+                        )
+                    }
+                    val todayWorkViewModel: TodayWorkViewModel = viewModel(
+                        factory = TodayWorkViewModelFactory(todayWorkRepository),
+                    )
+                    TodayWorkScreen(
+                        viewModel = todayWorkViewModel,
+                        onNavigateToAlarmSettings = { navController.navigate(Routes.WorkAlarmSettings) },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.TrainCrewLookup) {
+                    val dataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    val database = remember(appContext) { com.example.crewmate.database.CrewMateDatabase.getInstance(appContext) }
+
+                    com.example.crewmate.schedule.TrainCrewLookupV2Screen(
+                        censusManager = globalCensusManager,
+                        diaCensusDao = database.diaCensusDao(),
+                        crewWorkStatusDataSource = dataSource,
+                        diaDetailDataSource = dataSource,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable(Routes.DiaLookup) {
+                    val diaDetailDataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    com.example.crewmate.schedule.DiaLookupScreen(
+                        diaDetailDataSource = diaDetailDataSource,
+                        censusManager = globalCensusManager
+                    )
+                }
+                composable(Routes.CrewWorkStatus) {
+                    val crewWorkStatusDataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    val database = remember(appContext) { com.example.crewmate.database.CrewMateDatabase.getInstance(appContext) }
+                    val crewWorkStatusRepository = remember(crewWorkStatusDataSource, database, isOfflineMode) {
+                        com.example.crewmate.schedule.CrewWorkStatusRepository(
+                            crewWorkStatusDataSource, 
+                            database.crewAssignmentDao(),
+                            isOfflineModeProvider = { isOfflineMode }
+                        )
+                    }
+                    com.example.crewmate.schedule.CrewWorkStatusScreen(
+                        crewWorkStatusRepository = crewWorkStatusRepository,
+                        diaDetailDataSource = crewWorkStatusDataSource
+                    )
+                }
+                composable(Routes.NonOpStatus) {
+                    val dataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    val leaveRepository = remember(appContext) {
+                        com.example.crewmate.database.LeaveRepository(com.example.crewmate.database.CrewMateDatabase.getInstance(appContext).leaveDao())
+                    }
+                    val viewModel: com.example.crewmate.schedule.NonOpStatusViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                        factory = com.example.crewmate.schedule.NonOpStatusViewModelFactory(dataSource, leaveRepository)
+                    )
+                    com.example.crewmate.schedule.NonOpStatusScreen(viewModel)
+                }
                 composable(Routes.Settings) {
                     SettingsScreen()
                 }
+                composable(Routes.WorkAlarmSettings) {
+                    com.example.crewmate.alarm.WorkAlarmSettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        xcrewSession = xcrewSession
+                    )
+                }
             }
         }
+
+        if (isPreFetchingOfflineData) {
+            AlertDialog(
+                onDismissRequest = {},
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text("오프라인 데이터 저장 중", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 3.dp, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text("최소 필수 근무 데이터를 기기에 저장하고 있습니다...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
         HiddenXcrewWebView(session = xcrewSession)
     }
 }
@@ -380,33 +447,23 @@ private fun CrewMateTopBar(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        shadowElevation = 4.dp
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        IconButton(
+                            onClick = { menuExpanded = !menuExpanded },
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            IconButton(
-                                onClick = { menuExpanded = true },
-                                modifier = Modifier.size(38.dp),
-                            ) {
-                                Text(
-                                    text = "☰",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
+                            Text("☰", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
                         DropdownMenu(
                             expanded = menuExpanded,
@@ -474,6 +531,14 @@ private fun CrewMateTopBar(
                                 },
                             )
                             MenuDropdownRow(
+                                title = "정밀 알람",
+                                selected = currentRoute == Routes.WorkAlarmSettings,
+                                onClick = {
+                                    menuExpanded = false
+                                    onSelectMenu(Routes.WorkAlarmSettings)
+                                },
+                            )
+                            MenuDropdownRow(
                                 title = if (isOfflineMode) "온라인 모드 전환" else "오프라인 모드 전환",
                                 selected = false,
                                 onClick = {
@@ -496,14 +561,16 @@ private fun CrewMateTopBar(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clickable(onClick = onLogoClick)
-                            .padding(vertical = 2.dp)
+                            .padding(vertical = 8.dp)
                     ) {
                         Spacer(Modifier.width(10.dp))
-                        CrewMateLogo(size = 30.dp)
+                        
+                        CrewMateLogo(size = 28.dp)
+                        
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = "CrewMate",
-                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -515,7 +582,7 @@ private fun CrewMateTopBar(
                             ) {
                                 Text(
                                     text = "OFFLINE",
-                                    fontSize = 9.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -526,7 +593,7 @@ private fun CrewMateTopBar(
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (userInfo != null) {
+                    if (userInfo != null && !isOfflineMode) {
                         Column(
                             horizontalAlignment = Alignment.End,
                             modifier = Modifier.padding(end = 8.dp),
@@ -580,6 +647,7 @@ private fun MenuDropdownRow(
     onClick: () -> Unit,
 ) {
     DropdownMenuItem(
+        modifier = if (selected) Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), MaterialTheme.shapes.small) else Modifier,
         text = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (selected) {
@@ -592,9 +660,9 @@ private fun MenuDropdownRow(
                 }
                 Text(
                     text = title,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
                     color = if (enabled) (if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                 )
             }
         },
@@ -615,25 +683,19 @@ private fun HiddenXcrewWebView(session: XcrewWebViewSession) {
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String?) {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
                         session.markPageReady()
                     }
                 }
                 session.attach(this)
-                loadDataWithBaseURL(
-                    "https://xcrew.korail.com/extrCrewMg/extrRltmCrewWrkPstt.do",
-                    "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>",
-                    "text/html",
-                    "UTF-8",
-                    null,
-                )
+                loadUrl("https://xcrew.korail.com/loginView.do")
             }
         },
-        update = {},
+        onRelease = {
+            it.destroy()
+        },
     )
 }

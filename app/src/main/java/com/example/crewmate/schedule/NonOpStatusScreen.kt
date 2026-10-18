@@ -142,7 +142,7 @@ fun NonOpStatusScreen(
                                     val reasonStr = if (item.reason.isNotBlank()) " (${item.reason})" else ""
                                     
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) {
-                                        Box(modifier = Modifier.size(5.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.5.dp)))
+                                        Box(modifier = Modifier.size(5.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.5.dp)))
                                         Spacer(Modifier.width(8.dp))
                                         Text(
                                             text = "$dateStr / ${item.days}일$reasonStr",

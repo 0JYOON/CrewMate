@@ -18,6 +18,9 @@ class WorkScheduleParser {
             finalDia = nonActive
         }
 
+        val hldyYnStr = item.hldyYn?.trim()?.uppercase()
+        val alcCodeStr = item.alcSpecDvCd?.trim()
+
         return WorkSchedule(
             workDate = item.pjtDt?.trim(),
             diaNo = finalDia,
@@ -27,7 +30,13 @@ class WorkScheduleParser {
             endTime = item.loiwTm?.trim(),
             nonActiveType = item.nonAtulClsfCdNm?.trim(),
             isContinuation = contMatch != null,
-            isHoliday = (item.hldyYn?.trim()?.uppercase() == "Y") || (item.wkdyDvCd?.trim()?.uppercase() == "S") || (item.hldyAt?.trim()?.uppercase() == "Y")
+            isHoliday = (hldyYnStr == "Y") || 
+                    (item.wkdyDvCd?.trim()?.uppercase() == "S") || 
+                    (item.hldyAt?.trim()?.uppercase() == "Y") ||
+                    (item.nonAtulClsfCdNm?.trim()?.uppercase() == "S") ||
+                    (item.nonAtulClsfCdNm?.contains("휴일") == true),
+            alcSpecDvCd = alcCodeStr,
+            hldyYn = hldyYnStr
         )
     }
 

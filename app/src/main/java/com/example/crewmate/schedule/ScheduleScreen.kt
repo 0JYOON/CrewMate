@@ -269,6 +269,8 @@ fun ScheduleContent(
             onDismissRequest = { selectedDate = null },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             ScheduleDetailSheet(
                 date = date,
@@ -442,17 +444,24 @@ private fun ScheduleDateCell(
             else -> MaterialTheme.colorScheme.onSurface
         }
 
-// 1. 오직 서버에서 내려준 휴일 여부(Y/N) 값만을 기준으로 휴일 판단 (다이아 번호 무시)
-        val isServerHoliday = schedules.any { it.isHoliday }
-
-        // 2. 해당 날짜에 실제 근무(연차나 S가 아닌 실제 다이아)가 배정되었는지 확인
-        val hasActualDuty = schedules.any {
-            val d = it.diaNo?.trim().orEmpty()
-            d != "S" && d != "연차" && d.isNotEmpty()
+        // 1. 서버 전용 휴일근무 판단 공식: hldyYn == "Y" 이면서 alcSpecDvCd != "02" 인 경우
+        val showHolidayBadge = schedules.any { schedule ->
+            val isServerHoliday = schedule.hldyYn?.trim()?.uppercase() == "Y" || schedule.isHoliday
+            val isNotOffCode = schedule.alcSpecDvCd?.trim() != "02"
+            
+            isServerHoliday && isNotOffCode
         }
 
-        // 3. 서버 기준 휴일이면서 실제 근무가 있을 때만 날짜 옆에 빨간 "휴" 표시
-        val showHolidayBadge = isServerHoliday && hasActualDuty
+        // 실제 근무가 지정된 경우 뱃지 리스트에서 중복되는 "S" 뱃지 제거
+        val hasActualDuty = schedules.any {
+            val d = it.diaNo?.trim().orEmpty()
+            d.isNotEmpty() && d != "S" && d != "연차"
+        }
+        val displaySchedules = if (hasActualDuty) {
+            schedules.filter { it.diaNo?.trim() != "S" && it.nonActiveType?.trim() != "S" }
+        } else {
+            schedules
+        }
 
         Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 4.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -462,7 +471,7 @@ private fun ScheduleDateCell(
                 }
             }
             Spacer(Modifier.height(2.dp))
-            schedules.forEachIndexed { index, schedule ->
+            displaySchedules.forEachIndexed { index, schedule ->
                 if (index > 0) Spacer(Modifier.height(3.dp))
                 
                 val st = schedule.startTime.toDisplayTime()
