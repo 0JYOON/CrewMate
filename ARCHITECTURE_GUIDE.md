@@ -19,6 +19,7 @@ com.example.crewmate
  ├── navigation/                   [안내원] 화면 전환(오늘의 근무, 달력, 설정 등) 및 햄버거 메뉴
  ├── schedule/                     [근무표 및 조회] 달력, 오늘의 근무, 승무원 조회 V2, 다이아 조회
  ├── settings/                     [일반 설정] 앱 테마(다크모드), 폰트 크기, 감시 숨기기 옵션
+ ├── telegram/                     [텔레그램 봇 연동] SubwayNowBot 실시간 위치 추적, PIN 인증 및 다이아 관제
  ├── ui/theme/                     [디자인 옷장] M3 색상 팔레트, Typography, Shapes, CrewMate 로고
  └── util/                         [유틸리티] 가상 날짜 디버그 모드 공급자(AppDateProvider)
 ```
@@ -52,9 +53,17 @@ com.example.crewmate
 | `data/remote/` | [XcrewLoginRepository.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/data/remote/xcrew/XcrewLoginRepository.kt) | **Xcrew 로그인 처리기**: 사번과 비밀번호로 코레일 Xcrew 웹사이트에 접속해 세션을 생성 | **활성 (핵심)** |
 | `data/remote/` | [DiaDetail.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/data/remote/xcrew/DiaDetail.kt) | **다이아 상세 번역기**: Xcrew에서 받아온 다이아 구간 정보 JSON을 해석하는 파서 | **활성 (핵심)** |
 | `data/remote/` | [AttendanceStatus.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/data/remote/xcrew/AttendanceStatus.kt) | **출무 현황 번역기**: 예정출무시각과 실제출무시각 JSON 데이터를 해석하는 파서 | **활성 (핵심)** |
-| `database/` | [CrewMateDatabase.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/database/CrewMateDatabase.kt) | **앱 내장 오프라인 데이터베이스**: 근무표, 다이아, 출무 스냅샷을 보관하는 Room DB 마스터 | **활성 (핵심)** |
+| `database/` | [CrewMateDatabase.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/database/CrewMateDatabase.kt) | **앱 내장 오프라인 데이터베이스**: 근무표, 다이아, 출무 스냅샷, 봇 전송 이력을 보관하는 Room DB 마스터 (v8) | **활성 (핵심)** |
+| `database/` | [BotCommandHistoryEntity.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/database/BotCommandHistoryEntity.kt) | **봇 전송 이력 장부**: 텔레그램 SubwayNowBot 명령어 전송 내역, 시각, 응답 및 취소 상태 저장 테이블 | **활성 (신규)** |
+| `database/` | [BotCommandDao.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/database/BotCommandDao.kt) | **봇 이력 데이터 조작원**: 봇 명령어 삽입, 상태 갱신, 열차별 취소 마킹 및 최근 이력 Flow 제공 | **활성 (신규)** |
 | `database/` | [AttendanceStatusEntity.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/database/AttendanceStatusEntity.kt) | **오프라인 출무 스냅샷 장부**: 비행기 모드에서도 출무를 확인할 수 있게 저장하는 DB 테이블 | **활성 (핵심)** |
 | `database/` | [DiaCensusEntity.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/database/DiaCensusEntity.kt) | **전수조사 승무원 장부**: 1초 승무원 조회를 위해 한 달 다이아를 미리 수집해둔 DB 테이블 | **활성 (핵심)** |
+| `telegram/` | [SubwayNowSettings.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowSettings.kt) | **텔레그램 연동 설정 금고**: 봇 사용 여부, Chat ID, 인증 상태, 전송 시각($T_{send}$), 추적 시작 시각($T_{start}$), 주기 영구 저장 | **활성 (신규)** |
+| `telegram/` | [SubwayNowRuleEvaluator.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowRuleEvaluator.kt) | **다이아 4대 필터링 두뇌**: 1순위 업무 추출, Sandwiched 감시 연속업무 제외, K-Prefix 정규화, 선행 감시 출발시각 간주 엔진 | **활성 (신규)** |
+| `telegram/` | [SubwayNowApiClient.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowApiClient.kt) | **봇 서버 통신 클라이언트**: OkHttp 기반 PIN 인증, 상태 조회, 열차 추적 등록(`POST /track`), 개별 취소(`POST /stop`) 비동기 호출 | **활성 (신규)** |
+| `telegram/` | [SubwayNowManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowManager.kt) | **봇 자동 스케줄러 & 관제사**: 다이아 기반 열차별 전송 시점 AlarmManager 예약, 즉시 전송 및 개별 추적 취소 총괄 | **활성 (신규)** |
+| `telegram/` | [SubwayNowReceiver.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowReceiver.kt) | **봇 자동 발송 수신기**: AlarmManager 예약 시점에 백그라운드에서 깨어나 SubwayNowBot으로 명령어를 자동 전송하는 리시버 | **활성 (신규)** |
+| `telegram/ui/` | [SubwayNowBotSettingsCard.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/ui/SubwayNowBotSettingsCard.kt) | **텔레그램 설정 & 관제 카드**: Chat ID 입력, 6자리 PIN 상호 인증 다이얼로그, 전송/추적 시각 칩, 최근 전송 이력 및 개별 취소 UI | **활성 (신규)** |
 | `login/` | [SecureCredentialStore.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/login/SecureCredentialStore.kt) | **암호화 비밀번호 금고**: 사번과 비밀번호를 안드로이드 키스토어(AES-256)로 암호화 보관 | **활성 (핵심)** |
 | `login/` | [LoginScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/login/LoginScreen.kt) | **네이티브 로그인 화면**: 사번과 비밀번호를 치고 로그인하는 첫 화면 | **활성 (핵심)** |
 | `login/` | [KorailWebView.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/login/KorailWebView.kt) | **숨겨진 웹브라우저**: 안보이는 곳에서 코레일 웹사이트 세션을 유지해주는 보이지 않는 창 | **활성 (핵심)** |
@@ -204,6 +213,15 @@ es/xml/network_security_config.xml의 <domain-config> 블록에 새 도메인을
 - **수정할 파일**: [WorkAlarmSettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/WorkAlarmSettingsScreen.kt), [SettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt)
 - **수정 위치**:
   - WorkAlarmSettingsScreen.kt 상단의 checkAlarmPrerequisites 함수에서 NotificationManagerCompat, POST_NOTIFICATIONS, canScheduleExactAlarms, isIgnoringBatteryOptimizations 3대 권한 검사 조건을 관리합니다.
-  - 
-otificationPermissionLauncher 및 handleNotificationPermissionClick에서 Android 13+ 1-탭 팝업(RequestPermission()) 및 Android 8.0+ 직통 알림 설정 인텐트(Settings.ACTION_APP_NOTIFICATION_SETTINGS)를 제어합니다.
+  - notificationPermissionLauncher 및 handleNotificationPermissionClick에서 Android 13+ 1-탭 팝업(RequestPermission()) 및 Android 8.0+ 직통 알림 설정 인텐트(Settings.ACTION_APP_NOTIFICATION_SETTINGS)를 제어합니다.
   - showSafetyDialog에서 🔔 알림 권한 허용 (직통 연결), ⏰ 정확한 알람 권한 설정 (직통 연결), 🔋 배터리 최적화 제외 설정 (직통 연결)의 다이얼로그 UI 및 색상을 관리합니다.
+
+### 13. SubwayNowBot 텔레그램 실시간 열차 추적 연동 및 다이아 관제 엔진 설정 위치
+- **수정할 파일**: [SubwayNowSettings.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowSettings.kt), [SubwayNowRuleEvaluator.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowRuleEvaluator.kt), [SubwayNowApiClient.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowApiClient.kt), [SubwayNowManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/SubwayNowManager.kt), [SubwayNowBotSettingsCard.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/telegram/ui/SubwayNowBotSettingsCard.kt), [TodayWorkScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt)
+- **수정 위치**:
+  - `SubwayNowSettings.kt`에서 봇 서버 기본 URL(`DEFAULT_SERVER_URL = "http://129.225.156.25:8088"`), 기본 예약 전송 여유 시간(30분), 기본 추적 시작 여유 시간(15분), 기본 알림 주기(3개 역) 및 SharedPreferences 키를 관리합니다.
+  - `SubwayNowRuleEvaluator.kt`에서 4대 다이아 필터링 규칙(1순위 업무 판정 `isRank1`, 연속 감시 제외 `isSandwiched`, `K` prefix 정규화 `normalizeTrainNo`, 선행 감시 출발시각 상속)을 관리합니다.
+  - `SubwayNowApiClient.kt`에서 SubwayNowBot REST API 엔드포인트(`/api/v1/ping`, `/api/v1/auth/request`, `/api/v1/auth/status`, `/api/v1/track`, `/api/v1/stop`) 호출 규격과 타임아웃을 관리합니다.
+  - `SubwayNowManager.kt`에서 열차별 AlarmManager 발송 예약(`syncTodayDiaSchedule`), 즉시 발송(`dispatchTarget`), 개별 취소(`cancelTarget`), Room DB(`bot_command_histories`) 기록을 총괄합니다.
+  - `SubwayNowBotSettingsCard.kt`에서 설정 화면의 Chat ID 입력, 6자리 PIN 발급 및 3초 주기 자동 검증 다이얼로그, 시각/주기 FilterChip, 최근 전송 이력 다이얼로그를 제어합니다.
+  - `TodayWorkScreen.kt`에서 당일 근무표 로드 시 다이아 자동 동기화 및 메인 화면 상단 `[🤖 텔레그램 열차 추적]` 연동 뱃지 및 원터치 `[🚀 즉시 전송]` / `[🛑 추적 취소]` 제어 다이얼로그를 제공합니다.

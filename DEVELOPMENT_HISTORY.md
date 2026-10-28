@@ -405,6 +405,38 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   7. **빌드 검증**:
      - `compileDebugKotlin` 0 에러, `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 완수.
 
+### STEP 40: SubwayNowBot 텔레그램 열차 추적 자동 연동 및 다이아 기반 관제 시스템 구축
+* **작업 배경 및 목적**:
+  * 승무원이 당일 승무할 열차를 위해 출발 예정 시각 전부터 목표역 진입 시까지 실시간 현위치를 텔레그램 메신저로 자동 안내해 주는 **SubwayNowBot** 연동 자동화 시스템을 구축.
+  * 예약 전송 시각($T_{send}$)과 추적 시작 시각($T_{start}$) 분리, 실수로 전체가 해제되는 사고를 방지하기 위한 개별 열차 취소(`/stop [열번]`) 지원, 6자리 PIN 상호 교차 검증(Cross-Checking), 다이아 4대 필터링 규칙(1순위 업무, Sandwiched 감시 연속업무 제외, K-prefix 정규화, 선행 감시 출발시각 간주)을 구현.
+* **주요 구현 내용**:
+  1. **SubwayNowBot REST API 브릿지 및 개별 열차 취소 (`api_bridge.py`, `bot.py`, `scheduler.py`)**:
+     - Python `aiohttp.web` 기반 비동기 경량 HTTP 서버 구축 (`129.225.156.25:8088`).
+     - `/stop [열번]` 및 `중지 [열번]` 명령어를 통한 개별 열차 지정 취소 메커니즘 구축.
+     - `POST /api/v1/auth/request`, `GET /api/v1/auth/status`, `POST /api/v1/track`, `POST /api/v1/stop`, `GET /api/v1/ping` 엔드포인트 완비.
+  2. **6자리 PIN 기반 상호 인증 (Cross-Checking)**:
+     - CrewMate 설정에서 Chat ID 입력 후 `[인증 시작]` 터치 시 6자리 일회용 난수 PIN 발급.
+     - 텔레그램 `@SubwayNowBot` 대화창에 5분 내 PIN 전송 시 검증 및 SQLite DB(`crew_auth`) 영속화.
+     - 3초 주기 자동 폴링을 통한 즉각적인 녹색 `[인증 완료]` 뱃지 전환.
+  3. **오늘의 다이아 4대 필터링 엔진 (`SubwayNowRuleEvaluator.kt`)**:
+     - 1순위 업무(운전/승무/출고준비/입환) 열차번호, 시작역(`dptStnNm`), 출발시각 추출.
+     - `1순위 -> 감시 -> 1순위` 패턴 시 두 번째 1순위 업무(Sandwiched Duty) 제외.
+     - 열차번호 숫자 추출 후 무조건 `K` Prefix로 정규화 (`1601` -> `K1601`, `S507` -> `K507`).
+     - 1순위 직전에 감시가 있는 경우(`감시 -> 1순위`), 감시의 시작시각(`depTm`)을 기준시각으로 간주.
+  4. **전송 설정 및 이력 관리 (`SubwayNowSettings.kt`, `SubwayNowBotSettingsCard.kt`)**:
+     - 예약 전송 시각 $T_{send}$ (출근 시 일괄, 60분 전, 45분 전, 30분 전) 및 추적 시작 시각 $T_{start}$ (30분 전, 20분 전, 15분 전, 10분 전) 독립 설정.
+     - 알림 발송 주기 (1~3개 역), 서버 Ping 테스트, 전송 이력 다이얼로그(원터치 개별 추적 중지) 제공.
+  5. **오늘의 근무 화면 연동 및 자동 스케줄러 (`TodayWorkScreen.kt`, `SubwayNowManager.kt`, `SubwayNowReceiver.kt`)**:
+     - 다이아 로드 시 AlarmManager를 통해 각 열차의 전송 시각에 자동 발송 스케줄링.
+     - `TodayWorkScreen`에 텔레그램 열차 추적 뱃지 및 열차별 `[🚀 즉시 전송]` / `[🛑 추적 취소]` 제어 다이얼로그 완비.
+  6. **Room DB 엔티티 및 네트워크 보안 (`BotCommandHistoryEntity.kt`, `CrewMateDatabase.kt`, `network_security_config.xml`)**:
+     - `bot_command_histories` 테이블 신설(Room DB v8).
+     - `network_security_config.xml`: SubwayNowBot 서버 IP(`129.225.156.25`) HTTP 통신 전용 허용 및 Xcrew 도메인 100% 엄격한 HTTPS 유지.
+* **검증 결과**:
+  - `SubwayNowRuleEvaluatorTest` 4대 필터링 규칙 단위 테스트 100% 통과.
+  - `test_api_bridge.py` Python REST API 서버 단위 테스트 100% 통과.
+  - `./gradlew.bat testDebugUnitTest` 및 `./gradlew.bat assembleDebug` Zero-Error(0 오류) 빌드 검증 완료.
+
 ---
 
 ## 📊 4부: 개발 통계 요약 (Project Statistics)
@@ -414,12 +446,13 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 | :--- | :--- | :--- |
 | **화면 1** | `LoginScreen.kt` | 네이티브 로그인 화면 (사번/비밀번호 입력, 비밀번호 보기 토글 및 자동 로그인 설정) |
 | **화면 2** | `ScheduleScreen.kt` | 월간 근무표 달력 화면 (M3 곡률 바텀시트, 다이아, 연차, 휴가, 날짜별 메모) |
-| **화면 3** | `TodayWorkScreen.kt` | 오늘의 근무 화면 (당일 타임라인, 예정 알람 팝업 칩, 출무 현황, 가상 날짜 칩) |
+| **화면 3** | `TodayWorkScreen.kt` | 오늘의 근무 화면 (당일 타임라인, 예정 알람 팝업 칩, 출무 현황, 텔레그램 열차 추적 제어) |
 | **화면 4** | `WorkAlarmSettingsScreen.kt` | 정밀 알람 전용 대시보드 (마스터 스위치, 테스트 카드, 6대 세부 규칙) |
 | **화면 5** | `TrainCrewLookupV2Screen.kt` | 열차 승무원 조회 V2 (전수조사 DB 기반 1초 동료 검색 및 출퇴근 시각) |
 | **화면 6** | `DiaLookupScreen.kt` | 승무 다이아 상세 조회 화면 (다이아 번호 기반 타임라인 및 분석) |
 | **화면 7** | `CrewWorkStatusScreen.kt` | 소속 승무원 전체 근무 현황 조회 화면 |
 | **화면 8** | `NonOpStatusScreen.kt` | 비실동 현황 및 개인 휴가 종합 조회 화면 |
+| **설정 보조**| `SubwayNowBotSettingsCard.kt` | SubwayNowBot 텔레그램 연동, PIN 상호 인증 및 시각/주기 설정 카드 |
 | **알람 팝업**| `PopupAlarmActivity.kt` | 알람 발동 시 뜨는 대화상자형 팝업 액티비티 |
 | **전체알람**| `FullScreenAlarmActivity.kt` | 화면이 꺼져있을 때 켜지는 잠금화면 전체화면 알람 액티비티 |
 
@@ -432,7 +465,7 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 6. `searchPersonalLeave.do` - 개인 휴가 및 연차 현황 조회 API
 7. `fetchAttendanceStatus` - 당일 예정/실제 출무 현황 데이터 API
 
-### 3. 로컬 데이터베이스 테이블 요약 (Room DB 8개 테이블)
+### 3. 로컬 데이터베이스 테이블 요약 (Room DB 9개 테이블)
 1. `work_schedules` - 월간 근무표 저장 테이블
 2. `dia_details` - 다이아 상세 타임라인 JSON 캐시 테이블
 3. `crew_assignments` - 소속 승무원 근무 배정 캐시 테이블
@@ -441,3 +474,4 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 6. `alarm_histories` - 알람 발동 작동 기록 저장 테이블 (최근 14일)
 7. `memos` - 날짜별 개인 메모 저장 테이블
 8. `leaves` - 개인 연차 및 휴가 저장 테이블
+9. `bot_command_histories` - SubwayNowBot 텔레그램 명령어 전송 이력 및 상태 관리 테이블 (v8 신설)

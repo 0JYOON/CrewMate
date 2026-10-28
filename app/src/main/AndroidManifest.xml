@@ -90,5 +90,14 @@
                 <action android:name="com.example.crewmate.alarm.ACTION_SET_ONLINE" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".telegram.SubwayNowReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.crewmate.telegram.ACTION_DISPATCH_TRACK" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

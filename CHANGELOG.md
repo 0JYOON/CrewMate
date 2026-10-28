@@ -4,6 +4,56 @@
 
 ---
 
+## [v1.0.13] - 2026-10-28
+
+### 🤖 SubwayNowBot 텔레그램 열차 추적 자동 연동 및 다이아 기반 관제 시스템 완비
+- **1. SubwayNowBot 전용 REST API 브릿지 및 개별 열차 취소 (`api_bridge.py`, `bot.py`, `scheduler.py`)**:
+  - `aiohttp.web` 기반 비동기 초경량 HTTP API 서버 신설 (`129.225.156.25:8088`).
+  - `/stop [열번]` 및 `중지 [열번]` 명령어를 통한 개별 열차 지정 취소 기능 지원 (실수로 전체 추적이 취소되는 사고 원천 방지).
+  - 6자리 PIN 발급 및 검증(`/api/v1/auth/request`, `/api/v1/auth/status`), 추적 예약/즉시 등록(`/api/v1/track`), 개별 취소(`/api/v1/stop`) 엔드포인트 완비.
+- **2. 6자리 PIN 상호 교차 검증 (Cross-Checking) 보안 체계 (`SubwayNowBotSettingsCard.kt`, `api_bridge.py`)**:
+  - 앱에서 Chat ID 입력 후 `[인증 시작]` 터치 시 6자리 일회용 보안 PIN 발급.
+  - 승무원이 텔레그램 `@SubwayNowBot` 대화방에 5분 이내 PIN 번호 입력 시 서버 검증 및 계정 연동 승인(SQLite 영속화).
+  - 앱에서 3초 주기 자동 폴링 또는 `[인증 확인]` 터치로 녹색 `[인증 완료]` 뱃지 활성화.
+- **3. 다이아 필터링 4대 규칙 엔진 구축 (`SubwayNowRuleEvaluator.kt`)**:
+  - **1순위 주요업무 추출**: `운전`, `승무`, `출고준비`, `입환` 항목에서 열차번호, 시작역(`dptStnNm`), 출발시각 추출.
+  - **연속 업무 제외 (Sandwiched Duty)**: `1순위 -> 감시 -> 1순위` 패턴일 때, 감시 뒤의 두 번째 1순위는 앞 업무의 연속이므로 추적 대상에서 완전 제외.
+  - **열차번호 K-Prefix 정규화**: `K`로 시작하지 않거나 숫자만 있는 경우(예: `1601` $\rightarrow$ `K1601`, `S507` $\rightarrow$ `K507`) 무조건 `K`로 자동 정규화.
+  - **선행 감시 출발시각 간주**: 1순위 업무 직전에 '감시'가 있는 경우(`감시 -> 1순위`), 출발시각($T_{base}$)은 해당 감시의 시작시각(`depTm`)으로 간주하여 계산.
+- **4. 시각 분리 및 유연한 전송 설정 (`SubwayNowSettings.kt`, `SubwayNowBotSettingsCard.kt`)**:
+  - **예약 전송 시각 ($T_{send}$)**: `출근 시 일괄 전송`, `60분 전`, `45분 전`, `30분 전(기본값)` 중 선택.
+  - **추적 시작 시각 ($T_{start}$)**: `30분 전`, `20분 전`, `15분 전(기본값)`, `10분 전` 중 선택.
+  - **추적 주기 (인터벌)**: `1개 역`, `2개 역`, `3개 역(기본값)` 이동 시마다 텔레그램 푸시.
+  - 봇 서버 연결 Ping 테스트 및 최근 전송 이력 다이얼로그(성공/실패/취소 상태, 원터치 개별 추적 취소) 지원.
+- **5. 오늘의 근무 연동 및 자동 스케줄러 (`TodayWorkScreen.kt`, `SubwayNowManager.kt`, `SubwayNowReceiver.kt`)**:
+  - 오늘의 근무표 로드 시 다이아를 자동 분석하여 `AlarmManager`로 각 열차의 전송 시점에 맞춰 백그라운드 발송 예약.
+  - 출근 시 일괄 전송 모드 시 당일 열차 자동 일괄 등록.
+  - `TodayWorkScreen`에 `🤖 텔레그램 열차 추적` 연동 뱃지 및 터치 시 열차별 `[🚀 즉시 전송]` / `[🛑 추적 취소]` 제어 다이얼로그 제공.
+- **6. Room DB 이력 영속화 및 네트워크 보안 설정 (`BotCommandHistoryEntity.kt`, `BotCommandDao.kt`, `CrewMateDatabase.kt`, `network_security_config.xml`)**:
+  - `bot_command_histories` 테이블 신설 및 Room DB v8 판올림.
+  - `network_security_config.xml`: Korail Xcrew 도메인은 100% 엄격한 HTTPS를 유지하면서, SubwayNowBot 서버(`129.225.156.25`)와의 HTTP 통신을 안전하게 허용.
+- **주요 수정/신설 파일**:
+  - `app/src/main/java/com/example/crewmate/telegram/SubwayNowSettings.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/telegram/SubwayNowRuleEvaluator.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/telegram/SubwayNowApiClient.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/telegram/SubwayNowManager.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/telegram/SubwayNowReceiver.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/telegram/ui/SubwayNowBotSettingsCard.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/database/BotCommandHistoryEntity.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/database/BotCommandDao.kt` (신설)
+  - `app/src/main/java/com/example/crewmate/database/CrewMateDatabase.kt`
+  - `app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt`
+  - `app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt`
+  - `app/src/main/AndroidManifest.xml`
+  - `app/src/main/res/xml/network_security_config.xml`
+  - `app/src/test/java/com/example/crewmate/telegram/SubwayNowRuleEvaluatorTest.kt` (신설)
+  - `SubwayNowBot/api_bridge.py` (신설)
+  - `SubwayNowBot/bot.py`
+  - `SubwayNowBot/requirements.txt`
+  - `SubwayNowBot/test_api_bridge.py` (신설)
+
+---
+
 ## [v1.0.12] - 2026-10-28
 
 ### 🎨 세부 UI/UX 디자인, 이모지 및 문구 정리 6대 개선 완비

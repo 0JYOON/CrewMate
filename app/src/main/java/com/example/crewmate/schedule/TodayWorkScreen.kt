@@ -319,6 +319,9 @@ private fun AttendanceStatusSection(
         var isAlarmEnabled by remember { mutableStateOf(false) }
         var showUpcomingAlarmsDialog by remember { mutableStateOf(false) }
         var upcomingAlarmsList by remember { mutableStateOf<List<com.example.crewmate.alarm.WorkAlarmItem>>(emptyList()) }
+        var isTelegramEnabled by remember { mutableStateOf(com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)) }
+        var showTelegramControlDialog by remember { mutableStateOf(false) }
+        var todayTrackTargets by remember { mutableStateOf<List<com.example.crewmate.telegram.SubwayNowTrackTarget>>(emptyList()) }
         val dateKey = state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
         val alarmStore = remember(context) { com.example.crewmate.alarm.WorkAlarmSettingsStore(context) }
         var bypassedAlarmKeys by remember(dateKey) { mutableStateOf(alarmStore.getBypassedAlarmKeys(dateKey)) }
@@ -328,20 +331,22 @@ private fun AttendanceStatusSection(
             val alarmStore = com.example.crewmate.alarm.WorkAlarmSettingsStore(context)
             val alarmSettings = alarmStore.loadSettings()
             isAlarmEnabled = alarmSettings.alarmEnabled
+            isTelegramEnabled = com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)
             
-            if (alarmSettings.alarmEnabled) {
-                val parser = com.example.crewmate.data.remote.xcrew.DiaDetailParser()
-                val allSegments = mutableListOf<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>()
-                state.result.dias.forEach { dia ->
-                    val key = "${state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"))}|${dia.schedule.diaNo.orEmpty()}"
-                    val cachedDetail = db.diaDetailDao().getDiaDetail(key)
-                    if (cachedDetail != null && cachedDetail.detailJson.isNotBlank()) {
-                        runCatching {
-                            val detailResponse = parser.parse(cachedDetail.detailJson)
-                            allSegments.addAll(detailResponse.segments)
-                        }
+            val parser = com.example.crewmate.data.remote.xcrew.DiaDetailParser()
+            val allSegments = mutableListOf<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>()
+            state.result.dias.forEach { dia ->
+                val key = "${state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"))}|${dia.schedule.diaNo.orEmpty()}"
+                val cachedDetail = db.diaDetailDao().getDiaDetail(key)
+                if (cachedDetail != null && cachedDetail.detailJson.isNotBlank()) {
+                    runCatching {
+                        val detailResponse = parser.parse(cachedDetail.detailJson)
+                        allSegments.addAll(detailResponse.segments)
                     }
                 }
+            }
+
+            if (alarmSettings.alarmEnabled) {
                 val upcoming = com.example.crewmate.alarm.WorkAlarmRuleEvaluator.evaluate(
                     segments = allSegments,
                     workDate = state.result.workDate,
@@ -350,6 +355,19 @@ private fun AttendanceStatusSection(
                 )
                 upcomingAlarmsCount = upcoming.size
                 upcomingAlarmsList = upcoming
+            }
+
+            if (com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)) {
+                val config = com.example.crewmate.telegram.SubwayNowSettings.getConfig(context)
+                val targets = com.example.crewmate.telegram.SubwayNowRuleEvaluator.evaluateTargets(
+                    segments = allSegments,
+                    workDate = state.result.workDate,
+                    sendLeadMinutes = config.sendLeadMinutes,
+                    trackLeadMinutes = config.trackLeadMinutes,
+                    trackInterval = config.trackInterval
+                )
+                todayTrackTargets = targets
+                com.example.crewmate.telegram.SubwayNowManager.syncTodayDiaSchedule(context, allSegments, state.result.workDate)
             }
         }
 
@@ -370,6 +388,30 @@ private fun AttendanceStatusSection(
                         text = "⏰ 오늘의 예정 정밀 알람 ${upcomingAlarmsCount}건",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        if (isTelegramEnabled && todayTrackTargets.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showTelegramControlDialog = true },
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🤖 텔레그램 열차 추적 (${todayTrackTargets.size}건 연동/예정)",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                         fontSize = 13.sp
                     )
                 }
@@ -475,6 +517,135 @@ private fun AttendanceStatusSection(
                 },
                 confirmButton = {
                     androidx.compose.material3.TextButton(onClick = { showUpcomingAlarmsDialog = false }) {
+                        Text("닫기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            )
+        }
+
+        if (showTelegramControlDialog) {
+            val scope = rememberCoroutineScope()
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showTelegramControlDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.extraLarge,
+                tonalElevation = 6.dp,
+                title = {
+                    Text(
+                        "🤖 텔레그램 열차 위치 추적 (${todayTrackTargets.size}건)",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "설정된 시각표에 맞춰 SubwayNowBot으로 명령어가 자동 전송되어 텔레그램으로 열차 현위치를 안내받습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        todayTrackTargets.forEach { target ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "${target.trainNo} (${target.targetStation}역)",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "출발: ${target.baseDepartureTime}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = "명령어: ${target.rawCommand}",
+                                        fontSize = 11.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = "추적 개시: ${target.trackStartTimeStr} (전송: ${target.sendDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))})",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    val res = com.example.crewmate.telegram.SubwayNowManager.dispatchTarget(
+                                                        context = context,
+                                                        target = target,
+                                                        isManual = true
+                                                    )
+                                                    if (res.isSuccess) {
+                                                        android.widget.Toast.makeText(context, "${target.trainNo} 봇 전송 완료!", android.widget.Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "전송 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            shape = RoundedCornerShape(6.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("🚀 즉시 전송", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    val res = com.example.crewmate.telegram.SubwayNowManager.cancelTarget(
+                                                        context = context,
+                                                        trainNo = target.trainNo
+                                                    )
+                                                    if (res.isSuccess) {
+                                                        android.widget.Toast.makeText(context, "${target.trainNo} 추적이 취소되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        android.widget.Toast.makeText(context, "취소 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            shape = RoundedCornerShape(6.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                        ) {
+                                            Text("🛑 추적 취소", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = { showTelegramControlDialog = false }) {
                         Text("닫기", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
                 }

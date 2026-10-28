@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-
 import androidx.room.TypeConverters
 
 @Database(
@@ -17,9 +16,10 @@ import androidx.room.TypeConverters
         DiaDetailEntity::class,
         AlarmHistoryEntity::class,
         DiaCensusEntity::class,
-        AttendanceStatusEntity::class
+        AttendanceStatusEntity::class,
+        BotCommandHistoryEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -32,6 +32,7 @@ abstract class CrewMateDatabase : RoomDatabase() {
     abstract fun alarmHistoryDao(): AlarmHistoryDao
     abstract fun diaCensusDao(): DiaCensusDao
     abstract fun attendanceStatusDao(): AttendanceStatusDao
+    abstract fun botCommandDao(): BotCommandDao
 
     companion object {
         @Volatile

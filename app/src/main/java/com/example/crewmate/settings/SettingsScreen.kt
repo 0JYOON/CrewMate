@@ -766,6 +766,11 @@ fun SettingsScreen() {
 
         Spacer(Modifier.height(16.dp))
 
+        // --- SubwayNowBot 텔레그램 열차 추적 연동 카드 ---
+        com.example.crewmate.telegram.ui.SubwayNowBotSettingsCard()
+
+        Spacer(Modifier.height(16.dp))
+
         // --- 3. 근무 미제공 달 맞춤형 순환 패턴 인터랙티브 빌더 ---
         var showDatePickerDialog by remember { mutableStateOf(false) }
 
