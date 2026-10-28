@@ -2,10 +2,14 @@ package com.example.crewmate.navigation
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.example.crewmate.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -73,10 +77,28 @@ fun AppNavigation(initialTargetRoute: String? = null) {
     val coroutineScope = rememberCoroutineScope()
     var isPreFetchingOfflineData by remember { mutableStateOf(false) }
 
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == "is_offline_mode") {
+                isOfflineMode = sharedPreferences.getBoolean("is_offline_mode", false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     val globalCensusManager = remember(xcrewSession, appContext) {
         val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
         val database = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
         com.example.crewmate.schedule.DiaCensusManager(dataSource, dataSource, database.diaCensusDao())
+    }
+
+    val sharedDiaDetailRepository = remember(xcrewSession, appContext, isOfflineMode) {
+        val dataSource = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+        val database = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
+        com.example.crewmate.schedule.DiaDetailRepository(dataSource, database.diaDetailDao()) { isOfflineMode }
     }
     
     var authRootRoute by remember(isOfflineMode) { 
@@ -145,6 +167,10 @@ fun AppNavigation(initialTargetRoute: String? = null) {
         }
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
+        WebStorage.getInstance().deleteAllData()
+        xcrewSession.setMockReviewMode(false)
+        xcrewSession.webView?.clearCache(true)
+        xcrewSession.webView?.clearHistory()
         navController.navigate(Routes.Login) {
             popUpTo(0) { inclusive = true }
             launchSingleTop = true
@@ -234,6 +260,11 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     LaunchedEffect(state.isLoggedIn) {
                         if (state.isLoggedIn) {
                             skipAutoLoginOnLoginScreen = false
+                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                runCatching {
+                                    com.example.crewmate.alarm.AutoOfflineManager.syncFromDatabase(appContext)
+                                }
+                            }
                             val mainScreenName = prefs.getString("main_screen", MainScreenOption.SCHEDULE.name)
                             val targetRoute = MainScreenOption.entries.find { it.name == mainScreenName }?.route ?: Routes.Schedule
 
@@ -272,9 +303,6 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     )
                 }
                 composable(Routes.Schedule) {
-                    val diaDetailDataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
                     val scheduleViewModel: ScheduleViewModel = viewModel(
                         factory = ScheduleViewModelFactory(
                             xcrewSession,
@@ -284,7 +312,7 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     )
                     ScheduleScreen(
                         viewModel = scheduleViewModel,
-                        diaDetailDataSource = diaDetailDataSource,
+                        diaDetailDataSource = sharedDiaDetailRepository,
                     )
                 }
                 // composable(Routes.PersonalSchedule) {
@@ -358,16 +386,13 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                         censusManager = globalCensusManager,
                         diaCensusDao = database.diaCensusDao(),
                         crewWorkStatusDataSource = dataSource,
-                        diaDetailDataSource = dataSource,
+                        diaDetailDataSource = sharedDiaDetailRepository,
                         onBack = { navController.popBackStack() }
                     )
                 }
                 composable(Routes.DiaLookup) {
-                    val diaDetailDataSource = remember(xcrewSession) {
-                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
-                    }
                     com.example.crewmate.schedule.DiaLookupScreen(
-                        diaDetailDataSource = diaDetailDataSource,
+                        diaDetailDataSource = sharedDiaDetailRepository,
                         censusManager = globalCensusManager
                     )
                 }
@@ -385,7 +410,7 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     }
                     com.example.crewmate.schedule.CrewWorkStatusScreen(
                         crewWorkStatusRepository = crewWorkStatusRepository,
-                        diaDetailDataSource = crewWorkStatusDataSource
+                        diaDetailDataSource = sharedDiaDetailRepository
                     )
                 }
                 composable(Routes.NonOpStatus) {
@@ -680,14 +705,31 @@ private fun HiddenXcrewWebView(session: XcrewWebViewSession) {
             .clearAndSetSemantics {},
         factory = { context ->
             CookieManager.getInstance().setAcceptCookie(true)
+            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                @Suppress("DEPRECATION")
+                settings.allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION")
+                settings.allowUniversalAccessFromFileURLs = false
+                @Suppress("DEPRECATION")
+                settings.savePassword = false
+                settings.saveFormData = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    settings.safeBrowsingEnabled = true
+                }
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                 webChromeClient = WebChromeClient()
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        session.markPageReady()
+                        if (url != null && url.startsWith("https://xcrew.korail.com") && (view?.progress ?: 100) >= 100) {
+                            session.markPageReady(url)
+                        }
                     }
                 }
                 session.attach(this)

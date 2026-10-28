@@ -62,4 +62,30 @@ class XcrewAuthenticationTest {
         gate.completeRecovery()
         assertTrue(gate.beginRecovery())
     }
+
+    @Test
+    fun mockReviewAccount_matchesOnlyDedicatedReviewCredentials() {
+        assertTrue(MockReviewDataProvider.isReviewAccount("000000", "crewmatereview2026!"))
+        assertTrue(MockReviewDataProvider.isReviewAccount("  000000 ", "crewmatereview2026!"))
+        assertFalse(MockReviewDataProvider.isReviewAccount("000000", "wrong_password"))
+        assertFalse(MockReviewDataProvider.isReviewAccount("123456", "crewmatereview2026!"))
+    }
+
+    @Test
+    fun mockReviewDataProvider_generatesValidSchedulesAndDiaDetails() {
+        val scheduleResponse = MockReviewDataProvider.getWorkSchedules("202610", XcrewWorkScheduleParser())
+        assertEquals(31, scheduleResponse.data.size)
+
+        val diaDetail = MockReviewDataProvider.fetchDiaDetail("20261025", "16001")
+        assertTrue(diaDetail.segments.isNotEmpty())
+        assertTrue(diaDetail.summaries.isNotEmpty())
+        assertEquals("평휴, 평평, 평토", diaDetail.extractRunDays())
+
+        val crewStatus = MockReviewDataProvider.fetchCrewWorkStatus("20261025")
+        assertTrue(crewStatus.isNotEmpty())
+
+        val attendance = MockReviewDataProvider.fetchAttendanceStatus("김철도", "20261025")
+        assertEquals(1, attendance.size)
+        assertEquals("07:32", attendance.first().actualTime)
+    }
 }

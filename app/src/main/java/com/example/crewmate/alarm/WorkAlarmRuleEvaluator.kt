@@ -17,7 +17,9 @@ data class WorkAlarmItem(
     val trainNo: String,
     val dptStnNm: String,
     val dptTimeStr: String
-)
+) {
+    val uniqueKey: String get() = "${triggerDateTime}_${ruleTitle}_${trainNo}_$cat"
+}
 
 object WorkAlarmRuleEvaluator {
 
@@ -106,10 +108,12 @@ object WorkAlarmRuleEvaluator {
         if (settings.attendanceEnabled && attendanceStatuses.isNotEmpty()) {
             val now = LocalDateTime.now()
             attendanceStatuses.forEachIndexed { attIdx, att ->
-                val actualTime = att.actualTime
-                val isAlreadyAttended = !actualTime.isNullOrBlank()
+                val actualTime = att.actualTime?.trim()
+                val hasActualTime = !actualTime.isNullOrBlank() && actualTime != "-" && actualTime != "null"
+                val isCompletedStatus = att.gtwcGubunCd?.trim() == "3" || att.gtwcGubunCd?.trim() == "6"
+                val isAlreadyAttended = hasActualTime || isCompletedStatus
 
-                // If actual attendance time is present (completed), auto-skip alarm!
+                // 출무 상태(적합성미완료 등)와 무관하게 실제 출무시각이 확인되면 출무 알람 자동 해제
                 if (!isAlreadyAttended) {
                     val scheduledTime = parseTimeSafe(att.gtwcEpctTm)
                     if (scheduledTime != null) {

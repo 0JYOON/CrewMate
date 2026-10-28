@@ -15,11 +15,23 @@ interface LeaveDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAnnualLeave(leave: AnnualLeaveEntity)
 
-    @Query("SELECT * FROM carried_over_leaves ORDER BY endDate ASC")
+    @Query("SELECT * FROM annual_leaves ORDER BY year ASC")
+    suspend fun getAllAnnualLeaves(): List<AnnualLeaveEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAnnualLeaves(leaves: List<AnnualLeaveEntity>)
+
+    @Query("SELECT * FROM carried_over_leaves ORDER BY endDate ASC, id ASC")
     fun getCarriedOverLeaves(): Flow<List<CarriedOverLeaveEntity>>
+
+    @Query("SELECT * FROM carried_over_leaves ORDER BY endDate ASC, id ASC")
+    suspend fun getAllCarriedOverLeaves(): List<CarriedOverLeaveEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCarriedOverLeave(leave: CarriedOverLeaveEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCarriedOverLeaves(leaves: List<CarriedOverLeaveEntity>)
 
     @Delete
     suspend fun deleteCarriedOverLeave(leave: CarriedOverLeaveEntity)

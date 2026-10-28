@@ -1,6 +1,9 @@
 package com.example.crewmate.schedule
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -52,6 +55,8 @@ fun DiaDetailCard(
     schedule: WorkSchedule,
     detail: DiaDetailResponse,
     workDate: LocalDate? = null,
+    forceShowAllDetails: Boolean? = null,
+    isCaptureMode: Boolean = false,
 ) {
     val diaPrefix = if (schedule.isContinuation) "~" else ""
     val diaText = "$diaPrefix${schedule.diaNo.orEmpty()}"
@@ -114,7 +119,8 @@ fun DiaDetailCard(
 
                     val categorizedSegments = remember(detail.segments, workDate) { categorizeSegments(detail.segments, workDate) }
 
-                    var showHiddenDetails by remember { mutableStateOf(false) }
+                    var showHiddenDetailsState by remember { mutableStateOf(false) }
+                    val showHiddenDetails = forceShowAllDetails ?: showHiddenDetailsState
 
                     categorizedSegments.forEachIndexed { index, item ->
                         val seg = item.segment
@@ -143,69 +149,82 @@ fun DiaDetailCard(
                         val isHiddenItem = isRank3 || isSandwiched
 
                         if (isHiddenItem) {
-                            AnimatedVisibility(visible = showHiddenDetails) {
-                                SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex)
+                            if (isCaptureMode) {
+                                if (showHiddenDetails) {
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
+                                }
+                            } else {
+                                AnimatedVisibility(visible = showHiddenDetails) {
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
+                                }
                             }
                         } else {
-                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex)
+                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
                         }
                     }
                     
                     val hasHiddenItems = categorizedSegments.any { it.rank == 3 || (it.isSandwichedGamsi && hideSandwichedGamsi) }
-                    if (hasHiddenItems) {
-                        TextButton(onClick = { showHiddenDetails = !showHiddenDetails }, modifier = Modifier.fillMaxWidth()) {
+                    if (hasHiddenItems && !isCaptureMode) {
+                        TextButton(onClick = { showHiddenDetailsState = !showHiddenDetails }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (showHiddenDetails) "상세 구간 접기" else "상세 구간 더보기", color = MaterialTheme.colorScheme.primary)
                         }
                     }
 
-                    // 사업시간/거리 요약 정보
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
-                    var showSummary by remember { mutableStateOf(false) }
-                    TextButton(onClick = { showSummary = !showSummary }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (showSummary) "사업시간/거리 요약 접기" else "사업시간/거리 요약 보기", color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
-                    }
-                    
-                    AnimatedVisibility(visible = showSummary) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
-                            // 운용요일, 시행기간 표출
-                            val runDays = detail.extractRunDays()
-                            val effectiveTerm = detail.extractEffectiveTermStr()
-                            
-                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("운용요일", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text(runDays, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("시행기간", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                Text(effectiveTerm, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-
-                            // 표출할 정보: 준비, 운전/승무, 감시, 휴게, 승계, 총사업시간, 총사업거리
-                            val prepTime = detail.summaries.find { it.pjtHrDvNm?.contains("준비") == true }?.pjtTnum ?: 0
-                            val driveTime = detail.summaries.filter { it.pjtHrDvNm?.contains("운전") == true || it.pjtHrDvNm?.contains("승무") == true }.sumOf { it.pjtTnum ?: 0 }
-                            val monitorTime = detail.summaries.find { it.pjtHrDvNm?.contains("감시") == true }?.pjtTnum ?: 0
-                            val restTime = detail.summaries.find { it.pjtHrDvNm?.contains("휴게") == true }?.pjtTnum ?: 0
-                            val transferTime = detail.summaries.find { it.pjtHrDvNm?.contains("승계") == true }?.pjtTnum ?: 0
-                            
-                            val totalTime = detail.summaries.firstOrNull()?.totWrkTnum ?: 0
-                            val totalDist = detail.summaries.firstOrNull()?.totPjtDst ?: 0.0
-
-                            fun Int.toHourMin() = String.format(Locale.US, "%02d:%02d", this / 60, this % 60)
-
-                            SummaryRow("준비", prepTime.toHourMin())
-                            SummaryRow("운전/승무", driveTime.toHourMin())
-                            SummaryRow("감시", monitorTime.toHourMin())
-                            SummaryRow("휴게", restTime.toHourMin())
-                            SummaryRow("승계", transferTime.toHourMin())
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                            SummaryRow("총사업시간", totalTime.toHourMin(), isTotal = true)
-                            SummaryRow("총사업거리", String.format(Locale.US, "%.1f km", totalDist), isTotal = true)
+                    // 사업시간/거리 요약 정보 (캡처 모드에서는 제외하고 타임라인만 표출)
+                    if (!isCaptureMode) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                        var showSummary by remember { mutableStateOf(false) }
+                        TextButton(onClick = { showSummary = !showSummary }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (showSummary) "사업시간/거리 요약 접기" else "사업시간/거리 요약 보기", color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
+                        }
+                        
+                        AnimatedVisibility(visible = showSummary) {
+                            DiaSummaryContent(detail)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiaSummaryContent(detail: DiaDetailResponse) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
+        // 운용요일, 시행기간 표출
+        val runDays = detail.extractRunDays()
+        val effectiveTerm = detail.extractEffectiveTermStr()
+        
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("운용요일", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(runDays, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("시행기간", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(effectiveTerm, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+
+        // 표출할 정보: 준비, 운전/승무, 감시, 휴게, 승계, 총사업시간, 총사업거리
+        val prepTime = detail.summaries.find { it.pjtHrDvNm?.contains("준비") == true }?.pjtTnum ?: 0
+        val driveTime = detail.summaries.filter { it.pjtHrDvNm?.contains("운전") == true || it.pjtHrDvNm?.contains("승무") == true }.sumOf { it.pjtTnum ?: 0 }
+        val monitorTime = detail.summaries.find { it.pjtHrDvNm?.contains("감시") == true }?.pjtTnum ?: 0
+        val restTime = detail.summaries.find { it.pjtHrDvNm?.contains("휴게") == true }?.pjtTnum ?: 0
+        val transferTime = detail.summaries.find { it.pjtHrDvNm?.contains("승계") == true }?.pjtTnum ?: 0
+        
+        val totalTime = detail.summaries.firstOrNull()?.totWrkTnum ?: 0
+        val totalDist = detail.summaries.firstOrNull()?.totPjtDst ?: 0.0
+
+        fun Int.toHourMin() = String.format(Locale.US, "%02d:%02d", this / 60, this % 60)
+
+        SummaryRow("준비", prepTime.toHourMin())
+        SummaryRow("운전/승무", driveTime.toHourMin())
+        SummaryRow("감시", monitorTime.toHourMin())
+        SummaryRow("휴게", restTime.toHourMin())
+        SummaryRow("승계", transferTime.toHourMin())
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+        SummaryRow("총사업시간", totalTime.toHourMin(), isTotal = true)
+        SummaryRow("총사업거리", String.format(Locale.US, "%.1f km", totalDist), isTotal = true)
     }
 }
 
@@ -227,7 +246,7 @@ private fun SummaryRow(label: String, value: String, isTotal: Boolean = false) {
 
 data class CategorizedSegment(val segment: DiaDetailSegment, val name: String, val rank: Int, val isCurrent: Boolean = false, val isSandwichedGamsi: Boolean = false)
 
-private fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: LocalDate?): List<CategorizedSegment> {
+internal fun categorizeSegments(segments: List<DiaDetailSegment>, workDate: LocalDate?): List<CategorizedSegment> {
     val segmentDateTimes = computeSegmentDateTimes(segments, workDate)
     val now = LocalDateTime.now()
 
@@ -313,8 +332,10 @@ private fun SegmentRow(
     isRank3: Boolean,
     cat: String,
     trn: String,
-    isLast: Boolean
+    isLast: Boolean,
+    workDate: LocalDate? = null,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val seg = item.segment
     val isCurrent = item.isCurrent
     val rowBg = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else if (isRank1) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
@@ -384,7 +405,18 @@ private fun SegmentRow(
             if (trn.isNotEmpty()) {
                 Surface(
                     color = if (isRank1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(4.dp)
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.clickable {
+                        val dateStr = (workDate ?: LocalDate.now()).format(DateTimeFormatter.BASIC_ISO_DATE)
+                        val cleanTrn = trn.trim()
+                        val url = "https://rail.blue/railroad/logis/Default.aspx?date=$dateStr&train=$cleanTrn#!"
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                    }
                 ) {
                     Text(
                         text = "$trn $cat",

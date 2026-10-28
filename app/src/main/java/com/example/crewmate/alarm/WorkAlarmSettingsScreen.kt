@@ -9,6 +9,13 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,7 +119,8 @@ private fun checkAlarmPrerequisites(context: Context): Triple<Boolean, Boolean, 
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
 
-    val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    val notifEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    val hasNotif = notifEnabled && if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     } else true
 
@@ -195,6 +203,75 @@ fun WorkAlarmSettingsScreen(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var prerequisites by remember { mutableStateOf(checkAlarmPrerequisites(context)) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val updatedPrereqs = checkAlarmPrerequisites(context)
+        prerequisites = updatedPrereqs
+        if (isGranted) {
+            Toast.makeText(context, "알림 권한이 허용되었습니다.", Toast.LENGTH_SHORT).show()
+            if (updatedPrereqs.first && updatedPrereqs.second && updatedPrereqs.third) {
+                val updated = alarmSettings.copy(alarmEnabled = true)
+                alarmSettings = updated
+                alarmSettingsStore.saveSettings(updated)
+                refreshTodayAlarms()
+                showSafetyDialog = false
+            }
+        } else {
+            Toast.makeText(context, "알림 권한이 허용되지 않았습니다. 설정 화면에서 알림을 켜주세요.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val updatedPrereqs = checkAlarmPrerequisites(context)
+                prerequisites = updatedPrereqs
+                if (showSafetyDialog && updatedPrereqs.first && updatedPrereqs.second && updatedPrereqs.third) {
+                    val updated = alarmSettings.copy(alarmEnabled = true)
+                    alarmSettings = updated
+                    alarmSettingsStore.saveSettings(updated)
+                    refreshTodayAlarms()
+                    showSafetyDialog = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    fun handleNotificationPermissionClick() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            if (permStatus != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        try {
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "알림 설정 화면을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         refreshTodayAlarms()
     }
@@ -252,12 +329,23 @@ fun WorkAlarmSettingsScreen(
                         checked = alarmSettings.alarmEnabled,
                         onCheckedChange = { checked ->
                             if (checked) {
-                                val (hasNotif, hasExact, isIgnoringBattery) = checkAlarmPrerequisites(context)
+                                val currentPrereqs = checkAlarmPrerequisites(context)
+                                prerequisites = currentPrereqs
+                                val (hasNotif, hasExact, isIgnoringBattery) = currentPrereqs
                                 if (!hasNotif || !hasExact || !isIgnoringBattery) {
                                     val updated = alarmSettings.copy(alarmEnabled = false)
                                     alarmSettings = updated
                                     alarmSettingsStore.saveSettings(updated)
-                                    showSafetyDialog = true
+                                    if (!hasNotif && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        if (!hasExact || !isIgnoringBattery) {
+                                            showSafetyDialog = true
+                                        }
+                                    } else {
+                                        showSafetyDialog = true
+                                    }
                                 } else {
                                     val updated = alarmSettings.copy(alarmEnabled = true)
                                     alarmSettings = updated
@@ -711,7 +799,7 @@ fun WorkAlarmSettingsScreen(
 
     // Safety Prerequisites Dialog
     if (showSafetyDialog) {
-        val (hasNotif, hasExact, isIgnoringBattery) = checkAlarmPrerequisites(context)
+        val (hasNotif, hasExact, isIgnoringBattery) = prerequisites
         AlertDialog(
             onDismissRequest = { showSafetyDialog = false },
             containerColor = MaterialTheme.colorScheme.surface,
@@ -781,10 +869,23 @@ fun WorkAlarmSettingsScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    if (!hasNotif || !hasExact) {
+                    if (!hasNotif) {
+                        Button(
+                            onClick = { handleNotificationPermissionClick() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2563EB),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("🔔 알림 권한 허용 (직통 연결)", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (!hasExact) {
                         Button(
                             onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasExact) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     try {
                                         context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}")))
                                     } catch (_: Exception) {
@@ -794,9 +895,13 @@ fun WorkAlarmSettingsScreen(
                                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF0D9488),
+                                contentColor = Color.White
+                            )
                         ) {
-                            Text("알림 / 알람 권한 설정 이동", fontWeight = FontWeight.Bold)
+                            Text("⏰ 정확한 알람 권한 설정 (직통 연결)", fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -806,24 +911,34 @@ fun WorkAlarmSettingsScreen(
                                 val pkgUri = Uri.parse("package:${context.packageName}")
                                 try {
                                     val intent = Intent(
-                                        Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
                                     ).apply {
+                                        data = pkgUri
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                     }
                                     context.startActivity(intent)
                                 } catch (_: Exception) {
-                                    val intent = Intent(
-                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                        pkgUri
-                                    ).apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    try {
+                                        val intent = Intent(
+                                            Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                                        ).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        val intent = Intent(
+                                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            pkgUri
+                                        ).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                        context.startActivity(intent)
                                     }
-                                    context.startActivity(intent)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("배터리 최적화 제외 설정 이동", fontWeight = FontWeight.Bold)
+                            Text("🔋 배터리 최적화 제외 설정 (직통 연결)", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

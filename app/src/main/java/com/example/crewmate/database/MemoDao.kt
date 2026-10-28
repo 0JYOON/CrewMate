@@ -23,4 +23,10 @@ interface MemoDao {
 
     @Delete
     suspend fun deleteMemo(memo: MemoEntity)
+
+    @Query("SELECT * FROM memos ORDER BY date ASC, id ASC")
+    suspend fun getAllMemos(): List<MemoEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMemos(memos: List<MemoEntity>)
 }

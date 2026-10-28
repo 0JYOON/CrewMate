@@ -31,6 +31,12 @@ com.example.crewmate
 | :--- | :--- | :--- | :--- |
 | `root` | [MainActivity.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/MainActivity.kt) | **앱의 메인 대문**: 앱이 시작할 때 가장 먼저 실행되어 테마와 화면 네비게이션을 띄워주는 파일 | **활성 (핵심)** |
 | `util/` | [AppDateProvider.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/util/AppDateProvider.kt) | **가상 날짜 공급자**: 시스템 시각 변경 없이 앱 내부 날짜를 임의 변경해 테스트할 수 있게 해주는 싱글톤 | **활성 (신규)** |
+| `util/` | [ScreenshotHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/ScreenshotHelper.kt) | **스크린샷 촬영/저장기**: Compose 뷰를 캡처하여 MediaStore(Pictures/CrewMate)에 PNG 저장 | **활성 (신규)** |
+| `util/` | [DiaCaptureHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt) | **전 화면 다이아 캡처 통합기**: 요약/전체 캡처 옵션 다이얼로그, 전용 문서 헤더 및 갤러리 원스톱 저장 헬퍼 | **활성 (신규)** |
+| `alarm/` | [MidnightCaptureReceiver.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/MidnightCaptureReceiver.kt) | **자정 자동 캡처기**: 매일 자정에 당일 다이아를 요약/전체 옵션에 맞춰 가변 높이 비트맵 렌더링해 갤러리에 자동 저장하는 수신기 | **활성 (신규)** |
+| `alarm/` | [AutoOfflineManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineManager.kt) | **자동 오프라인 스케줄러 및 DB 동기화기**: 1순위 운전 구간(다중 구간 포함) 전환/복귀 시각 계산, 즉시 전환 및 예정 스케줄 요약 기록 | **활성 (핵심)** |
+| `alarm/` | [AutoOfflineReceiver.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineReceiver.kt) | **자동 오프라인 수신기 및 이력 기록기**: 예약 시각에 오프라인/온라인 전환, 실제 작동 시각(`yyyy-MM-dd HH:mm:ss`) 기록 및 차기 구간 예약 | **활성 (핵심)** |
+| `schedule/` | [WorkPatternSettings.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/WorkPatternSettings.kt) | **순환 근무 패턴 저장소**: 기준일자와 사용자 지정 순환 뱃지([주간],[야간],[~],[S]) 패턴 저장 및 달력 매핑 | **활성 (신규)** |
 | `alarm/` | [WorkAlarmScheduler.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/alarm/WorkAlarmScheduler.kt) | **알람 예약 시계**: 안드로이드 OS에 알람 시각을 정확히 등록하는 시계 기사 | **활성 (핵심)** |
 | `alarm/` | [AlarmLoopService.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/alarm/AlarmLoopService.kt) | **무한 알람 사이렌**: 해제 버튼을 누를 때까지 소리와 워치 손목 진동을 계속 울려주는 서비스 | **활성 (핵심)** |
 | `alarm/` | [WorkAlarmRuleEvaluator.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/alarm/WorkAlarmRuleEvaluator.kt) | **알람 판정 두뇌**: 출근, 출무, 운전, 편승 등 6대 규칙에 따라 몇 시에 알람을 울릴지 정밀 계산 | **활성 (핵심)** |
@@ -62,7 +68,10 @@ com.example.crewmate
 | `schedule/` | [CrewWorkStatusScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/schedule/CrewWorkStatusScreen.kt) | **소속 승무원 근무 현황 화면**: 사업소 승무원들의 일자별 근무 현황표 화면 | **활성 (핵심)** |
 | `schedule/` | [NonOpStatusScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/schedule/NonOpStatusScreen.kt) | **비실동 현황 화면**: 교육, 출장, 연차, 병가 등 비실동 종합 현황표 화면 | **활성 (핵심)** |
 | `schedule/` | [WorkSchedule.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/schedule/WorkSchedule.kt) | **근무 스케줄 모델 및 판정 엔진**: `alcSpecDvCd` 절대 규칙 기반 `determineShiftType()` 판정식 | **활성 (핵심)** |
-| `settings/` | [SettingsScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt) | **일반 설정 화면**: 앱 테마, 주요 항목 사이 감시 숨기기, 가상 날짜 디버그 진입 | **활성 (핵심)** |
+| `data/backup/` | [DataBackupManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/data/backup/DataBackupManager.kt) | **사용자 데이터 백업/복원 엔진**: 작성 메모, 연차/휴가 정보, 앱 설정을 JSON으로 암호화/비민감 안전 추출 및 복원 | **활성 (핵심)** |
+| `util/` | [DiaCaptureHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt) | **공통 다이아 캡처 헬퍼 모듈**: 전 화면 다이아 캡처 옵션 팝업, 인쇄 레이아웃 및 무결점 비트맵 캡처 실행기 | **활성 (핵심)** |
+| `settings/` | [SettingsScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt) | **일반 설정 화면**: 앱 테마, 주요 항목 사이 감시 숨기기, 가상 날짜 디버그 진입, 데이터 백업/복원, 자동 오프라인 관리 | **활성 (핵심)** |
+| `util/` | [ScreenshotHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/ScreenshotHelper.kt) | **오프스크린 스크린샷 렌더러 및 갤러리 저장기**: DecorView 기반 무결점 고화질 비트맵 캡처 및 MediaStore 저장 | **활성 (핵심)** |
 | `ui/theme/` | [Color.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/Color.kt) | **M3 색상 팔레트**: M3 Tonal Color System 라이트/다크 모드 색상 정의 | **활성 (핵심)** |
 | `ui/theme/` | [Type.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/Type.kt) | **M3 타이포그래피 스케일**: 숫자, 시각, 열차번호 가독성 최적화 M3 서체 스케일 | **활성 (신규)** |
 | `ui/theme/` | [Shape.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/Shape.kt) | **M3 곡률 스케일**: 4.dp / 8.dp / 12.dp / 16.dp / 28.dp 정식 M3 곡률 스케일 | **활성 (신규)** |
@@ -155,3 +164,46 @@ com.example.crewmate
 ### 6. 상단 CrewMate 로고 모양이나 텍스트를 고치고 싶을 때
 - **수정할 파일**: [CrewMateLogo.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/CrewMateLogo.kt)
 - **수정 위치**: 로고 벡터 그래픽 디자인 파일입니다.
+
+### 7. 네트워크 HTTPS 보안 도메인 추가 및 WebView 보안/ProGuard 설정 변경 위치
+- **수정할 파일**: [network_security_config.xml](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/res/xml/network_security_config.xml), [proguard-rules.pro](file:///C:/Users/joon1/Documents/CrewMate/app/proguard-rules.pro), [KorailWebView.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/login/KorailWebView.kt), [AppNavigation.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/navigation/AppNavigation.kt)
+- **수정 위치**:
+  - 코레일 서버 도메인이 추가/변경될 경우 
+es/xml/network_security_config.xml의 <domain-config> 블록에 새 도메인을 등록합니다.
+  - WebView 보안 플래그(setWebContentsDebuggingEnabled(BuildConfig.DEBUG), llowFileAccess = false 등)는 KorailWebView.kt와 AppNavigation.kt 하단의 HiddenXcrewWebView에 설정되어 있습니다.
+
+### 8. 구글 플레이 스토어 심사용 테스트 계정(Mock 로그인) 아이디/비밀번호 변경 위치
+- **수정할 파일**: [MockReviewDataProvider.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/data/remote/xcrew/MockReviewDataProvider.kt)
+- **수정 위치**: 파일 상단의 REVIEW_EMPLOYEE_NO = "000000", REVIEW_PASSWORD = "crewmatereview2026!" 상수를 변경하면 심사용 계정 정보를 즉시 바꿀 수 있습니다.
+
+### 9. 실무 편의 5대 기능(스크린샷, 알람 Bypass, 자동 오프라인 및 QA 기록 패널, 순환 패턴, 레일블루 링크) 설정 위치
+- **수정할 파일**: [SettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt), [WorkPatternSettings.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/WorkPatternSettings.kt), [AutoOfflineManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineManager.kt), [AutoOfflineReceiver.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineReceiver.kt), [DiaDetailCard.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/DiaDetailCard.kt)
+- **수정 위치**:
+  - `SettingsScreen.kt`에서 '자정 자동 캡처'(`midnight_auto_capture` 및 요약/전체 형태 선택 `midnight_auto_capture_option`), '운전 시간 자동 오프라인'(`auto_offline_mode` 및 하단 QA 시각 기록 관리 패널), '미조회 월 순환 근무 패턴 빌더' UI 및 SharedPreferences 키를 관리합니다.
+  - `WorkPatternSettings.kt`에서 기본 패턴 주기(`DEFAULT_CYCLE`)와 기준일자 포맷(`YYYY-MM-DD`) 및 모듈로 매핑 규칙을 조정할 수 있습니다.
+  - `AutoOfflineManager.kt`에서 1순위 업무 판정 조건(`isRank1`), 자동 오프라인 전환 리드 타임(1분 전), 복귀 조건('정리', '입고정리'), 그리고 QA 기록용 SharedPreferences 키(`PREF_SCHEDULED_SUMMARY`, `PREF_LAST_OFFLINE_TIME`, `PREF_LAST_ONLINE_TIME`)를 관리합니다.
+  - `DiaDetailCard.kt`에서 레일블루 URL 템플릿(`https://rail.blue/railroad/logis/Default.aspx?date={date}&train={train}#!`)을 수정할 수 있습니다.
+
+### 10. 전 화면 다이아 스크린샷 오프스크린 렌더러(ScrollView 무제한 높이) 및 공통 캡처 모듈 변경 위치
+- **수정할 파일**: [DiaCaptureHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt), [ScreenshotHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/ScreenshotHelper.kt), [ScheduleScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/ScheduleScreen.kt), [DiaLookupScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/DiaLookupScreen.kt), [TodayWorkScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt), [DiaDetailCard.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/DiaDetailCard.kt)
+- **수정 위치**:
+  - `DiaCaptureHelper.kt` 상단의 `enum class DiaCaptureOption(title, filePrefix, showAll)`에서 2대 핵심 범위(`타임라인 요약` → `CrewMate_타임라인요약`, `타임라인 전체` → `CrewMate_타임라인전체`)의 제목과 한글 파일명 prefix를 수정할 수 있습니다.
+  - `DiaCaptureHelper.kt` 내의 `DiaCaptureLayout` 및 `DiaDetailCard.kt`의 `isCaptureMode = true` 분기에서 캡처본에 표시되는 인쇄용 헤더와 다이아 카드의 배치 및 패딩을 일괄 조정할 수 있습니다.
+  - `ScreenshotHelper.kt`의 `captureComposableToBitmap`에서 `ScrollView` 컨테이너 기반 오프스크린 무제한 높이(`MeasureSpec.UNSPECIFIED`) 측정 및 Canvas 배경색을 조정할 수 있습니다.
+
+### 11. 데이터 백업/복원(JSON) 및 오프라인 모드 복귀 지연/Skip 설정 위치
+- **수정할 파일**: [DataBackupManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/data/backup/DataBackupManager.kt), [AutoOfflineManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineManager.kt), [AutoOfflineReceiver.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/AutoOfflineReceiver.kt), [SettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt), [TodayWorkScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt)
+- **수정 위치**:
+  - `DataBackupManager.kt`에서 백업 파일 제외 대상 키(`EXCLUDED_PREF_KEYS`, 비밀번호, 키스토어, 세션 토큰 등) 및 JSON 직렬화 구조를 관리합니다.
+  - `AutoOfflineManager.kt`에서 정리/입고정리 후 온라인 복귀 기본 지연 시간(`PREF_RETURN_DELAY_MINUTES`, 기본 10분) 및 `skipOnlineReturn` / `resetReturnSkipped` 로직을 관리합니다.
+  - `SettingsScreen.kt`에서 데이터 백업(내보내기)/복원(가져오기) UI 카드와 복귀 지연 칩(`0분`, `5분`, `10분`, `15분`, `20분`) 및 복귀 Skip 버튼을 제어합니다.
+  - `TodayWorkScreen.kt` 상단바에서 오프라인 모드 진입 시 표시되는 원터치 `[복귀 Skip]` 버튼 상태를 제어합니다.
+
+
+### 12. 정밀 알람 3대 필수 권한(알림/정밀알람/배터리 최적화) 직통 연결 및 시스템 사전 준비 다이얼로그 위치
+- **수정할 파일**: [WorkAlarmSettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/alarm/WorkAlarmSettingsScreen.kt), [SettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt)
+- **수정 위치**:
+  - WorkAlarmSettingsScreen.kt 상단의 checkAlarmPrerequisites 함수에서 NotificationManagerCompat, POST_NOTIFICATIONS, canScheduleExactAlarms, isIgnoringBatteryOptimizations 3대 권한 검사 조건을 관리합니다.
+  - 
+otificationPermissionLauncher 및 handleNotificationPermissionClick에서 Android 13+ 1-탭 팝업(RequestPermission()) 및 Android 8.0+ 직통 알림 설정 인텐트(Settings.ACTION_APP_NOTIFICATION_SETTINGS)를 제어합니다.
+  - showSafetyDialog에서 🔔 알림 권한 허용 (직통 연결), ⏰ 정확한 알람 권한 설정 (직통 연결), 🔋 배터리 최적화 제외 설정 (직통 연결)의 다이얼로그 UI 및 색상을 관리합니다.

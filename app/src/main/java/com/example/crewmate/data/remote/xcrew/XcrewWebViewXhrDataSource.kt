@@ -1,6 +1,7 @@
 package com.example.crewmate.data.remote.xcrew
 
 import android.util.Log
+import android.webkit.WebStorage
 import android.webkit.WebView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
@@ -53,6 +54,14 @@ class XcrewWebViewSession {
     
     private val _userInfo = MutableStateFlow<Pair<String, String>?>(null)
     val userInfo: StateFlow<Pair<String, String>?> = _userInfo.asStateFlow()
+
+    @Volatile
+    var isMockReviewSession: Boolean = false
+        private set
+
+    fun setMockReviewMode(enabled: Boolean) {
+        isMockReviewSession = enabled
+    }
     
     val requestMutex = kotlinx.coroutines.sync.Mutex()
 
@@ -81,15 +90,23 @@ class XcrewWebViewSession {
     @Volatile
     private var pageReady = CompletableDeferred<Unit>()
 
+    @Volatile
+    private var expectedTargetPrefix: String? = null
+
     fun attach(webView: WebView) {
         this.webView = webView
     }
 
-    fun markPageReady() {
+    fun markPageReady(loadedUrl: String? = null) {
+        val prefix = expectedTargetPrefix
+        if (prefix != null && loadedUrl != null && !loadedUrl.startsWith(prefix)) {
+            return
+        }
         pageReady.complete(Unit)
     }
 
-    fun resetPageReady() {
+    fun resetPageReady(targetPrefix: String? = null) {
+        expectedTargetPrefix = targetPrefix
         pageReady = CompletableDeferred()
     }
 
@@ -103,12 +120,12 @@ class XcrewWebViewSession {
 
     suspend fun prepareForLogin() {
         withContext(Dispatchers.Main.immediate) {
+            isMockReviewSession = false
             _userInfo.value = null
             _authenticationExpired.value = false
             webView?.let { view ->
-                resetPageReady()
                 view.stopLoading()
-                view.loadUrl("https://xcrew.korail.com/loginView.do")
+                resetPageReady()
             }
         }
     }
@@ -116,8 +133,8 @@ class XcrewWebViewSession {
     suspend fun refreshWebViewPage(targetUrl: String = "https://xcrew.korail.com/extrCrewMg/extrRltmCrewWrkPstt.do") {
         withContext(Dispatchers.Main.immediate) {
             val view = webView ?: return@withContext
-            resetPageReady()
             view.stopLoading()
+            resetPageReady("https://xcrew.korail.com/extrCrewMg/")
             view.loadUrl(targetUrl)
         }
         runCatching {
@@ -143,6 +160,11 @@ class XcrewWebViewXhrDataSource(
 ) : XcrewDataSource, DiaDetailDataSource, CrewWorkStatusDataSource {
     override suspend fun getWorkSchedules(month: String): XcrewWorkScheduleResponse {
         require(month.matches(Regex("\\d{6}"))) { "Month must be yyyyMM" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.getWorkSchedules(month, parser)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
 
@@ -169,6 +191,8 @@ class XcrewWebViewXhrDataSource(
                 fields = fields,
                 logLabel = "month=$month empNm=$empNm",
             )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             if (empNm.isNotEmpty()) {
                 request(
@@ -238,6 +262,11 @@ class XcrewWebViewXhrDataSource(
     override suspend fun fetchDiaDetail(pjtDt: String, pdiaNo: String): DiaDetailResponse {
         require(pjtDt.matches(Regex("\\d{8}"))) { "Project date must be yyyyMMdd" }
         require(pdiaNo.matches(Regex("[A-Za-z0-9]+"))) { "Dia number has an invalid format" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.fetchDiaDetail(pjtDt, pdiaNo)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
         val xhrResponse = request(
@@ -264,6 +293,11 @@ class XcrewWebViewXhrDataSource(
 
     override suspend fun fetchCrewWorkStatus(pjtDt: String): List<CrewAssignment> {
         require(pjtDt.matches(Regex("\\d{8}"))) { "Project date must be yyyyMMdd" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.fetchCrewWorkStatus(pjtDt)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
         val xhrResponse = request(
@@ -281,6 +315,11 @@ class XcrewWebViewXhrDataSource(
 
     suspend fun fetchNonOpStatus(year: String): List<NonOpData> {
         require(year.matches(Regex("\\d{4}"))) { "Year must be yyyy" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.fetchNonOpStatus(year)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
 
@@ -325,6 +364,11 @@ class XcrewWebViewXhrDataSource(
 
     suspend fun fetchPersonalWorkSchedule(pjtDt: String, empNm: String): List<PersonalWorkScheduleDto> {
         require(pjtDt.matches(Regex("\\d{8}"))) { "pjtDt must be yyyyMMdd" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.fetchPersonalWorkSchedule(pjtDt, empNm)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
         
@@ -347,6 +391,11 @@ class XcrewWebViewXhrDataSource(
 
     suspend fun fetchAttendanceStatus(empNm: String, pjtDt: String): List<AttendanceStatusDto> {
         require(pjtDt.matches(Regex("\\d{8}"))) { "pjtDt must be yyyyMMdd" }
+        if (session.isMockReviewSession) {
+            return withContext(Dispatchers.Default) {
+                MockReviewDataProvider.fetchAttendanceStatus(empNm, pjtDt)
+            }
+        }
         val webView = session.webView ?: throw MissingXcrewWebViewException()
         session.awaitPageReady()
 
@@ -444,6 +493,7 @@ class XcrewWebViewXhrDataSource(
         })()"""
 
         evaluateJavascript(webView, startScript)
+        var reDispatchedAfterNav = false
         return try {
             withTimeout(XHR_TIMEOUT_MILLIS) {
                 while (true) {
@@ -451,12 +501,29 @@ class XcrewWebViewXhrDataSource(
                         webView,
                         """(function() {
                             var store = window.__crewMateXcrewXhrResults;
-                            if (!store || !store[$quotedId]) return null;
-                            var result = store[$quotedId];
-                            delete store[$quotedId];
-                            return result;
+                            var xhrStore = window.__crewMateXcrewXhrs;
+                            if (!store && !xhrStore) return "__NAV_RESET__";
+                            if (store && store[$quotedId]) {
+                                var result = store[$quotedId];
+                                delete store[$quotedId];
+                                return result;
+                            }
+                            if (xhrStore && xhrStore[$quotedId]) return null;
+                            return "__NAV_RESET__";
                         })()""",
                     )
+                    if (result == "\"__NAV_RESET__\"") {
+                        if (!reDispatchedAfterNav) {
+                            reDispatchedAfterNav = true
+                            Log.w(TAG, "WebView navigated during XHR, awaiting page ready and re-dispatching url=$url")
+                            session.awaitPageReady()
+                            evaluateJavascript(webView, startScript)
+                            delay(100)
+                            continue
+                        } else {
+                            return@withTimeout XcrewWebViewXhrResponse(0, "", "")
+                        }
+                    }
                     if (result != null && result != "null") {
                         return@withTimeout result.toXcrewWebViewXhrResponse()
                     }

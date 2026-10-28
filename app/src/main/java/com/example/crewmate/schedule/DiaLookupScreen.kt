@@ -101,6 +101,46 @@ fun DiaLookupScreen(
     val censusState = censusManager?.progressState?.collectAsState()?.value
     val isRunningCensus = censusState is CensusProgressState.Running
 
+    var showCaptureDialog by remember { mutableStateOf(false) }
+    var activeCaptureOption by remember { mutableStateOf<com.example.crewmate.util.DiaCaptureOption?>(null) }
+    var isCapturing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeCaptureOption) {
+        val option = activeCaptureOption ?: return@LaunchedEffect
+        val successState = uiState as? DiaDetailLoadState.Success ?: return@LaunchedEffect
+        isCapturing = true
+        try {
+            val item = com.example.crewmate.util.DiaCaptureItem(
+                schedule = WorkSchedule(diaNo = diaNo),
+                detail = successState.detail
+            )
+            com.example.crewmate.util.DiaCaptureHelper.executeCapture(
+                context = context,
+                headerTitle = "승무 다이아 조회",
+                workDate = date,
+                dias = listOf(item),
+                option = option
+            )
+        } finally {
+            isCapturing = false
+            activeCaptureOption = null
+        }
+    }
+
+    if (showCaptureDialog) {
+        com.example.crewmate.util.DiaCaptureOptionDialog(
+            onDismissRequest = { showCaptureDialog = false },
+            onOptionSelected = { option ->
+                showCaptureDialog = false
+                activeCaptureOption = option
+            }
+        )
+    }
+
+    if (isCapturing) {
+        com.example.crewmate.util.DiaCaptureProgressDialog()
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -108,12 +148,29 @@ fun DiaLookupScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.Top,
     ) {
-        Text(
-            text = "승무 다이아 조회",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "승무 다이아 조회",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (uiState is DiaDetailLoadState.Success) {
+                OutlinedButton(
+                    onClick = { showCaptureDialog = true },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(28.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text("📸 캡처", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         Spacer(Modifier.height(14.dp))
 
         Card(

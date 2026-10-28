@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class WorkAlarmReceiver : BroadcastReceiver() {
 
@@ -45,6 +46,32 @@ class WorkAlarmReceiver : BroadcastReceiver() {
         val settings = settingsStore.loadSettings()
 
         if (!settings.alarmEnabled && !isTest) return
+
+        // 출무 알람인 경우: 출무 상태(적합성미완료 등)와 무관하게 실제 출무 시각이 이미 확인되어 있다면 알람 발동 즉시 취소
+        if (cat == "출무" && !isTest) {
+            try {
+                val db = CrewMateDatabase.getInstance(context)
+                val todayStr = java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
+                val cached = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    db.attendanceStatusDao().getAttendanceStatus(todayStr)
+                }
+                if (cached != null && cached.jsonString.isNotBlank()) {
+                    val parser = com.example.crewmate.data.remote.xcrew.AttendanceStatusParser()
+                    val statuses = parser.parse(cached.jsonString)
+                    val isAttended = statuses.any { 
+                        val act = it.actualTime?.trim()
+                        (!act.isNullOrBlank() && act != "-" && act != "null") ||
+                                it.gtwcGubunCd?.trim() == "3" || it.gtwcGubunCd?.trim() == "6"
+                    }
+                    if (isAttended) {
+                        Log.i("WorkAlarmReceiver", "Actual attendance already confirmed for today. Cancelling 출무 siren.")
+                        return
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("WorkAlarmReceiver", "Failed to check attendance status before siren", e)
+            }
+        }
 
         val formattedTime = if (dptTimeStr.length == 4 && dptTimeStr.all(Char::isDigit)) {
             "${dptTimeStr.substring(0, 2)}:${dptTimeStr.substring(2, 4)}"

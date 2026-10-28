@@ -19,10 +19,16 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Log.i("BootReceiver", "Device rebooted. Re-scheduling today's work alarms from local DB cache.")
-            
+
             val settingsStore = WorkAlarmSettingsStore(context)
             val settings = settingsStore.loadSettings()
-            if (!settings.alarmEnabled) return
+            val autoOfflineEnabled = AutoOfflineManager.isEnabled(context)
+            val prefs = context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
+            val midnightCaptureEnabled = prefs.getBoolean("midnight_auto_capture", false)
+            if (midnightCaptureEnabled) {
+                MidnightCaptureReceiver.scheduleMidnightCapture(context)
+            }
+            if (!settings.alarmEnabled && !autoOfflineEnabled) return
 
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -51,9 +57,15 @@ class BootReceiver : BroadcastReceiver() {
                     }
 
                     if (allSegments.isNotEmpty()) {
-                        val alarmItems = WorkAlarmRuleEvaluator.evaluate(allSegments, today, settings)
-                        WorkAlarmScheduler.scheduleAlarms(context, alarmItems)
-                        Log.i("BootReceiver", "Re-scheduled ${alarmItems.size} alarms on boot")
+                        if (settings.alarmEnabled) {
+                            val alarmItems = WorkAlarmRuleEvaluator.evaluate(allSegments, today, settings)
+                            WorkAlarmScheduler.scheduleAlarms(context, alarmItems)
+                            Log.i("BootReceiver", "Re-scheduled ${alarmItems.size} alarms on boot")
+                        }
+                        if (autoOfflineEnabled) {
+                            AutoOfflineManager.scheduleAutoOffline(context, allSegments, today)
+                            Log.i("BootReceiver", "Re-scheduled auto-offline transitions on boot")
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("BootReceiver", "Failed to reschedule alarms on boot", e)

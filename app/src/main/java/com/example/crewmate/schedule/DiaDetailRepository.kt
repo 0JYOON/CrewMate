@@ -10,13 +10,19 @@ class DiaDetailRepository(
     private val diaDetailDataSource: DiaDetailDataSource,
     private val diaDetailDao: DiaDetailDao,
     private val isOfflineModeProvider: () -> Boolean = { false }
-) {
+) : DiaDetailDataSource {
     private val parser = DiaDetailParser()
 
-    suspend fun fetchDiaDetail(pjtDt: String, pdiaNo: String): DiaDetailResponse {
+    override suspend fun fetchDiaDetail(pjtDt: String, pdiaNo: String): DiaDetailResponse {
+        val cleanDia = pdiaNo.trim().removePrefix("~")
         val key = "$pjtDt|$pdiaNo"
+        val altKey = "$pjtDt|$cleanDia"
         if (isOfflineModeProvider()) {
             val cached = diaDetailDao.getDiaDetail(key)
+                ?: (if (key != altKey) diaDetailDao.getDiaDetail(altKey) else null)
+                ?: diaDetailDao.getDiaDetailsForDate(pjtDt).find { 
+                    it.pdiaNo.trim() == pdiaNo.trim() || it.pdiaNo.trim() == cleanDia 
+                }
             if (cached != null && cached.detailJson.isNotBlank()) {
                 return runCatching { parser.parse(cached.detailJson) }.getOrElse { emptyFallbackDetail() }
             }
@@ -39,6 +45,10 @@ class DiaDetailRepository(
             response
         } catch (e: Exception) {
             val cached = diaDetailDao.getDiaDetail(key)
+                ?: (if (key != altKey) diaDetailDao.getDiaDetail(altKey) else null)
+                ?: diaDetailDao.getDiaDetailsForDate(pjtDt).find { 
+                    it.pdiaNo.trim() == pdiaNo.trim() || it.pdiaNo.trim() == cleanDia 
+                }
             if (cached != null && cached.detailJson.isNotBlank()) {
                 runCatching { parser.parse(cached.detailJson) }.getOrElse { emptyFallbackDetail() }
             } else {

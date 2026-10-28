@@ -372,6 +372,9 @@ private fun CalendarGrid(
     resolveSecondTrain: (LocalDate, WorkSchedule) -> String?,
     onDateClick: (LocalDate) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val patternData = remember { com.example.crewmate.schedule.WorkPatternSettings.load(context) }
+    val isMonthEmpty = remember(schedulesByDate) { schedulesByDate.values.all { it.isEmpty() } || schedulesByDate.isEmpty() }
     val weekdays = listOf("일", "월", "화", "수", "목", "금", "토")
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         weekdays.forEachIndexed { idx, day ->
@@ -391,6 +394,7 @@ private fun CalendarGrid(
                 val daySchedules = date?.let { schedulesByDate[it] }.orEmpty()
                 val dayEvents = date?.let { deviceEventsByDate[it] }.orEmpty()
                 val dayMemos = date?.let { memosByDate[it.format(DateTimeFormatter.ISO_LOCAL_DATE)] }.orEmpty()
+                val patternBadge = if (isMonthEmpty && date != null) com.example.crewmate.schedule.WorkPatternSettings.getPatternForDate(patternData, date) else null
                 ScheduleDateCell(
                     date = date,
                     dayOfWeekIndex = dayOfWeekIdx,
@@ -399,6 +403,7 @@ private fun CalendarGrid(
                     deviceEvents = dayEvents,
                     memos = dayMemos,
                     fontScale = fontScale,
+                    patternBadge = patternBadge,
                     resolveSecondTrain = { schedule -> date?.let { resolveSecondTrain(it, schedule) } },
                     modifier = Modifier.weight(1f).fillMaxHeight()
                 ) { date?.let(onDateClick) }
@@ -417,11 +422,12 @@ private fun ScheduleDateCell(
     deviceEvents: List<DeviceEvent>,
     memos: List<MemoEntity>,
     fontScale: Float,
+    patternBadge: String? = null,
     resolveSecondTrain: (WorkSchedule) -> String?,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
-    val hasWorkOrEvent = schedules.isNotEmpty() || deviceEvents.isNotEmpty() || memos.isNotEmpty()
+    val hasWorkOrEvent = schedules.isNotEmpty() || deviceEvents.isNotEmpty() || memos.isNotEmpty() || patternBadge != null
     val backgroundColor = when {
         date == null -> Color.Transparent
         isToday -> MaterialTheme.colorScheme.primaryContainer
@@ -471,6 +477,27 @@ private fun ScheduleDateCell(
                 }
             }
             Spacer(Modifier.height(2.dp))
+            if (displaySchedules.isEmpty() && patternBadge != null) {
+                val isNightPattern = patternBadge == "야간" || patternBadge == "~"
+                val badgeBg = if (isNightPattern) Color(0xFF333333).copy(alpha = 0.85f) else Color(0xFFFFD54F).copy(alpha = 0.85f)
+                val badgeFg = if (isNightPattern) Color.White else Color.Black
+                val isRest = patternBadge == "S"
+
+                Surface(
+                    color = if (isRest) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f) else badgeBg,
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        text = patternBadge,
+                        fontSize = (9.5f * fontScale).sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRest) MaterialTheme.colorScheme.primary else badgeFg,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+
             displaySchedules.forEachIndexed { index, schedule ->
                 if (index > 0) Spacer(Modifier.height(3.dp))
                 
@@ -617,9 +644,78 @@ fun ScheduleDetailSheet(
         }
     }
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    val currentContext = androidx.compose.ui.platform.LocalContext.current
+    var showCaptureDialog by remember { mutableStateOf(false) }
+    var activeCaptureOption by remember { mutableStateOf<com.example.crewmate.util.DiaCaptureOption?>(null) }
+    var isCapturing by remember { mutableStateOf(false) }
+
+    // Collect available DiaDetail items for capture reactively as detailCache updates
+    val captureItems = schedules.mapNotNull { schedule ->
+        val dia = schedule.diaNo?.trim().orEmpty()
+        val loadState = detailCache["$dateKey|$dia"]
+        if (loadState is DiaDetailLoadState.Success) {
+            com.example.crewmate.util.DiaCaptureItem(schedule, loadState.detail)
+        } else null
+    }
+
+    androidx.compose.runtime.LaunchedEffect(activeCaptureOption) {
+        val option = activeCaptureOption ?: return@LaunchedEffect
+        if (captureItems.isEmpty()) return@LaunchedEffect
+        isCapturing = true
+        try {
+            com.example.crewmate.util.DiaCaptureHelper.executeCapture(
+                context = currentContext,
+                headerTitle = "승무 다이아 상세",
+                workDate = date,
+                dias = captureItems,
+                option = option
+            )
+        } finally {
+            isCapturing = false
+            activeCaptureOption = null
+        }
+    }
+
+    if (showCaptureDialog) {
+        com.example.crewmate.util.DiaCaptureOptionDialog(
+            onDismissRequest = { showCaptureDialog = false },
+            onOptionSelected = { option ->
+                showCaptureDialog = false
+                activeCaptureOption = option
+            }
+        )
+    }
+
+    if (isCapturing) {
+        com.example.crewmate.util.DiaCaptureProgressDialog()
+    }
     
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 740.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-        Text(date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.ROOT)), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd", Locale.ROOT)),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (captureItems.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { showCaptureDialog = true },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(28.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text("📸 캡처", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         
         if (showTabs) {
             TabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary) {

@@ -19,4 +19,8 @@ object AppDateProvider {
     fun resetToRealToday() {
         _overrideDate.value = null
     }
+
+    fun setOverrideDate(date: LocalDate?) {
+        _overrideDate.value = date
+    }
 }

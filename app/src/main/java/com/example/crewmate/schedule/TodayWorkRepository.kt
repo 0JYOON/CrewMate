@@ -147,6 +147,7 @@ class TodayWorkRepository(
                                     obj.put("flg", dto.flg)
                                     obj.put("tnsmTm", dto.tnsmTm)
                                     obj.put("gtwcTm", dto.gtwcTm)
+                                    obj.put("actlTm", dto.actlTm)
                                     jsonArr.put(obj)
                                 }
                                 val entity = com.example.crewmate.database.AttendanceStatusEntity(
@@ -194,19 +195,28 @@ class TodayWorkRepository(
             attendanceStatusList = finalAttendanceStatuses
         )
 
-        // Schedule alarms if enabled and appContext is available
-        if (appContext != null) {
+        // Schedule alarms and auto-offline transitions if appContext is available
+        if (appContext != null && details.isNotEmpty()) {
+            val allSegments = details.flatMap { it.detail.segments }
+            try {
+                com.example.crewmate.alarm.AutoOfflineManager.scheduleAutoOffline(appContext, allSegments, selectedDate)
+            } catch (e: Exception) {
+                android.util.Log.e("TodayWorkRepository", "Failed to schedule auto offline", e)
+            }
             try {
                 val settingsStore = com.example.crewmate.alarm.WorkAlarmSettingsStore(appContext)
                 val settings = settingsStore.loadSettings()
-                if (settings.alarmEnabled && details.isNotEmpty()) {
-                    val allSegments = details.flatMap { it.detail.segments }
+                if (settings.alarmEnabled) {
                     val alarmItems = com.example.crewmate.alarm.WorkAlarmRuleEvaluator.evaluate(
                         segments = allSegments,
                         workDate = selectedDate,
-                        settings = settings
+                        settings = settings,
+                        attendanceStatuses = finalAttendanceStatuses
                     )
-                    com.example.crewmate.alarm.WorkAlarmScheduler.scheduleAlarms(appContext, alarmItems)
+                    val dateKey = selectedDate.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+                    val bypassedKeys = settingsStore.getBypassedAlarmKeys(dateKey)
+                    val activeAlarms = alarmItems.filter { !bypassedKeys.contains(it.uniqueKey) }
+                    com.example.crewmate.alarm.WorkAlarmScheduler.scheduleAlarms(appContext, activeAlarms)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TodayWorkRepository", "Failed to schedule work alarms", e)

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.crewmate.data.remote.xcrew.MockReviewDataProvider
 import com.example.crewmate.data.remote.xcrew.XcrewHttpException
 import com.example.crewmate.data.remote.xcrew.XcrewLoginFailureException
 import com.example.crewmate.data.remote.xcrew.XcrewLoginNetworkException
@@ -203,10 +204,38 @@ class LoginViewModel(
         password: String,
         rememberLogin: Boolean,
         isAutoLogin: Boolean,
+        retryCount: Int = 0,
     ) {
         try {
             if (!isAutoLogin && !rememberLogin) credentialStore.clear()
             xcrewSession.prepareForLogin()
+
+            if (MockReviewDataProvider.isReviewAccount(employeeNumber, password)) {
+                xcrewSession.setMockReviewMode(true)
+                xcrewSession.setUserInfo(
+                    MockReviewDataProvider.REVIEW_USER_NAME,
+                    MockReviewDataProvider.REVIEW_USER_AFFIL
+                )
+                if (!isAutoLogin) {
+                    if (rememberLogin) credentialStore.save(employeeNumber, password)
+                    else credentialStore.clear()
+                }
+                val currentMonth = withContext(Dispatchers.Default) {
+                    YearMonth.now().format(DateTimeFormatter.ofPattern("yyyyMM"))
+                }
+                XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    .getWorkSchedules(currentMonth)
+                xcrewSession.markAuthenticated()
+                Log.i(LOGIN_TAG, "MOCK_REVIEW_LOGIN_SUCCESS")
+                _uiState.value = LoginUiState(
+                    isLoggedIn = true,
+                    rememberLogin = rememberLogin,
+                    employeeNumber = employeeNumber,
+                    password = password,
+                )
+                return
+            }
+
             val userInfo = loginRepository.login(employeeNumber, password, diagnosticsEnabled = !isAutoLogin)
             if (userInfo.first.isNotEmpty() || userInfo.second.isNotEmpty()) {
                 xcrewSession.setUserInfo(userInfo.first, userInfo.second)
@@ -235,7 +264,16 @@ class LoginViewModel(
                 employeeNumber = employeeNumber,
                 password = password,
             )
-        } catch (_: TimeoutCancellationException) {
+        } catch (cancelled: CancellationException) {
+            if (cancelled !is TimeoutCancellationException) {
+                throw cancelled
+            }
+            if (isAutoLogin && retryCount < 1) {
+                Log.w(LOGIN_TAG, "AUTO_LOGIN_PREFLIGHT_TIMEOUT_RETRYING")
+                kotlinx.coroutines.delay(400)
+                attemptLogin(employeeNumber, password, rememberLogin, isAutoLogin, retryCount + 1)
+                return
+            }
             handleRetryableFailure(
                 employeeNumber,
                 password,
@@ -245,11 +283,15 @@ class LoginViewModel(
                 "SCHEDULE_PREFLIGHT_TIMEOUT",
                 networkFailure = true,
             )
-        } catch (cancelled: CancellationException) {
-            throw cancelled
         } catch (_: XcrewLoginFailureException) {
             handleAuthenticationFailure(employeeNumber, password, rememberLogin, isAutoLogin)
         } catch (_: XcrewSessionExpiredException) {
+            if (isAutoLogin && retryCount < 1) {
+                Log.w(LOGIN_TAG, "AUTO_LOGIN_SESSION_EXPIRED_RETRYING")
+                kotlinx.coroutines.delay(400)
+                attemptLogin(employeeNumber, password, rememberLogin, isAutoLogin, retryCount + 1)
+                return
+            }
             handleAuthenticationFailure(employeeNumber, password, rememberLogin, isAutoLogin)
         } catch (failure: XcrewHttpException) {
             if (failure.statusCode == 401 || failure.statusCode == 403) {

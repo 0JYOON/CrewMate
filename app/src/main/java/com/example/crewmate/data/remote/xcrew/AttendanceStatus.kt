@@ -15,11 +15,14 @@ data class AttendanceStatusDto(
     val gtwcTpDvCd: String? = null, // 출무구분유형코드
     val flg: String? = null,     // 플래그
     val tnsmTm: String? = null,  // 실제출무시각 (tnsmTm)
-    val gtwcTm: String? = null   // 백업 시각
+    val gtwcTm: String? = null,  // 백업 시각
+    val actlTm: String? = null   // 추가 실제시각
 ) {
     val actualTime: String?
-        get() = tnsmTm?.takeIf { it.isNotBlank() && it != "null" }
-            ?: gtwcTm?.takeIf { it.isNotBlank() && it != "null" }
+        get() = listOfNotNull(tnsmTm, gtwcTm, actlTm).firstOrNull { 
+            val s = it.trim()
+            s.isNotBlank() && s != "null" && s != "-"
+        }
 }
 
 fun AttendanceStatusDto?.toGtwcGubunText(): String {
@@ -78,7 +81,8 @@ class AttendanceStatusParser {
                         gtwcTpDvCd = row.optionalScalar("gtwcTpDvCd"),
                         flg = row.optionalScalar("flg"),
                         tnsmTm = row.optionalScalar("tnsmTm") ?: row.optionalScalar("tnsmDttm"),
-                        gtwcTm = row.optionalScalar("gtwcTm")
+                        gtwcTm = row.optionalScalar("gtwcTm") ?: row.optionalScalar("gtwcDttm"),
+                        actlTm = row.optionalScalar("actlTm") ?: row.optionalScalar("actlGtwcTm") ?: row.optionalScalar("chckTm") ?: row.optionalScalar("realTm")
                     )
                 )
             }

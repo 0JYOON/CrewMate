@@ -14,6 +14,7 @@ import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.crewmate.BuildConfig
 
 internal const val XCREW_LOGIN_URL = "https://xcrew.korail.com/loginView.do"
 private const val XCREW_HOST = "xcrew.korail.com"
@@ -37,11 +38,19 @@ fun KorailWebView(
             val isNewWebView = existingWebView == null
             (existingWebView ?: WebView(viewContext)).apply {
                 if (isNewWebView) {
+                    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
+                    @Suppress("DEPRECATION")
+                    settings.allowFileAccessFromFileURLs = false
+                    @Suppress("DEPRECATION")
+                    settings.allowUniversalAccessFromFileURLs = false
+                    @Suppress("DEPRECATION")
+                    settings.savePassword = false
+                    settings.saveFormData = false
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         settings.safeBrowsingEnabled = true
                     }

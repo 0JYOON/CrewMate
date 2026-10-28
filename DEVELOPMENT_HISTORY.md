@@ -163,6 +163,220 @@
   * AI 에이전트 작업 필수 지침서(`AGENTS.md`) 및 패키지노트(`CHANGELOG.md`) 전수 구축.
   * `versionCode = 2`, `versionName = "1.0.1"` 정식 출시 버전 지정 및 `CrewMate_v1.0.1.apk` 정식 서명 빌드 완성.
 
+### STEP 28: 카카오톡 배포용 1:1 정사각형 Bento Grid 포스터 5종 전면 재설계 (`promo_poster.html`)
+* **진행 내용**:
+  * 카카오톡 썸네일 공유에 최적화된 1:1 정사각형 비율(`600x600` 디스플레이 ➔ `html2canvas` 2x 스케일 적용 `1200x1200` 고해상도 PNG) 포스터 5종(`poster_main_square.png` 및 `card_1_calendar_square.png` ~ `card_4_lookup_square.png`) 전면 재설계.
+  * 빈 여백 제로(ZERO) 벤토 그리드(Bento Grid) 및 2분할 꽉 찬 카드 구성 적용.
+  * 실제 캡처 화면 100% 고증: M3 라이트 테마 색상(`#F6F8FC`, `#0F2942`, `#D2F5EE`, `#E8F0FE`), M3 곡률, 상단 앱바(`김철도 (안산승소)`), `TodayWorkScreen`, `DiaDetailCard` 타임라인 세그먼트, `ScheduleScreen` M3 바텀시트, `WorkAlarmSettingsScreen` 스위치, `TrainCrewLookupV2Screen` 1초 동료 검색 카드 정밀 재현.
+  * 전문용어 배제 및 원터치 PNG 다운로드 연동 완료.
+
+### STEP 29: 배포 보안 정밀 진단, 무손실(Zero-Regression) 보안 보강 및 스토어 심사용 Mock 로그인 구축
+* **목표**: 향후 대규모 임직원 배포 및 Google Play 비공개 테스트 트랙 전환을 대비하여, 기존 비즈니스 로직과 UI를 단 한 줄도 훼손하지 않고(Zero Regression) 네트워크/WebView/ProGuard 보안을 락다운하며 스토어 심사관 전용 Mock 로그인 파이프라인을 구축.
+* **진행 내용 (MockReviewDataProvider.kt, 
+etwork_security_config.xml, AndroidManifest.xml, proguard-rules.pro, KorailWebView.kt, AppNavigation.kt, XcrewWebViewXhrDataSource.kt, LoginViewModel.kt)**:
+  1. **스토어 심사용 Mock 로그인 안전 분기 (MockReviewDataProvider.kt)**:
+     * 외부 심사관에게 실제 사내 계정을 제공하지 않고도 모든 화면을 심사 통과시킬 수 있도록 전용 테스트 사번(
+eview_crewmate / crewmatereview2026!) 입력 시에만 활성화되는 MockReviewDataProvider를 구현했습니다.
+     * XcrewWebViewSession.isMockReviewSession 플래그를 통해 월간 근무표, 오늘의 근무 다이아 상세(16001 등), 출무 현황, 소속 승무원 현황, 비실동 현황, 승무원 조회 V2 전수조사까지 모두 로컬 Mock JSON/DTO로 즉시 응답하며, 일반 임직원 로그인 흐름에는 0%의 영향도 주지 않도록 격리했습니다.
+  2. **네트워크 보안 구성 신설**: 
+es/xml/network_security_config.xml을 생성하여 평문 HTTP 통신(cleartextTrafficPermitted="false")을 전역 차단하고 xcrew.korail.com 도메인에 시스템 인증서 기반 HTTPS 전용 통신을 강제했으며, AndroidManifest.xml에 ndroid:usesCleartextTraffic="false"와 함께 연동했습니다.
+  3. **WebView 보안 플래그 락다운 및 세션 클리어 고도화**:
+     * KorailWebView.kt와 백그라운드 XHR 통신을 수행하는 AppNavigation.kt의 HiddenXcrewWebView 양쪽 모두에 WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)를 적용해 Release APK에서의 WebView 인스펙터 디버깅/쿠키 탈취를 원천 차단했습니다.
+     * llowFileAccess = false, llowContentAccess = false, llowFileAccessFromFileURLs = false, llowUniversalAccessFromFileURLs = false, MIXED_CONTENT_NEVER_ALLOW, 서드파티 쿠키 차단, savePassword = false, saveFormData = false를 양쪽 WebView에 동일하게 적용했습니다.
+     * 로그아웃(handleLogout) 및 재로그인 초기화(prepareForLogin) 시 CookieManager 쿠키 삭제에 더해 WebStorage.getInstance().deleteAllData(), clearCache(true), clearHistory()를 호출하여 WebStorage 잔재까지 완벽히 파기하도록 보강했습니다.
+  4. **정밀 ProGuard 룰 보강**: 백신 오탐 방지 설정(-dontobfuscate, -dontshrink)과 함께 Room @Entity/@Dao/@Database, Xcrew DTO/파서, 도메인 모델, @JavascriptInterface 및 WebViewClient 콜백 보존 룰을 명시하고, Release 빌드에서 Log.v/Log.d 로그를 제거하도록 구성했습니다.
+
+---
+
+
+
+---
+
+### STEP 30: 현장 실무 피드백 기반 5대 핵심 편의기능 고도화 및 4종 캡처 정밀 보완
+* **목표**: 일선 승무원 현장 실무 사용 경험을 바탕으로 도출된 5가지 핵심 요구사항(스크린샷 4종 범위 선택 및 전체 스크롤 롱캡처, 알람 당일 Skip 간소화, 운전 업무 자동 오프라인 전환, 미조회 월 순환 근무 패턴 빌더, 열차번호 직접 터치 레일블루 연동)을 기존 무손실/고밀도 설계 원칙에 맞추어 완벽히 구현.
+* **진행 내용 (ScreenshotHelper.kt, MidnightCaptureReceiver.kt, WorkAlarmSettingsStore.kt, WorkAlarmRuleEvaluator.kt, AutoOfflineManager.kt, AutoOfflineReceiver.kt, WorkPatternSettings.kt, TodayWorkScreen.kt, DiaDetailCard.kt, SettingsScreen.kt, ScheduleScreen.kt)**:
+  1. **오늘의 근무 스크린샷 4종 범위 선택 및 전체 스크롤 합성 엔진 (`ScreenshotHelper.kt`, `TodayWorkScreen.kt`, `MidnightCaptureReceiver.kt`)**:
+     * `TodayWorkScreen`의 '📸 캡처' 터치 시 4가지 범위 선택 다이얼로그(1. 타임라인 요약만 / 2. 타임라인 전체 / 3. 타임라인 요약 + 출무현황 / 4. 타임라인 전체 + 출무현황) 제공.
+     * `ScreenshotHelper.captureFullScrollableComposeView`를 신설하여 Compose 뷰포트에서 잘리는 부분 없이 스크롤 상단부터 하단까지 무손실 슬라이스 합성 롱스크린샷을 `Pictures/CrewMate` 앨범에 PNG로 보관.
+     * `SettingsScreen`에 '오늘의 근무 자동 캡쳐 (자정)' 토글 스위치 및 `MidnightCaptureReceiver`(매일 00:01) 백그라운드 스케줄러 연동.
+  2. **오늘의 예정 알람 1회성 스킵 ("Skip") 간소화 (`WorkAlarmSettingsStore.kt`, `TodayWorkScreen.kt`)**:
+     * '오늘의 예정 알람' 팝업 내 버튼 문구를 `Bypass (스킵)`에서 `Skip` (스킵 상태 시 `Skip 해제`)으로 단순화하여 터치 가독성 극대화.
+  3. **운전(1순위 업무) 시간 자동 오프라인 모드 전환 및 복귀 (`AutoOfflineManager.kt`, `AutoOfflineReceiver.kt`, `SettingsScreen.kt`)**:
+     * `SettingsScreen`에 '운전 시간 자동 오프라인 모드' 스위치 신설.
+     * 1순위 업무(운전, 승무, 출고준비, 입환) 시작 1분 전(단, 1순위 직전 '감시'가 인접해 있는 경우 감시 시작 1분 전)에 OS 알람(`AutoOfflineReceiver`)을 통해 자동으로 앱을 오프라인 모드로 전환.
+     * 1순위 업무 이후 처음 등장하는 '정리' 또는 '입고정리' 시작 시각(미발견 시 당일 근무 종료 시각)에 온라인 모드로 자동 복귀하도록 스케줄러 연동.
+  4. **미조회 달 순환 근무 패턴 빌더 및 달력 표시 (`WorkPatternSettings.kt`, `SettingsScreen.kt`, `ScheduleScreen.kt`)**:
+     * `SettingsScreen`에 4개 핵심 뱃지(`[주간]`, `[야간]`, `[~]`, `[S]`)를 터치하여 원하는 순서와 횟수로 순환 주기를 구성하는 인터랙티브 뱃지 빌더와 기준일자(Anchor Date) 선택 UI 구현.
+     * `ScheduleScreen`에서 Xcrew 데이터가 없는 날짜에 대해 모듈로(Modulo) 순환 연산으로 다이아 영역에 패턴 뱃지를 표시하여 교번 근무자가 미래 일정을 한눈에 파악 가능.
+  5. **다이아 근무 상세 열차번호 직접 터치 Rail.blue(레일블루) 하이퍼링크 (`DiaDetailCard.kt`)**:
+     * 가독성을 해치는 별도 아이콘 없이, 열차번호 뱃지(예: `K6543 운전`) 자체를 터치하면 `https://rail.blue/railroad/logis/Default.aspx?date={YYYYMMDD}&train={trainNo}#!` 웹페이지를 외부 브라우저로 바로 띄워 열차 편성 및 운행 상세 정보를 원터치 조회 가능하도록 구현.
+  6. **단위 테스트 및 빌드 검증 완수**: `EnhancementsUnitTest.kt` 단위 테스트 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 빌드 검증 완료.
+
+---
+
+### [STEP 31] 오늘의 근무 스크린샷 엔진 무결점(Zero-Artifact) 개편 및 한글 규격 파일명 반영 (v1.0.4)
+* **작업 배경**:
+  * 실기기 QA 테스트 중 스크린샷 상단 및 타임라인 중간에 공통 네비게이션 앱바(`[ ☰ CrewMate 윤영준(안산승소) [재접속] ]`)가 중복으로 찍히고 운행 세그먼트(`4503 편승` 등)를 덮어버리는 결함 제보.
+  * 또한 저장되는 파일명이 영문 Enum 상수(`CrewMate_TIMELINE_SUMMARY_...`)로 저장되어 직관성이 떨어지고, '상세 구간 더보기/접기', '📸 캡처' 등 대화형 UI 버튼이 스크린샷에 잔재하는 문제 발견.
+* **진행 내용 (`ScreenshotHelper.kt`, `TodayWorkScreen.kt`, `DiaDetailCard.kt`, `MidnightCaptureReceiver.kt`)**:
+  1. **무결점 오프스크린 Compose 렌더러 (`ScreenshotHelper.captureComposableToBitmap`) 신설**:
+     * 화면 뷰를 스크롤하며 조각내어 합성하던 기존 방식(Slicing)을 전면 폐기하고, Activity의 Window DecorView에 인비저블 상태로 일시 마운트하여 컨텐츠 전체 높이(`MeasureSpec.UNSPECIFIED`)를 단 1회의 Canvas Pass로 깨끗하게 드로우하는 엔진 구축.
+     * 사용자 화면이 스크롤되거나 깜빡이지 않으며, 상단 앱바(`CrewMateAppBar`)가 원천 배제되어 중복 및 텍스트 가림 현상 0% 달성.
+  2. **4종 캡처 범위별 직관적 한글 규격 파일명 적용**:
+     * `WorkCaptureOption`에 `filePrefix` 속성을 정의하여 갤러리에 저장 시 선택한 한글 명칭이 명확히 반영되도록 규격화:
+       * `CrewMate_타임라인요약_YYYYMMDD_HHmmss.png`
+       * `CrewMate_타임라인전체_YYYYMMDD_HHmmss.png`
+       * `CrewMate_타임라인요약_출무현황_YYYYMMDD_HHmmss.png`
+       * `CrewMate_타임라인전체_출무현황_YYYYMMDD_HHmmss.png`
+  3. **인쇄/공유용 전용 문서 레이아웃 (`TodayWorkCaptureLayout`, `DiaDetailCard.kt`)**:
+     * `DiaDetailCard`에 `isCaptureMode = true` 파라미터를 추가하여, 캡처 시에는 '상세 구간 더보기/접기' 텍스트 버튼을 숨기고 순수 타임라인 목록과 하단 '사업시간/거리 요약표'가 기본 펼침 상태로 정돈되어 출력되도록 개선.
+     * 3, 4번 옵션(출무현황 포함) 선택 시 '소속 승무원 출무현황' 표가 펼쳐진 상태로 타임라인 하단에 매끄럽게 연결.
+  4. **자정 자동 캡처 리시버 (`MidnightCaptureReceiver.kt`) 정밀화**:
+     * `cancelMidnightCapture` 호출 시 `PendingIntent`를 명시적으로 즉시 cancel하도록 보강.
+  5. **빌드 검증**: `gradle test`, `assembleDebug`, `assembleRelease` 100% 무오류 통과.
+
+---
+
+### [STEP 32] 실무 승무 QA 3대 결함 해결: 자동 로그인 속도/안정성 복원, 운전 시간 자동 오프라인 복구 및 QA 패널, 타임라인 캡처 완성 (v1.0.5)
+* **작업 배경**:
+  * 실제 승무 중 테스트에서 (1) `"자동 로그인 중입니다..."` 문구에서 무한 대기하며 자동 로그인이 실패하는 현상, (2) 1순위 운전 시간 시작 시 자동 오프라인 모드 전환이 전혀 작동하지 않는 현상(및 설정 화면 내 전환 시각 QA 기록 확인 필요), (3) 캡처 시 타임라인 하단이 잘리거나 하단에 불필요한 정보(`사업시간/거리 요약`, `출무현황`)가 노출되는 3대 문제점이 확인됨.
+* **진행 내용 (`XcrewWebViewXhrDataSource.kt`, `XcrewLoginRepository.kt`, `LoginViewModel.kt`, `AutoOfflineManager.kt`, `AutoOfflineReceiver.kt`, `TodayWorkRepository.kt`, `BootReceiver.kt`, `AppNavigation.kt`, `SettingsScreen.kt`, `ScreenshotHelper.kt`, `TodayWorkScreen.kt`, `DiaDetailCard.kt`)**:
+  1. **자동 로그인 무한 대기(`"자동 로그인 중입니다..."`) 원천 해결**:
+     * `prepareForLogin()`에서 매 로그인마다 캐시를 지우던 `clearCache(true)`, `WebStorage.deleteAllData()`와 경쟁 요청을 유발하던 `loadUrl("loginView.do")`를 제거하여 `OkHttpClient`가 저장한 인증 `JSESSIONID` 쿠키가 WebView의 뒤늦은 미인증 응답에 덮어쓰이던 레이스 컨디션 해결.
+     * `refreshWebViewPage()`에서 `view.stopLoading()`을 `resetPageReady("https://xcrew.korail.com/extrCrewMg/")`보다 먼저 실행하고 `HiddenXcrewWebView.onPageFinished`에서 URL prefix 및 `view.progress >= 100`을 검증하여 취소된 이전 페이지가 `pageReady`를 조기 완료시키던 버그 차단.
+     * `executeXhr()`에서 네비게이션 전환으로 JS 컨텍스트(`window.__crewMateXcrewXhrResults`)가 사라진 경우 15초 대기 없이 즉시 감지(`__NAV_RESET__`)해 페이지 로드 완료 후 1회 재요청하도록 개선.
+  2. **운전 시간(1순위) 자동 오프라인 모드 작동 복구 및 설정 화면 QA 시각 기록 패널 구축**:
+     * `SettingsScreen.kt`와 `AutoOfflineManager.kt` 간 SharedPreferences 키 불일치(`"auto_offline_mode"` vs `"auto_offline_enabled"`)를 `"auto_offline_mode"`로 통일.
+     * `TodayWorkRepository.kt`에서 정밀 알람 스위치(`settings.alarmEnabled`)가 꺼져 있어도 자동 오프라인 스케줄링이 독립적으로 실행되도록 분리하고, 하루 다중 운전 구간(`calculateOfflineSchedules`) 및 이미 진입한 운전 구간 즉시 전환(`syncFromDatabase`)을 구현.
+     * `AppNavigation.kt`에 `OnSharedPreferenceChangeListener`를 연동하여 백그라운드 전환 시 앱 상단 `OFFLINE` 배지 및 오프라인 상태가 실시간 동기화되도록 수정.
+     * `SettingsScreen.kt`의 '운전 시간 자동 오프라인 모드' 카드 내부에 **예정 스케줄(OFF/ON 시각)**, **최근 오프라인 전환 시각**, **최근 온라인 복귀 시각** 및 `[🔄 스케줄 재계산]`, `[🗑️ 기록 초기화]` 버튼을 갖춘 QA 관리 패널 추가.
+  3. **타임라인 요약 / 타임라인 전체 2종 무결점 캡처 완성**:
+     * `WorkCaptureOption`을 `타임라인 요약`과 `타임라인 전체` 2종으로 단순화하고, 출무현황 및 `DiaDetailCard` 하단 `사업시간/거리 요약`을 캡처 모드(`isCaptureMode = true`)에서 완전히 배제.
+     * `ScreenshotHelper.captureComposableToBitmap`에서 `ComposeView`를 `ScrollView`에 감싸 DecorView에 부착함으로써 안드로이드 `FrameLayout`의 화면 높이 제한(`AT_MOST(screenHeight)`)을 해제하고 긴 타임라인도 하단 잘림 없이 전체가 깔끔하게 캡처되도록 수정.
+  4. **단위 테스트 및 빌드 검증**: `EnhancementsUnitTest.kt` 다중 운전 구간 테스트 추가 및 통과, `gradle test`, `assembleDebug`, `assembleRelease` 0 에러 검증 완료.
+
+---
+
+### [STEP 33] 전 화면 다이아 상세 조회 무결점 캡처(`타임라인 요약` / `타임라인 전체`) 전면 확장 (v1.0.6)
+* **작업 배경**:
+  * `TodayWorkScreen`(오늘의 근무)에서 완성된 무결점 캡처 엔진의 편의성이 검증됨에 따라, 크루메이트 앱 내에서 다이아 상세를 조회할 수 있는 모든 화면(월별 달력 상세, 승무 다이아 조회, 소속 승무원 현황 다이아 상세, 열차 승무원 조회 V2 다이아 상세)에서도 동일하게 캡처 기능을 사용할 수 있도록 전면 확장 요청.
+* **진행 내용 (`DiaCaptureHelper.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`, `CrewWorkStatusScreen.kt`, `TrainCrewLookupV2Screen.kt`, `TodayWorkScreen.kt`)**:
+  1. **공통 다이아 캡처 헬퍼 모듈 (`DiaCaptureHelper.kt`) 신설**:
+     * `DiaCaptureOption`(`타임라인 요약`, `타임라인 전체`), 전용 인쇄용 헤더 문서 레이아웃(`DiaCaptureLayout`), 2선택 팝업 다이얼로그(`DiaCaptureOptionDialog`) 및 비트맵 생성/갤러리 저장 실행 엔진(`executeCapture`)을 공통화하여 화면별 코드 중복을 제거.
+  2. **월별 승무근무표 (`ScheduleScreen.kt`) 연동**:
+     * 달력에서 특정 날짜를 터치하면 열리는 상세 바텀시트(`ScheduleDetailSheet`) 헤더 우측에 `📸 캡처` 버튼을 배치하여, 다이아 정보 로드 완료 시 원터치로 요약/전체 캡처 가능하도록 구현.
+  3. **승무 다이아 조회 (`DiaLookupScreen.kt`) 연동**:
+     * 사업일자와 다이아 번호를 검색하여 상세 정보 로드 성공(`DiaDetailLoadState.Success`) 시 상단 헤더 우측에 `📸 캡처` 버튼 노출 및 저장 연동.
+  4. **소속 승무원 근무 현황 (`CrewWorkStatusScreen.kt`) & 열차 승무원 조회 V2 (`TrainCrewLookupV2Screen.kt`) 연동**:
+     * 항목 및 다이아 클릭 시 열리는 상세 바텀시트(`ScheduleDetailSheet`)에 공통 캡처 버튼이 자동 제공되어 승무원 검색 및 현황 확인 중에도 즉시 캡처 가능.
+  5. **오늘의 근무 (`TodayWorkScreen.kt`) 리팩토링**:
+     * 기존 화면에 중복 선언되어 있던 캡처 옵션과 레이아웃 코드를 공통 `DiaCaptureHelper` 기반으로 정돈하여 기능 100% 보존(Zero-Regression) 및 코드 경량화 달성.
+  6. **빌드 검증**: `gradle testDebugUnitTest`, `assembleDebug`, `assembleRelease` 100% 무오류 완료.
+
+---
+
+### [STEP 34] 상세 다이아 바텀시트 캡처 버튼 가변 노출 및 상태 반응성 결함 수정 (v1.0.7)
+* **작업 배경**:
+  * 소속 승무원 근무 현황(`CrewWorkStatusScreen`) 및 열차 승무원 조회 V2(`TrainCrewLookupV2Screen`)에서 상세 다이아를 열었을 때, 세로 화면에서는 `📸 캡처` 버튼이 보이지 않다가 가로 화면으로 회전하면 비로소 나타나는 UI 상태 불일치 현상 제보.
+* **진행 내용 (`ScheduleScreen.kt`)**:
+  1. **원인 규명**:
+     * 바텀시트(`ScheduleDetailSheet`) 헤더의 `captureItems`가 `remember(schedules, detailCache, dateKey)`로 감싸져 있어, 비동기 통신 전 초기 `emptyList()`가 고정된 채 `detailCache` 내용이 로드되어도 맵 인스턴스 주소 불변으로 인해 캐시 항목이 갱신되지 않는 결함 확인.
+  2. **반응형 상태 구독 전환**:
+     * `captureItems`를 컴포지션 시 실시간으로 계산하는 동적 프로퍼티로 전환하여, `detailCache`에 `DiaDetailLoadState.Success`가 들어오는 즉시 0.1초 만에 상단 `📸 캡처` 버튼이 활성화되도록 수정.
+     * 날짜 텍스트에 `Modifier.weight(1f, fill = false)`를 부여하여 좁은 화면에서도 캡처 버튼 레이아웃이 찌그러지거나 밀려나지 않도록 방어.
+  3. **빌드 검증**: `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 검증 완료.
+
+---
+
+### [STEP 35] 오늘의 근무 자정 자동 캡쳐 로직 전면 점검 및 타임라인 요약/전체 선택 옵션 신설 (v1.0.8)
+* **작업 배경**:
+  * 캡처 기능이 여러 차례 고도화됨에 따라 `설정` 화면의 `오늘의 근무 자동 캡쳐 (자정)` 기능이 현행 코드베이스 및 다이아 로직에서 안정적으로 동작하는지 점검하고, 수동 캡처와 마찬가지로 자정 자동 캡처 시에도 '타임라인 요약본'과 '타임라인 전체본' 중 원하는 형태를 선택할 수 있도록 옵션 제공 요청.
+* **진행 내용**:
+  1. **현행 자정 캡처 로직 결함 해결 (`MidnightCaptureReceiver.kt`)**:
+     * 고정 높이 캔버스(1440px) 및 `take(15)` 제한으로 인해 15개 초과 세그먼트나 복수 다이아가 잘리거나 누락되던 버그 수정.
+     * 다이아 세그먼트 수에 따라 전체 높이를 동적으로 정밀 계산하는 **가변 높이(Dynamic-Height) 헤드리스 캔버스 렌더러**를 구축하여 아무리 긴 다이아라도 잘림 0% 무결점 저장 보장.
+     * 전일 야간 연속 근무(Overnight) 다이아에 대한 fallback 탐색 로직을 보강하여 자정 실행 시 당일 다이아 조회의 견고성 향상.
+     * 시그니처 네이비 헤더, 다이아 카드 테두리, 업무 순위별 뱃지(Rank 1 블루, Rank 2 앰버, Rank 3 그레이), 출발/도착역 및 화살표 시간 표기가 적용된 고품질 모던 카드 디자인 비트맵 렌더링.
+  2. **설정 화면 내 자동 캡처 형태 선택 옵션 신설 (`SettingsScreen.kt`)**:
+     * `오늘의 근무 자동 캡쳐 (자정)` 스위치가 켜지면 하단에 **`[타임라인 요약]`**과 **`[타임라인 전체]`**를 선택할 수 있는 직관적인 세그먼트 카드가 표출되도록 구현.
+     * 선택값(`"midnight_auto_capture_option"`)을 SharedPreferences에 실시간 저장하고 `MidnightCaptureReceiver`와 동기화.
+  3. **세그먼트 분류 로직 공용화 (`DiaDetailCard.kt`)**:
+     * `DiaDetailCard.kt`의 `categorizeSegments`를 `internal`로 공개하여 `MidnightCaptureReceiver`에서도 수동 캡처와 동일한 1/2/3순위 및 샌드위치 감시 판단 알고리즘을 단일 소스 오브 트루스로 공유.
+  4. **빌드 검증**: `testDebugUnitTest`, `assembleDebug`, `assembleRelease` 100% 무오류 완료.
+
+---
+
+### [STEP 36] 실무 운용 7대 버그 해결 및 편의 기능 고도화 패치 (v1.0.9)
+* **작업 배경**:
+  * 실제 근무 투입 및 현장 테스트에서 보고된 7대 버그 및 개선 요구사항을 원천 해결:
+    1. 자동 오프라인 모드에서 온라인 복귀 시간 설정(정리/입고정리 시작 후 지연) 및 복귀 Skip 기능
+    2. 앱 재설치/기기 변경 대비 사용자 데이터 백업 및 복원(메모, 연차/휴가, 비민감 설정)
+    3. 오프라인 모드에서 오늘의 근무 외 화면의 상세 다이아 조회 불가 문제
+    4. 배터리 최적화 제외 설정 시 CrewMate 앱 직통 원터치 허용 다이얼로그 연동
+    5. '적합성미완료' 상태여도 실제 출무 시각 확인 시 출무 5분 전 알람 자동 해제
+    6. 자정 자동 캡쳐 날짜 탐색 결함 해결 및 Compose UI 양식 일치화
+    7. 캡처 모드에서 사업시간/거리 요약 표 배제 (순수 타임라인 전용 캡처)
+* **진행 내용**:
+  1. **오프라인 자동 전환 복귀 지연 및 Skip (`AutoOfflineManager.kt`, `AutoOfflineReceiver.kt`, `SettingsScreen.kt`, `TodayWorkScreen.kt`)**:
+     * 정리/입고정리 시작 후 온라인 복귀 지연 시간(`0분`, `5분`, `10분(권장)`, `15분`, `20분`) 선택 UI 및 계산 로직 추가.
+     * 열차/입고 지연 상황을 위해 온라인 복귀 알람을 취소하고 오프라인을 유지하는 `[온라인 복귀 Skip]` 기능 신설.
+     * `SettingsScreen` 및 `TodayWorkScreen` 상단바에 오프라인 상태일 때 원터치 `[복귀 Skip]` 버튼 제공.
+  2. **JSON 데이터 백업 및 복원 엔진 (`DataBackupManager.kt`, `MemoDao.kt`, `LeaveDao.kt`, `SettingsScreen.kt`)**:
+     * Room DB 메모(`memos`), 연차/이월연차(`annual_leaves`, `carried_over_leaves`), SharedPreferences 비민감 설정을 포함하는 JSON 백업 생성 및 복원 엔진 구축.
+     * 암호, 키스토어, 세션 토큰 등 보안 정보는 철저히 배제(Zero-Leak).
+  3. **전 화면 오프라인 상세 다이아 캐시 연동 (`AppNavigation.kt`, `DiaDetailRepository.kt`)**:
+     * `AppNavigation`에서 원시 네트워크 XHR 데이터소스를 직접 주입하던 결함을 수정하고, Room DB 캐시를 활용하는 공용 `DiaDetailRepository`를 주입하여 오프라인 모드에서도 캐시된 다이아를 안정적으로 조회 가능.
+  4. **배터리 최적화 원터치 직통 다이얼로그 (`AndroidManifest.xml`, `WorkAlarmSettingsScreen.kt`)**:
+     * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 권한 추가 및 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 패키지 Uri 직접 호출로 CrewMate 전용 팝업 직통 유도.
+  5. **출무 알람 해제 로직 보완 (`AttendanceStatus.kt`, `WorkAlarmRuleEvaluator.kt`, `WorkAlarmReceiver.kt`)**:
+     * 실제 출무 시각(`actlTm`, `tnsmTm` 등) 확인 시 출무 상태 코드와 무관하게 출무 5분 전 알람을 100% 자동 취소.
+  6. **자정 자동 캡쳐 날짜 버그 수정 및 디자인 일치화 (`MidnightCaptureReceiver.kt`, `DiaDetailDao.kt`)**:
+     * `|| true` 폴백 버그를 제거하고 당일 월별 근무표(`work_schedules`)를 먼저 조회하여 당일 배정 다이아를 정확히 캡처.
+     * Compose `DiaCaptureLayout`과 1:1로 일치하는 클린 문서 헤더, 캡슐 알약, 화이트 카드, 테두리, 세로 타임라인 트랙/도트로 캔버스 렌더러 개편.
+  7. **캡처 뷰 순수 타임라인 표출 (`DiaDetailCard.kt`)**:
+     * `isCaptureMode == true`일 때 `사업시간/거리 요약` 테이블을 완전히 숨겨 타임라인 구간만 깔끔하게 저장.
+  8. **빌드 검증**: `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 완수.
+
+---
+
+### [STEP 37] (2026-10-28) 알림 권한 허용 직통 연결 및 시스템 사전 준비 다이얼로그 고도화 (v1.0.10)
+* **작업 배경**:
+  - v1.0.9에서 배터리 최적화 설정을 CrewMate 전용 시스템 팝업(ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)으로 바로 연결되도록 개선한 것과 마찬가지로, 알림 권한 허용 또한 애플리케이션 상세 정보 루트 화면으로 이동하여 사용자가 메뉴를 찾아 헤매지 않고 바로 허용할 수 있도록 직통 연결 요구 발생.
+* **구현 및 개선 상세 내역**:
+  1. **알림 권한 직통 연결 및 Android 13+ 1-탭 팝업 (WorkAlarmSettingsScreen.kt)**:
+     - 
+ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을 도입하여 Android 13+ 기기에서 앱 내 1-탭 시스템 팝업을 직접 트리거.
+     - 설정 화면 이동 시에도 Settings.ACTION_APP_NOTIFICATION_SETTINGS와 Settings.EXTRA_APP_PACKAGE를 전달하여 CrewMate의 전용 알림 설정 토글창으로 직행.
+  2. **마스터 알람 스위치 토글 시 권한 자동 유도 (WorkAlarmSettingsScreen.kt)**:
+     - 마스터 스위치 활성화 시 알림 권한이 누락되어 있으면 백그라운드에서 바로 시스템 팝업을 띄우고, 다른 권한이 만족된 상태라면 원터치 승인 후 알람이 즉시 활성화되도록 개선.
+  3. **알람 사전 준비 다이얼로그 개편 (WorkAlarmSettingsScreen.kt)**:
+     - 알림 권한과 정확한 알람 권한 버튼을 각각 🔔 알림 권한 허용 (직통 연결)과 ⏰ 정확한 알람 권한 설정 (직통 연결)으로 분리.
+  4. **알림 활성화 상태 검증 정밀화 (WorkAlarmSettingsScreen.kt, SettingsScreen.kt)**:
+     - NotificationManagerCompat.from(context).areNotificationsEnabled() 및 POST_NOTIFICATIONS 런타임 권한을 교차 검증.
+  5. **생명주기(ON_RESUME) 자동 감지 (WorkAlarmSettingsScreen.kt)**:
+     - LocalLifecycleOwner 및 LifecycleEventObserver를 연동하여 사용자가 외부 설정 화면에서 권한을 켜고 돌아오면 즉시 재검증 및 마스터 알람 자동 활성화, 다이얼로그 자동 닫기 처리.
+  6. **빌드 검증**: 	estDebugUnitTest 100% 통과, ssembleDebug 및 ssembleRelease 0 에러 완수.
+
+---
+
+### STEP 38: 설정 화면(SettingsScreen) 4대 핵심 기능 원상 복구 및 시스템 완비
+* **배경 및 원인 규명**:
+  * Windows 인코딩 정규화 과정에서 실행된 `git checkout`으로 인해 `SettingsScreen.kt`가 v1.0.1 구버전으로 롤백되어 최근 추가된 4대 핵심 기능 카드가 일시 소실됨.
+  * 백엔드 엔진(`AutoOfflineManager`, `WorkPatternSettings`, `DataBackupManager`, `MidnightCaptureReceiver`)은 워킹 트리에 온전히 보존되어 있었으며, 에이전트 상세 로그로부터 소실된 UI 코드 및 상태 변수를 100% 무결점으로 추출 복구함.
+* **진행 내용 (`SettingsScreen.kt`, `DiaCaptureHelper.kt`, `AppDateProvider.kt`)**:
+  1. **설정 화면 4대 카드 100% 복구**:
+     - `오늘의 근무 자동 캡쳐 (자정)` 및 2종 캡처 옵션(`타임라인 요약` / `타임라인 전체`) 카드
+     - `운전 시간 자동 오프라인 전환` 스위치, QA 관리 패널, 0분~20분 지연 칩, `온라인 복귀 Skip` 버튼
+     - `미배정 달 순환 패턴 표시 (근무패턴 만들기)` 스위치, 기준일자 선택, 4대 뱃지 팔레트, 순환 패턴 목록
+     - `💾 데이터 백업 및 복원` (`[💾 백업 내보내기]`, `[📂 복원 가져오기]`)
+  2. **구버전 손상 문자열 클린 복구**:
+     - 캘린더 연동, 테마 설정, 감시 숨기기, 앱 정보, 가상 날짜 디버그 다이얼로그의 한글 문자열을 100% 정상 한글로 정규화.
+  3. **컴파일 및 타입 정밀화**:
+     - `DiaCaptureOption.fromName(name: String?)` 및 `AppDateProvider.setOverrideDate(date: LocalDate?)` 신설.
+     - `FlowRow` 레이아웃용 `@OptIn(ExperimentalLayoutApi::class)` 명시.
+  4. **빌드 검증**:
+     - `compileDebugKotlin` 0 에러, `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 완수.
+
 ---
 
 ## 📊 4부: 개발 통계 요약 (Project Statistics)

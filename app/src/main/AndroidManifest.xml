@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Explicitly declare telephony hardware not required -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -26,6 +27,8 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:label="CrewMate"
         android:supportsRtl="true"
         android:theme="@style/Theme.CrewMate">
@@ -70,6 +73,21 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".alarm.MidnightCaptureReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <receiver
+            android:name=".alarm.AutoOfflineReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.crewmate.alarm.ACTION_SET_OFFLINE" />
+                <action android:name="com.example.crewmate.alarm.ACTION_SET_ONLINE" />
             </intent-filter>
         </receiver>
     </application>

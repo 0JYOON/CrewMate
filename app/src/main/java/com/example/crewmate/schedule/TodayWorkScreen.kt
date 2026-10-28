@@ -1,33 +1,45 @@
 package com.example.crewmate.schedule
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,11 +72,74 @@ private fun TodayWorkContent(
 ) {
     val overrideDate by com.example.crewmate.util.AppDateProvider.overrideDate.collectAsState()
     val today = overrideDate ?: com.example.crewmate.util.AppDateProvider.today
+    val scrollState = rememberScrollState()
+    val currentContext = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val prefs = remember { currentContext.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
+    var isOfflineMode by remember { mutableStateOf(prefs.getBoolean("is_offline_mode", false)) }
+    var autoOfflineEnabled by remember { mutableStateOf(com.example.crewmate.alarm.AutoOfflineManager.isEnabled(currentContext)) }
+    var isReturnSkipped by remember { mutableStateOf(prefs.getBoolean(com.example.crewmate.alarm.AutoOfflineManager.PREF_RETURN_SKIPPED, false)) }
+
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "is_offline_mode") isOfflineMode = sp.getBoolean("is_offline_mode", false)
+            if (key == com.example.crewmate.alarm.AutoOfflineManager.PREF_AUTO_OFFLINE) {
+                autoOfflineEnabled = com.example.crewmate.alarm.AutoOfflineManager.isEnabled(currentContext)
+            }
+            if (key == com.example.crewmate.alarm.AutoOfflineManager.PREF_RETURN_SKIPPED) {
+                isReturnSkipped = sp.getBoolean(com.example.crewmate.alarm.AutoOfflineManager.PREF_RETURN_SKIPPED, false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    var showCaptureDialog by remember { mutableStateOf(false) }
+    var activeCaptureOption by remember { mutableStateOf<com.example.crewmate.util.DiaCaptureOption?>(null) }
+    var isCapturing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeCaptureOption) {
+        val option = activeCaptureOption ?: return@LaunchedEffect
+        val successState = state as? TodayWorkUiState.Success ?: return@LaunchedEffect
+        isCapturing = true
+        try {
+            val captureItems = successState.result.dias.map {
+                com.example.crewmate.util.DiaCaptureItem(
+                    schedule = it.schedule,
+                    detail = it.detail
+                )
+            }
+            com.example.crewmate.util.DiaCaptureHelper.executeCapture(
+                context = currentContext,
+                headerTitle = if (successState.result.isToday) "오늘의 근무" else "${successState.result.workDate.format(DateTimeFormatter.ofPattern("MM.dd"))} 근무",
+                workDate = successState.result.workDate,
+                dias = captureItems,
+                option = option
+            )
+        } finally {
+            isCapturing = false
+            activeCaptureOption = null
+        }
+    }
+
+    if (showCaptureDialog) {
+        com.example.crewmate.util.DiaCaptureOptionDialog(
+            onDismissRequest = { showCaptureDialog = false },
+            onOptionSelected = { option ->
+                showCaptureDialog = false
+                activeCaptureOption = option
+            }
+        )
+    }
+
+    if (isCapturing) {
+        com.example.crewmate.util.DiaCaptureProgressDialog()
+    }
 
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
     ) {
         if (overrideDate != null) {
@@ -131,17 +206,66 @@ private fun TodayWorkContent(
                 }
             }
             
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text(
-                    text = today.format(DISPLAY_DATE),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        text = today.format(DISPLAY_DATE),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+
+                if (isOfflineMode && autoOfflineEnabled) {
+                    if (!isReturnSkipped) {
+                        OutlinedButton(
+                            onClick = {
+                                com.example.crewmate.alarm.AutoOfflineManager.skipOnlineReturn(currentContext)
+                                isReturnSkipped = true
+                                android.widget.Toast.makeText(currentContext, "온라인 자동 복귀가 스킵되었습니다 (오프라인 유지).", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                            border = BorderStroke(1.dp, Color(0xFFD97706))
+                        ) {
+                            Text("복귀 Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                com.example.crewmate.alarm.AutoOfflineManager.resetReturnSkipped(currentContext)
+                                isReturnSkipped = false
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    com.example.crewmate.alarm.AutoOfflineManager.syncFromDatabase(currentContext.applicationContext)
+                                }
+                                android.widget.Toast.makeText(currentContext, "온라인 복귀가 다시 예약되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("복귀 Skip됨", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { showCaptureDialog = true },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(28.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text("📸 캡처", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -197,7 +321,7 @@ private fun TodayWorkContent(
                             DiaDetailCard(
                                 schedule = item.schedule,
                                 detail = item.detail,
-                                workDate = result.workDate,
+                                workDate = result.workDate
                             )
                             if (index < result.dias.lastIndex) Spacer(Modifier.height(14.dp))
                         }
@@ -226,6 +350,9 @@ private fun AttendanceStatusSection(
         var isAlarmEnabled by remember { mutableStateOf(false) }
         var showUpcomingAlarmsDialog by remember { mutableStateOf(false) }
         var upcomingAlarmsList by remember { mutableStateOf<List<com.example.crewmate.alarm.WorkAlarmItem>>(emptyList()) }
+        val dateKey = state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
+        val alarmStore = remember(context) { com.example.crewmate.alarm.WorkAlarmSettingsStore(context) }
+        var bypassedAlarmKeys by remember(dateKey) { mutableStateOf(alarmStore.getBypassedAlarmKeys(dateKey)) }
 
         androidx.compose.runtime.LaunchedEffect(state) {
             val db = com.example.crewmate.database.CrewMateDatabase.getInstance(context)
@@ -299,23 +426,78 @@ private fun AttendanceStatusSection(
                             Text("오늘 울릴 예정인 알람이 없거나 출무 정보가 조회되지 않았습니다.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             upcomingAlarmsList.forEach { item ->
+                                val isBypassed = bypassedAlarmKeys.contains(item.uniqueKey)
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = if (isBypassed) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
+                                    border = if (isBypassed) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
                                 ) {
-                                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            text = "⏰ ${item.triggerDateTime.format(DateTimeFormatter.ofPattern("MM.dd (E) HH:mm", Locale.KOREAN))} | ${item.ruleTitle}",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = item.message,
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+                                    Row(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "⏰ ${item.triggerDateTime.format(DateTimeFormatter.ofPattern("MM.dd (E) HH:mm", Locale.KOREAN))} | ${item.ruleTitle}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = if (isBypassed) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary,
+                                                    style = if (isBypassed) androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                                                )
+                                                if (isBypassed) {
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.errorContainer,
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "제외됨",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = item.message,
+                                                fontSize = 12.sp,
+                                                color = if (isBypassed) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
+                                                style = if (isBypassed) androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(8.dp))
+                                        OutlinedButton(
+                                            onClick = {
+                                                val newBypass = !isBypassed
+                                                alarmStore.setAlarmBypassed(dateKey, item.uniqueKey, newBypass)
+                                                val updatedSet = alarmStore.getBypassedAlarmKeys(dateKey)
+                                                bypassedAlarmKeys = updatedSet
+
+                                                // Reschedule active alarms immediately
+                                                val activeAlarms = upcomingAlarmsList.filter { !updatedSet.contains(it.uniqueKey) }
+                                                com.example.crewmate.alarm.WorkAlarmScheduler.scheduleAlarms(context, activeAlarms)
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(32.dp),
+                                            colors = if (isBypassed) ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) else ButtonDefaults.outlinedButtonColors()
+                                        ) {
+                                            Text(
+                                                text = if (isBypassed) "Skip 해제" else "Skip",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isBypassed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                     }
                                 }
                             }

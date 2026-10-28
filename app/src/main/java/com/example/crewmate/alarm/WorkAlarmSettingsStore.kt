@@ -1,4 +1,4 @@
-package com.example.crewmate.alarm
+﻿package com.example.crewmate.alarm
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -75,5 +75,19 @@ class WorkAlarmSettingsStore(context: Context) {
             putBoolean("skip_sandwiched_drive", settings.skipSandwichedDrive)
             apply()
         }
+    }
+
+    fun getBypassedAlarmKeys(dateStr: String): Set<String> {
+        return prefs.getStringSet("bypassed_alarms_$dateStr", emptySet()) ?: emptySet()
+    }
+
+    fun setAlarmBypassed(dateStr: String, alarmKey: String, bypassed: Boolean) {
+        val current = prefs.getStringSet("bypassed_alarms_$dateStr", emptySet())?.toMutableSet() ?: mutableSetOf()
+        if (bypassed) {
+            current.add(alarmKey)
+        } else {
+            current.remove(alarmKey)
+        }
+        prefs.edit().putStringSet("bypassed_alarms_$dateStr", current).apply()
     }
 }
