@@ -629,7 +629,15 @@ fun SettingsScreen() {
                                     }
                                     android.widget.Toast.makeText(context, "온라인 복귀 시점이 [정리/입고정리 +${mins}분]으로 설정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
                                 },
-                                label = { Text(label, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }

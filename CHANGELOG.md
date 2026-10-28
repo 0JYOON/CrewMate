@@ -25,6 +25,9 @@
   - "(QA 관리)" 문구 삭제 및 `전환 시각 기록` 카드를 기본 접힘(`펼치기 ▼` / `접기 ▲`)으로 변경하여 설정 화면 밀도 향상.
   - 온라인 복귀 시점 칩에서 `(권장)` 문구 삭제 (`10분`).
   - 예정 스케줄을 줄바꿈하여 아래에 표출하고 `1구간, 2구간`을 `1. 2.` 표기로 개선.
+- **7. 온라인 복귀 시점 칩 텍스트 가운데 정렬 및 캡처 버튼 가로 사이즈 축소 (`SettingsScreen.kt`, `TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`)**:
+  - `SettingsScreen.kt`: `FilterChip` 라벨 텍스트에 `textAlign = TextAlign.Center`를 적용하여 0분~20분 칩 내부 텍스트를 버튼 중앙에 정렬.
+  - `TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`: M3 Button 기본 최소폭(58dp) 대신 컴팩트 `size(28.dp)` 아이콘 버튼으로 교체하여 여백 낭비 원천 해소.
 - **주요 수정 파일**:
   - `app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt`
   - `app/src/main/java/com/example/crewmate/schedule/ScheduleScreen.kt`

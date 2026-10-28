@@ -399,6 +399,9 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
      - "(QA 관리)" 삭제 및 `전환 시각 기록` 카드를 기본 접힘 상태로 개편.
      - 온라인 복귀 시점에서 `(권장)` 문구 삭제 (`10분`).
      - 예정 스케줄을 줄바꿈하여 아래에 배치하고 `1구간, 2구간` -> `1. 2.` 표기로 개선.
+  7. **온라인 복귀 시점 칩 가운데 정렬 및 캡처 버튼 컴팩트화 (`SettingsScreen`, `TodayWorkScreen`, `ScheduleScreen`, `DiaLookupScreen`)**:
+     - 복귀 시점 `FilterChip` 내부 라벨 `TextAlign.Center` 적용으로 가운데 정렬 완료.
+     - 캡처 버튼의 M3 최소 가로폭(58dp) 제한을 해소하고 정사각 `size(28.dp)` 아이콘 버튼으로 교체하여 여백 최적화.
   7. **빌드 검증**:
      - `compileDebugKotlin` 0 에러, `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 완수.
 

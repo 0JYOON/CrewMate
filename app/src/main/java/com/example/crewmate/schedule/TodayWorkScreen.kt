@@ -1,5 +1,7 @@
 package com.example.crewmate.schedule
 
+import androidx.compose.foundation.layout.Box
+
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -222,14 +224,16 @@ private fun TodayWorkContent(
 
 
 
-                OutlinedButton(
+                Surface(
                     onClick = { showCaptureDialog = true },
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(28.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.size(28.dp)
                 ) {
-                    Text("✂️", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("✂️", fontSize = 13.sp)
+                    }
                 }
             }
         }
