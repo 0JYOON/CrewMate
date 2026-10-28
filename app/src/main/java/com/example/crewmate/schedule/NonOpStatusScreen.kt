@@ -185,6 +185,7 @@ fun LeaveManagementSection(
 ) {
     val context = LocalContext.current
     var annualInput by remember(annualLeave) { mutableStateOf(annualLeave?.totalDays?.toString() ?: "") }
+    var isAnnualEditing by remember(annualLeave) { mutableStateOf(annualLeave == null || annualLeave.totalDays == 0) }
     var coDaysInput by remember { mutableStateOf("") }
     var coDateInput by remember { mutableStateOf("") }
     var editingLeave by remember { mutableStateOf<CarriedOverLeaveEntity?>(null) }
@@ -206,28 +207,49 @@ fun LeaveManagementSection(
                 TextField(
                     value = annualInput,
                     onValueChange = { annualInput = it.filter { ch -> ch.isDigit() } },
+                    enabled = isAnnualEditing,
                     modifier = Modifier.width(80.dp),
                     singleLine = true,
                     textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         focusedTextColor = MaterialTheme.colorScheme.onSurface,
                         unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
                     ),
                     shape = RoundedCornerShape(8.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("일", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.weight(1f))
-                Button(
-                    onClick = { annualInput.toIntOrNull()?.let { onSaveAnnualLeave(it) } },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                    contentPadding = PaddingValues(horizontal = 16.dp)
-                ) {
-                    Text("저장", fontWeight = FontWeight.Bold)
+                if (!isAnnualEditing) {
+                    OutlinedButton(
+                        onClick = { isAnnualEditing = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("수정", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            val days = annualInput.toIntOrNull()
+                            if (days != null) {
+                                onSaveAnnualLeave(days)
+                                isAnnualEditing = false
+                                android.widget.Toast.makeText(context, "총 연차가 저장되었습니다 (${days}일).", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("저장", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 

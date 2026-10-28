@@ -220,42 +220,7 @@ private fun TodayWorkContent(
                     )
                 }
 
-                if (isOfflineMode && autoOfflineEnabled) {
-                    if (!isReturnSkipped) {
-                        OutlinedButton(
-                            onClick = {
-                                com.example.crewmate.alarm.AutoOfflineManager.skipOnlineReturn(currentContext)
-                                isReturnSkipped = true
-                                android.widget.Toast.makeText(currentContext, "온라인 자동 복귀가 스킵되었습니다 (오프라인 유지).", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
-                            border = BorderStroke(1.dp, Color(0xFFD97706))
-                        ) {
-                            Text("복귀 Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = {
-                                com.example.crewmate.alarm.AutoOfflineManager.resetReturnSkipped(currentContext)
-                                isReturnSkipped = false
-                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                    com.example.crewmate.alarm.AutoOfflineManager.syncFromDatabase(currentContext.applicationContext)
-                                }
-                                android.widget.Toast.makeText(currentContext, "온라인 복귀가 다시 예약되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(28.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("복귀 Skip됨", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+
 
                 OutlinedButton(
                     onClick = { showCaptureDialog = true },
@@ -264,7 +229,7 @@ private fun TodayWorkContent(
                     modifier = Modifier.height(28.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
-                    Text("📸 캡처", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("✂️", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

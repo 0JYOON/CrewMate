@@ -31,7 +31,7 @@ class AutoOfflineReceiver : BroadcastReceiver() {
                     editor.putString(AutoOfflineManager.PREF_LAST_TRIGGERED_WINDOW, windowKey)
                 }
                 editor.apply()
-                Toast.makeText(context, "운전/1순위 업무 시작: 오프라인 모드로 자동 전환되었습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "주요 업무 시작: 오프라인 모드로 자동 전환되었습니다.", Toast.LENGTH_SHORT).show()
             }
             ACTION_SET_ONLINE -> {
                 Log.i(TAG, "Triggering automatic ONLINE mode switch at $nowStr")

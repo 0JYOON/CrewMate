@@ -1,5 +1,11 @@
 package com.example.crewmate.navigation
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import com.example.crewmate.alarm.AutoOfflineManager
+import kotlinx.coroutines.Dispatchers
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
@@ -469,6 +475,26 @@ private fun CrewMateTopBar(
     onToggleOfflineMode: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
+    var autoOfflineEnabled by remember { mutableStateOf(AutoOfflineManager.isEnabled(context)) }
+    var isReturnSkipped by remember { mutableStateOf(AutoOfflineManager.isReturnSkipped(context)) }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == AutoOfflineManager.PREF_AUTO_OFFLINE) {
+                autoOfflineEnabled = AutoOfflineManager.isEnabled(context)
+            }
+            if (key == AutoOfflineManager.PREF_RETURN_SKIPPED) {
+                isReturnSkipped = AutoOfflineManager.isReturnSkipped(context)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -612,6 +638,44 @@ private fun CrewMateTopBar(
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                 )
+                            }
+                        }
+                    }
+
+                    if (isOfflineMode && autoOfflineEnabled) {
+                        Spacer(Modifier.width(6.dp))
+                        if (!isReturnSkipped) {
+                            OutlinedButton(
+                                onClick = {
+                                    AutoOfflineManager.skipOnlineReturn(context)
+                                    isReturnSkipped = true
+                                    Toast.makeText(context, "온라인 자동 복귀가 스킵되었습니다 (오프라인 유지).", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.height(24.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                                border = BorderStroke(1.dp, Color(0xFFD97706))
+                            ) {
+                                Text("복귀 Skip", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    AutoOfflineManager.resetReturnSkipped(context)
+                                    isReturnSkipped = false
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        AutoOfflineManager.syncFromDatabase(context.applicationContext)
+                                    }
+                                    Toast.makeText(context, "온라인 복귀가 다시 예약되었습니다.", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.height(24.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("복귀 활성", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

@@ -132,6 +132,7 @@ fun SettingsScreen() {
     }
 
     var autoOfflineMode by remember { mutableStateOf(AutoOfflineManager.isEnabled(context)) }
+    var isTimeRecordExpanded by remember { mutableStateOf(false) }
     var autoOfflineScheduledSummary by remember {
         mutableStateOf(prefs.getString(AutoOfflineManager.PREF_SCHEDULED_SUMMARY, null) ?: "확인 중...")
     }
@@ -468,7 +469,7 @@ fun SettingsScreen() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("오늘의 근무 자동 캡쳐 (자정)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("오늘의 근무 자동 캡쳐", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "매일 자정(00:01)에 당일 근무 다이아를 갤러리에 자동으로 저장합니다.",
@@ -574,7 +575,7 @@ fun SettingsScreen() {
                         Text("운전 시간 자동 오프라인 전환", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "1순위 업무(운전·승무·출고준비·입환) 시작 1분 전(직전 감시 포함) 자동으로 오프라인으로 전환하고, 정리/입고정리 시작 시 온라인으로 복귀합니다.",
+                            "주요 업무(운전·승무·출고준비·입환) 시작 1분 전(직전 감시 포함) 자동으로 오프라인으로 전환하고, 정리/입고정리 시작 시 온라인으로 복귀합니다.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -603,6 +604,39 @@ fun SettingsScreen() {
 
                 if (autoOfflineMode) {
                     Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = "⏱️ 온라인 복귀 시점 (정리/입고정리 시작 후)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val delays = listOf(0 to "0분", 5 to "5분", 10 to "10분", 15 to "15분", 20 to "20분")
+                        delays.forEach { (mins, label) ->
+                            val selected = autoOfflineReturnDelay == mins
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    autoOfflineReturnDelay = mins
+                                    prefs.edit().putInt(AutoOfflineManager.PREF_RETURN_DELAY_MINUTES, mins).apply()
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        AutoOfflineManager.syncFromDatabase(context.applicationContext)
+                                    }
+                                    android.widget.Toast.makeText(context, "온라인 복귀 시점이 [정리/입고정리 +${mins}분]으로 설정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text(label, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
@@ -610,169 +644,109 @@ fun SettingsScreen() {
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "📋 자동 오프라인/온라인 전환 시각 기록 (QA 관리)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Top
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isTimeRecordExpanded = !isTimeRecordExpanded },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("예정 스케줄", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = autoOfflineScheduledSummary,
+                                    text = "📋 자동 오프라인/온라인 전환 시각 기록",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("최근 오프라인 전환 시각", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
-                                    text = autoOfflineLastOfflineTime,
-                                    fontSize = 12.sp,
+                                    text = if (isTimeRecordExpanded) "접기 ▲" else "펼치기 ▼",
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFDC2626)
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("최근 온라인 복귀 시각", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    text = autoOfflineLastOnlineTime,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0D9488)
-                                )
-                            }
+                            if (isTimeRecordExpanded) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 
-                            Spacer(Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            withContext(Dispatchers.IO) {
-                                                AutoOfflineManager.syncFromDatabase(context.applicationContext)
-                                            }
-                                            autoOfflineScheduledSummary = prefs.getString(AutoOfflineManager.PREF_SCHEDULED_SUMMARY, null) ?: "없음"
-                                            android.widget.Toast.makeText(context, "당일 자동 오프라인 스케줄을 재계산했습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(32.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("🔄 스케줄 재계산", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        prefs.edit()
-                                            .remove(AutoOfflineManager.PREF_LAST_OFFLINE_TIME)
-                                            .remove(AutoOfflineManager.PREF_LAST_ONLINE_TIME)
-                                            .remove(AutoOfflineManager.PREF_LAST_TRIGGERED_WINDOW)
-                                            .apply()
-                                        autoOfflineLastOfflineTime = "기록 없음"
-                                        autoOfflineLastOnlineTime = "기록 없음"
-                                        android.widget.Toast.makeText(context, "전환 시각 기록이 초기화되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.weight(1f).height(32.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text("🗑️ 기록 초기화", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-                            Text(
-                                text = "⏱️ 온라인 복귀 시점 (정리/입고정리 시작 후)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                val delays = listOf(0 to "0분", 5 to "5분", 10 to "10분(권장)", 15 to "15분", 20 to "20분")
-                                delays.forEach { (mins, label) ->
-                                    val selected = autoOfflineReturnDelay == mins
-                                    FilterChip(
-                                        selected = selected,
-                                        onClick = {
-                                            autoOfflineReturnDelay = mins
-                                            prefs.edit().putInt(AutoOfflineManager.PREF_RETURN_DELAY_MINUTES, mins).apply()
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                AutoOfflineManager.syncFromDatabase(context.applicationContext)
-                                            }
-                                            android.widget.Toast.makeText(context, "온라인 복귀 시점이 [정리/입고정리 +${mins}분]으로 설정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                                        },
-                                        label = { Text(label, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
-                                        modifier = Modifier.weight(1f)
+                                    Text("예정 스케줄", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = autoOfflineScheduledSummary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        lineHeight = 16.sp
                                     )
                                 }
-                            }
 
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (autoOfflineReturnSkipped) "⚠️ 복귀 Skip 적용 중 (오프라인 유지)" else "온라인 자동 복귀 대기",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (autoOfflineReturnSkipped) Color(0xFFD97706) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (!autoOfflineReturnSkipped) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("최근 오프라인 전환 시각", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = autoOfflineLastOfflineTime,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFDC2626)
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("최근 온라인 복귀 시각", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text = autoOfflineLastOnlineTime,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0D9488)
+                                    )
+                                }
+
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     OutlinedButton(
                                         onClick = {
-                                            AutoOfflineManager.skipOnlineReturn(context)
-                                            autoOfflineReturnSkipped = true
-                                            android.widget.Toast.makeText(context, "온라인 복귀가 스킵되었습니다 (오프라인 유지).", android.widget.Toast.LENGTH_SHORT).show()
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
-                                        border = BorderStroke(1.dp, Color(0xFFD97706))
-                                    ) {
-                                        Text("온라인 복귀 Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = {
-                                            AutoOfflineManager.resetReturnSkipped(context)
-                                            autoOfflineReturnSkipped = false
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                AutoOfflineManager.syncFromDatabase(context.applicationContext)
+                                            coroutineScope.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    AutoOfflineManager.syncFromDatabase(context.applicationContext)
+                                                }
+                                                autoOfflineScheduledSummary = prefs.getString(AutoOfflineManager.PREF_SCHEDULED_SUMMARY, null) ?: "없음"
+                                                android.widget.Toast.makeText(context, "당일 자동 오프라인 스케줄을 재계산했습니다.", android.widget.Toast.LENGTH_SHORT).show()
                                             }
-                                            android.widget.Toast.makeText(context, "온라인 복귀가 다시 예약되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
                                         },
+                                        modifier = Modifier.weight(1f).height(32.dp),
                                         shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                     ) {
-                                        Text("온라인 복귀 재활성화", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("🔄 스케줄 재계산", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            prefs.edit()
+                                                .remove(AutoOfflineManager.PREF_LAST_OFFLINE_TIME)
+                                                .remove(AutoOfflineManager.PREF_LAST_ONLINE_TIME)
+                                                .remove(AutoOfflineManager.PREF_LAST_TRIGGERED_WINDOW)
+                                                .apply()
+                                            autoOfflineLastOfflineTime = "기록 없음"
+                                            autoOfflineLastOnlineTime = "기록 없음"
+                                            android.widget.Toast.makeText(context, "전환 시각 기록이 초기화되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f).height(32.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("🗑️ 기록 초기화", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -946,7 +920,7 @@ fun SettingsScreen() {
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("${index + 1}. $badge", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg)
+                                        Text(badge, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg)
                                         Spacer(Modifier.width(4.dp))
                                         Text("✕", fontSize = 10.sp, color = fg.copy(alpha = 0.7f))
                                     }

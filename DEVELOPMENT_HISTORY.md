@@ -379,6 +379,31 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 
 ---
 
+### STEP 39: 세부 UI/UX 디자인, 이모지 및 문구 정리 6대 개선 완비
+* **배경 및 목적**:
+  * 실무 운용 관점에서 승무원 사용자의 직관성과 화면 공간 효율성을 극대화하기 위해 다이아 캡처 이모지, 복귀 Skip 버튼 위치, 연차 수정 잠금, 순환 패턴 뱃지, 오프라인 설정의 세부 디자인 및 안내 문구를 정밀 정돈함.
+* **진행 내용**:
+  1. **다이아 캡처 버튼 이모지화 (`TodayWorkScreen`, `ScheduleScreen`, `DiaLookupScreen`, `DiaCaptureHelper`)**:
+     - 캡처 버튼의 텍스트("캡처")를 제거하고 `✂️` 단독 아이콘 버튼으로 컴팩트화. 다이얼로그 타이틀도 `✂️ 스크린샷 저장 범위 선택`으로 통일.
+  2. **오프라인 모드 복귀 Skip 버튼 최상단바 단일화 (`AppNavigation`, `TodayWorkScreen`, `SettingsScreen`)**:
+     - `CrewMateTopBar`의 `[OFFLINE]` 뱃지 바로 오른쪽에 `[복귀 Skip]` / `[복귀 활성]` 버튼을 배치.
+     - `TodayWorkScreen` 및 `SettingsScreen`의 중복 버튼을 제거하여 상단바로 완전히 일원화.
+  3. **나의 연차 관리 올해 총 연차 [수정]/[저장] 상태 제어 (`NonOpStatusScreen`)**:
+     - 저장 완료 시 TextField를 읽기전용으로 잠그고 버튼 문구를 `[수정]`으로 전환. `[수정]` 클릭 시 다시 활성화되어 `[저장]`으로 토글.
+  4. **순환 패턴 뱃지 번호 제거 (`SettingsScreen`)**:
+     - `[1.주간][2.주간]` 대신 `[주간][주간][야간]` 등 순수 뱃지만 표출.
+  5. **오늘의 근무 자동 캡쳐 문구 간결화 (`SettingsScreen`)**:
+     - `오늘의 근무 자동 캡쳐 (자정)` -> `오늘의 근무 자동 캡쳐`.
+  6. **운전 시간 자동 오프라인 전환 설정 정돈 (`SettingsScreen`, `AutoOfflineManager`, `AutoOfflineReceiver`)**:
+     - "1순위 업무"를 "주요 업무"로 통일.
+     - "(QA 관리)" 삭제 및 `전환 시각 기록` 카드를 기본 접힘 상태로 개편.
+     - 온라인 복귀 시점에서 `(권장)` 문구 삭제 (`10분`).
+     - 예정 스케줄을 줄바꿈하여 아래에 배치하고 `1구간, 2구간` -> `1. 2.` 표기로 개선.
+  7. **빌드 검증**:
+     - `compileDebugKotlin` 0 에러, `testDebugUnitTest` 100% 통과, `assembleDebug` 및 `assembleRelease` 0 에러 완수.
+
+---
+
 ## 📊 4부: 개발 통계 요약 (Project Statistics)
 
 ### 1. 화면(Screen) 및 주요 UI 컴포넌트 목록 (총 8개 화면 + 2개 알람 액티비티)

@@ -184,14 +184,14 @@ object AutoOfflineManager {
         val returnDelayMins = prefs.getInt(PREF_RETURN_DELAY_MINUTES, 10)
         val windows = calculateOfflineSchedules(segments, workDate, returnDelayMins)
         if (windows.isEmpty()) {
-            prefs.edit().putString(PREF_SCHEDULED_SUMMARY, "예정된 1순위 운전 구간 없음 (${workDate})").apply()
+            prefs.edit().putString(PREF_SCHEDULED_SUMMARY, "예정된 주요 업무 구간 없음 (${workDate})").apply()
             return
         }
 
         val isSkipped = prefs.getBoolean(PREF_RETURN_SKIPPED, false)
         val delayNote = if (returnDelayMins > 0) " (정리 +${returnDelayMins}분 복귀)" else ""
         val summaryStr = windows.mapIndexed { i, w ->
-            val prefix = if (windows.size > 1) "[${i + 1}구간] " else ""
+            val prefix = if (windows.size > 1) "${i + 1}. " else "1. "
             "${prefix}OFF ${w.offlineTriggerTime.format(SUMMARY_TIME_FORMAT)} → ON ${w.onlineTriggerTime.format(SUMMARY_TIME_FORMAT)}$delayNote"
         }.joinToString("\n") + if (isSkipped) "\n(⚠️ 온라인 복귀 Skip 적용 중)" else ""
         prefs.edit().putString(PREF_SCHEDULED_SUMMARY, summaryStr).apply()

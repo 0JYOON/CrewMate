@@ -167,7 +167,7 @@ fun DiaLookupScreen(
                     modifier = Modifier.height(28.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
-                    Text("📸 캡처", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("✂️", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

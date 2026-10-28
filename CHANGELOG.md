@@ -4,6 +4,40 @@
 
 ---
 
+## [v1.0.12] - 2026-10-28
+
+### 🎨 세부 UI/UX 디자인, 이모지 및 문구 정리 6대 개선 완비
+- **1. 다이아 캡처 버튼 이모지 변경 및 문구 삭제 (`TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`, `DiaCaptureHelper.kt`)**:
+  - 캡처 버튼에서 "캡처" 텍스트를 제거하고 캡처 도구의 대표 상징인 `✂️` 단독 아이콘 버튼으로 정돈하여 UI 공간 효율화.
+  - 캡처 범위 선택 다이얼로그 타이틀도 `✂️ 스크린샷 저장 범위 선택`으로 동기화.
+- **2. 오프라인 모드 복귀 Skip 버튼 어플 최상단 이동 (`AppNavigation.kt`, `TodayWorkScreen.kt`, `SettingsScreen.kt`)**:
+  - 상단바(TopBar) `CrewMate` 로고 우측 `[OFFLINE]` 뱃지 바로 오른쪽에 `[복귀 Skip]` (스킵 시 `[복귀 활성]`) 버튼을 배치하여 어느 화면에서나 1초 확인 및 제어 가능.
+  - `TodayWorkScreen` 날짜 뱃지 옆과 `SettingsScreen` 내부의 중복 Skip 버튼을 제거하여 상단바로 일원화.
+- **3. 나의 연차 관리 총 연차 [수정]/[저장] 토글 제어 (`NonOpStatusScreen.kt`)**:
+  - '올해 총 연차' 저장 후 숫자 입력창을 읽기전용(비활성)으로 잠그고 버튼 문구를 `[수정]`으로 전환.
+  - `[수정]` 버튼 터치 시 다시 입력창이 활성화되고 `[저장]` 버튼으로 전환되어 저장 여부를 사용자가 직관적으로 확인 가능.
+- **4. 미배정 달 순환 패턴 뱃지 번호 제거 (`SettingsScreen.kt`)**:
+  - 순환 패턴 순서 목록에서 번호(`1. 2.`)를 제거하고 `[주간]`, `[주간]`, `[야간]`, `[~]`, `[S]` 순수 뱃지만 깔끔하게 표출.
+- **5. 오늘의 근무 자동 캡쳐 (자정) 문구 정리 (`SettingsScreen.kt`)**:
+  - 타이틀에서 `(자정)` 문구를 삭제하여 `오늘의 근무 자동 캡쳐`로 간결화.
+- **6. 운전시간 자동 오프라인 전환 설정 정돈 (`SettingsScreen.kt`, `AutoOfflineManager.kt`, `AutoOfflineReceiver.kt`)**:
+  - "1순위 업무"를 "주요 업무"로 문구 통일.
+  - "(QA 관리)" 문구 삭제 및 `전환 시각 기록` 카드를 기본 접힘(`펼치기 ▼` / `접기 ▲`)으로 변경하여 설정 화면 밀도 향상.
+  - 온라인 복귀 시점 칩에서 `(권장)` 문구 삭제 (`10분`).
+  - 예정 스케줄을 줄바꿈하여 아래에 표출하고 `1구간, 2구간`을 `1. 2.` 표기로 개선.
+- **주요 수정 파일**:
+  - `app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt`
+  - `app/src/main/java/com/example/crewmate/schedule/ScheduleScreen.kt`
+  - `app/src/main/java/com/example/crewmate/schedule/DiaLookupScreen.kt`
+  - `app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt`
+  - `app/src/main/java/com/example/crewmate/navigation/AppNavigation.kt`
+  - `app/src/main/java/com/example/crewmate/schedule/NonOpStatusScreen.kt`
+  - `app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt`
+  - `app/src/main/java/com/example/crewmate/alarm/AutoOfflineManager.kt`
+  - `app/src/main/java/com/example/crewmate/alarm/AutoOfflineReceiver.kt`
+
+---
+
 ## [v1.0.11] - 2026-10-28
 
 ### 🛡️ 설정 화면(SettingsScreen) 4대 핵심 기능 원상 복구 및 시스템 완비
