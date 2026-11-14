@@ -31,7 +31,7 @@ sealed interface RouteStep {
         val station: String,
         val label: String,
         val durationMinutes: Int,
-        val isWatch: Boolean,
+        val isBlueCore: Boolean,
         val dptTm: String,
         val arvTm: String
     ) : RouteStep
@@ -79,13 +79,14 @@ object RouteDiagramBuilder {
             if (mins <= 0 && name.isEmpty()) continue
 
             val tag = when {
+                name.contains("출고") -> "출고"
                 name.contains("정리") || name.contains("입고") -> "정"
-                name.contains("준비") || name.contains("출고") -> "준"
+                name.contains("준비") -> "준"
                 name.contains("입환") -> "환"
                 name.contains("감시") -> "감"
                 name.contains("휴게") || name.contains("식사") -> "휴"
                 name.contains("승계") || name.contains("대기") -> "승"
-                name.contains("편승") -> "편"
+                name.contains("편승") -> "편)"
                 else -> name.take(1).ifEmpty { "업" }
             }
             parts.add("$tag${formatMinutesForDwell(mins)}")
@@ -141,7 +142,7 @@ object RouteDiagramBuilder {
 
         val steps = mutableListOf<RouteStep>()
         var dwellGroup = mutableListOf<DiaDetailSegment>()
-        var dwellGroupIsWatch: Boolean? = null
+        var dwellGroupIsBlueCore: Boolean? = null
         var lastStation = ""
         var stepIdx = 0
 
@@ -149,7 +150,7 @@ object RouteDiagramBuilder {
             if (dwellGroup.isEmpty()) return
             val label = formatDwellBadgeLabel(dwellGroup)
             val totalMins = dwellGroup.sumOf { it.pjtTnum ?: 0 }
-            val isWatch = dwellGroupIsWatch == true
+            val isBlueCore = dwellGroupIsBlueCore == true
             if (label.isNotEmpty() || totalMins > 0) {
                 steps.add(
                     RouteStep.Dwell(
@@ -157,14 +158,14 @@ object RouteDiagramBuilder {
                         station = stationName.ifEmpty { lastStation },
                         label = label,
                         durationMinutes = totalMins,
-                        isWatch = isWatch,
+                        isBlueCore = isBlueCore,
                         arvTm = arvTime ?: dwellGroup.first().arvTm ?: dwellGroup.first().dptTm.orEmpty(),
                         dptTm = dptTime ?: dwellGroup.last().dptTm.orEmpty()
                     )
                 )
             }
             dwellGroup = mutableListOf()
-            dwellGroupIsWatch = null
+            dwellGroupIsBlueCore = null
         }
 
         val startStation = rawSegments.firstOrNull { !it.dptStnNm.isNullOrBlank() }?.dptStnNm?.trim()
@@ -218,12 +219,13 @@ object RouteDiagramBuilder {
                 )
                 lastStation = arvStn
             } else {
-                // 감시와 일반 대기(정리·승계·준비·휴게·입고정리)가 바뀌면 분리하고, 같은 성격끼리는 1개 구간으로 통합
+                // 감시·출고준비·입환은 파란 실선(isBlueCore=true)으로 구분하고, 정리·승계·준비·휴게·입고정리는 1개 구간으로 통합
+                val isBlueCore = isWatch || isShunt || cat.contains("출고")
                 val segStation = dptStn.ifEmpty { arvStn }.ifEmpty { lastStation }
-                if (dwellGroupIsWatch != null && dwellGroupIsWatch != isWatch) {
+                if (dwellGroupIsBlueCore != null && (dwellGroupIsBlueCore != isBlueCore || isBlueCore)) {
                     flushDwell(segStation)
                 }
-                dwellGroupIsWatch = isWatch
+                dwellGroupIsBlueCore = isBlueCore
                 dwellGroup.add(seg)
                 if (segStation.isNotEmpty()) lastStation = segStation
             }

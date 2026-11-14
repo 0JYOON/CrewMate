@@ -33,9 +33,9 @@ class RouteDiagramBuilderTest {
     )
 
     @Test
-    fun `consecutive non-watch dwells merge into single step while watch stays separate`() {
+    fun `consecutive non-watch dwells merge into single step while blue core stays separate`() {
         val segments = listOf(
-            seg("준비", null, "안산", "안산", "0943", "1023", 40),
+            seg("출고준비", null, "안산", "안산", "0943", "1023", 40),
             seg("운전", "K4550", "안산", "4서울", "1023", "1209", 106),
             seg("감시", null, "4서울", "4서울", "1209", "1220", 11),
             seg("운전", "K4575", "4서울", "안산", "1220", "1257", 37),
@@ -66,14 +66,14 @@ class RouteDiagramBuilderTest {
         val dwells = model.steps.filterIsInstance<RouteStep.Dwell>()
 
         assertEquals(3, dwells.size)
-        assertEquals("(준40)", dwells[0].label)
-        assertFalse(dwells[0].isWatch)
+        assertEquals("(출고40)", dwells[0].label)
+        assertTrue(dwells[0].isBlueCore)
 
         assertEquals("(감11)", dwells[1].label)
-        assertTrue(dwells[1].isWatch)
+        assertTrue(dwells[1].isBlueCore)
 
         assertEquals("(정10 휴01:00 승01:25 준15)", dwells[2].label)
-        assertFalse(dwells[2].isWatch)
+        assertFalse(dwells[2].isBlueCore)
         assertEquals(170, dwells[2].durationMinutes)
     }
 

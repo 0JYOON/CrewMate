@@ -495,3 +495,14 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
    - 내장 `assets/railwayMasterData.json` + GitHub(`0JYOON/CrewMate`)·Web(`crewmate-alpha.pages.dev`) 버전 크로스체크 동기화 + 로컬 커스텀 오버라이드 3계층 구조 구축.
 2. **승무 행로도 시각화 뷰 (`RouteDiagramBuilder.kt`, `RouteDiagramView.kt`, `DiaDetailCard.kt`)**:
    - 피드백 기반 5대 개선 적용(시각 강조, 감시 파란 얇은 선, 정리·승계·준비·휴게·입고정리 단일 구간 통합, 겹침 방지 간격, 하단 접이식 요약 기본 접힘).
+
+
+---
+
+## STEP 43: 실험실 1호(승무 행로도) 시각적 디테일 6종 개선 및 웹/안드로이드 동기화 (2026-11-14)
+- **작업 내용**:
+  1. `RouteDiagramBuilder.kt`: `RouteStep.Dwell`에 `isBlueCore` 플래그를 추가하여 `감시`, `출고준비`, `입환`을 파란색 실선 핵심 작업으로 분류하고, `출고준비` 표기를 `"출고"`로, `편승` 열차 표기를 `"편) <열번>"` 형식으로 정규화.
+  2. `RouteDiagramView.kt`: 좌측 텍스트 잘림 방지를 위해 `sidePadDp = 28.dp` 대칭 여백을 적용하고, 열차번호 뱃지 배경을 제거한 뒤 시각과 동일한 `12.sp` `ExtraBold` 폰트로 수평선 상단에 충분한 간격을 두고 배치.
+  3. `RouteDiagramBuilderTest.kt`: `출고`, `편)`, `isBlueCore`(`출고준비`, `입환`, `감시` vs `정리·승계·준비·휴게·입고정리`) 검증 단위 테스트 추가.
+  4. `CrewMate-Alpha` (`app-runtime.js`, `dist/app-runtime.js`)에 동일 로직 반영 후 `origin main` 푸시(`4fefc64`) 완료.
+- **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).

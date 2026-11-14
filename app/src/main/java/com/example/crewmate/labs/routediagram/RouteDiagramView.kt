@@ -93,13 +93,14 @@ fun RouteDiagramView(
     }
 
     val density = LocalDensity.current
-    val colWidthDp = if (stations.size <= 5) 72.dp else 64.dp
-    val totalDiagramWidthDp = colWidthDp * stations.size
+    val colWidthDp = 96.dp
+    val sidePadDp = 28.dp
+    val totalDiagramWidthDp = colWidthDp * stations.size + sidePadDp * 2
     val topHeaderHeightDp = 38.dp
-    val startRowHeightDp = 30.dp
-    val runRowHeightDp = 56.dp
-    val dwellRowHeightDp = 42.dp
-    val endRowHeightDp = 32.dp
+    val startRowHeightDp = 32.dp
+    val runRowHeightDp = 62.dp
+    val dwellRowHeightDp = 44.dp
+    val endRowHeightDp = 34.dp
 
     data class PlacedNode(
         val step: RouteStep,
@@ -108,6 +109,7 @@ fun RouteDiagramView(
     )
 
     val colWidthPx = with(density) { colWidthDp.toPx() }
+    val sidePadPx = with(density) { sidePadDp.toPx() }
     val topHeaderPx = with(density) { topHeaderHeightDp.toPx() }
     val startRowPx = with(density) { startRowHeightDp.toPx() }
     val runRowPx = with(density) { runRowHeightDp.toPx() }
@@ -137,7 +139,7 @@ fun RouteDiagramView(
     }
     fun xForStation(station: String): Float {
         val idx = stationIndexMap[station] ?: 0
-        return colWidthPx * idx + colWidthPx / 2f
+        return sidePadPx + colWidthPx * idx + colWidthPx / 2f
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -180,7 +182,8 @@ fun RouteDiagramView(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(topHeaderHeightDp),
+                            .height(topHeaderHeightDp)
+                            .padding(horizontal = sidePadDp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         stations.forEach { stn ->
@@ -216,7 +219,7 @@ fun RouteDiagramView(
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val dash = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                         stations.indices.forEach { idx ->
-                            val x = colWidthPx * idx + colWidthPx / 2f
+                            val x = sidePadPx + colWidthPx * idx + colWidthPx / 2f
                             drawLine(
                                 color = gridColor,
                                 start = Offset(x, topHeaderPx),
@@ -240,13 +243,15 @@ fun RouteDiagramView(
                                 }
                                 is RouteStep.Dwell -> {
                                     val x = xForStation(step.station)
-                                    // 감시는 파란색 + 운전/승무보다 얇은 선(1.6dp), 일반 대기는 통합 1개 선(1.6dp)
-                                    val strokeColor = if (step.isWatch) COLOR_RUN_BLUE else dwellNeutralColor
+                                    // 감시·출고준비·입환은 파란색 실선(1.6dp), 정리·승계·준비·휴게·입고정리는 점선(1.6dp)
+                                    val strokeColor = if (step.isBlueCore) COLOR_RUN_BLUE else dwellNeutralColor
+                                    val effect = if (step.isBlueCore) null else dash
                                     drawLine(
                                         color = strokeColor,
                                         start = Offset(x, placed.yTopPx),
                                         end = Offset(x, placed.yBottomPx),
-                                        strokeWidth = 1.6.dp.toPx()
+                                        strokeWidth = 1.6.dp.toPx(),
+                                        pathEffect = effect
                                     )
                                 }
                                 is RouteStep.Run -> {
@@ -255,10 +260,9 @@ fun RouteDiagramView(
                                     val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
                                     val lineColor = when {
                                         step.isDeadhead -> COLOR_DEADHEAD_PURPLE
-                                        step.isShunt -> COLOR_SHUNT_TEAL
                                         else -> COLOR_RUN_BLUE
                                     }
-                                    val strokeWidth = if (step.isWatch) 1.8.dp.toPx() else 3.2.dp.toPx()
+                                    val strokeWidth = if (step.isWatch || step.isShunt) 1.8.dp.toPx() else 3.2.dp.toPx()
                                     val effect = if (step.isDeadhead) PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f) else null
 
                                     drawLine(
@@ -318,8 +322,8 @@ fun RouteDiagramView(
                                     Text(
                                         text = step.label,
                                         fontSize = 10.sp,
-                                        fontWeight = if (step.isWatch) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (step.isWatch) COLOR_RUN_BLUE else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (step.isBlueCore) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (step.isBlueCore) COLOR_RUN_BLUE else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier
                                             .offset { IntOffset(xOffset.roundToInt(), (yMid - 8.dp.toPx()).roundToInt()) }
                                             .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(4.dp))
@@ -333,35 +337,32 @@ fun RouteDiagramView(
                                 val yMid = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
                                 val isRightward = x2 >= x1
                                 val arrow = if (isRightward) "▶" else "◀"
-                                val badgeColor = when {
-                                    step.isDeadhead -> COLOR_DEADHEAD_PURPLE
-                                    step.isShunt -> COLOR_SHUNT_TEAL
-                                    else -> COLOR_RUN_BLUE
-                                }
-                                val prefix = if (step.isDeadhead) "[편승] " else ""
-                                val pillText = if (isRightward) "$prefix${step.trnNo} $arrow" else "$arrow $prefix${step.trnNo}"
+                                val textColor = if (step.isDeadhead) COLOR_DEADHEAD_PURPLE else COLOR_RUN_BLUE
+                                val prefix = if (step.isDeadhead) "편) " else ""
+                                val trainLabel = if (isRightward) "$prefix${step.trnNo} $arrow" else "$arrow $prefix${step.trnNo}"
 
                                 val midX = (x1 + x2) * 0.5f
-                                val pillW = with(density) { 66.dp.toPx() }
+                                val labelW = with(density) { 84.dp.toPx() }
+                                // 열차번호: 뱃지 없이 행로 선 위에 시각과 동일한 크기(12.sp)로 표기
                                 Box(
                                     modifier = Modifier
-                                        .width(66.dp)
-                                        .offset { IntOffset((midX - pillW / 2f).roundToInt(), (yMid - 10.dp.toPx()).roundToInt()) },
+                                        .width(84.dp)
+                                        .offset { IntOffset((midX - labelW / 2f).roundToInt(), (yMid - 21.dp.toPx()).roundToInt()) },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = pillText.trim(),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        text = trainLabel.trim(),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = textColor,
                                         maxLines = 1,
                                         modifier = Modifier
-                                            .background(badgeColor, RoundedCornerShape(10.dp))
-                                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
+                                            .padding(horizontal = 2.dp)
                                     )
                                 }
 
-                                // 출발 시각 (상단 배치) & 도착 시각 (하단 배치) — 겹침 방지 & 큰 글씨 강조
+                                // 출발·도착 시각: 선 아래(yMid + 8.dp)에 큰 글씨(12.sp)로 배치해 선·열번과 겹침 방지
                                 val dptStr = RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
                                 val arvStr = RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
                                 if (dptStr.isNotEmpty()) {
@@ -371,8 +372,8 @@ fun RouteDiagramView(
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier
-                                            .offset { IntOffset((x1 - 18.dp.toPx()).roundToInt(), (yMid - 22.dp.toPx()).roundToInt()) }
-                                            .background(surfaceBg.copy(alpha = 0.9f), RoundedCornerShape(3.dp))
+                                            .offset { IntOffset((x1 - 18.dp.toPx()).roundToInt(), (yMid + 8.dp.toPx()).roundToInt()) }
+                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                                             .padding(horizontal = 2.dp)
                                     )
                                 }
@@ -383,8 +384,8 @@ fun RouteDiagramView(
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier
-                                            .offset { IntOffset((x2 - 18.dp.toPx()).roundToInt(), (yMid + 7.dp.toPx()).roundToInt()) }
-                                            .background(surfaceBg.copy(alpha = 0.9f), RoundedCornerShape(3.dp))
+                                            .offset { IntOffset((x2 - 18.dp.toPx()).roundToInt(), (yMid + 8.dp.toPx()).roundToInt()) }
+                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                                             .padding(horizontal = 2.dp)
                                     )
                                 }
