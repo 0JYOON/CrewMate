@@ -1153,3 +1153,14 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewDialog.kt`: 직전 승무원·내 구간·교대 승무원·전체 열차 릴레이 팝업 다이얼로그 구현(`LabSafeContainer` 격리).
   - `DiaDetailCard.kt` 및 `LabFeature.kt`: `HANDOVER_CREW` 활성화 시 열번 뱃지 옆 `👥` 버튼 조건부 노출(캡처 모드 제외) 및 다이얼로그 연결.
   - `app/src/test/java/com/example/crewmate/labs/handovercrew/HandoverCrewResolverTest.kt`: 릴레이 판정 및 자정 경과 날짜 보정 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과 및 실기기 설치).
+
+
+### STEP 73: 실험실 5호 '다이아 평가 (`dia_rating`)' 구현 및 5대 실험실 기능 완결 (`v1.0.46`)
+- **배경**: 경/중사업, 야간 취침역, 운전/총사업시간 등 조건에 따라 월별 달력과 다이아 카드에서 다이아 난이도·선호도를 뱃지와 음영으로 즉시 구분하는 실험실 5호 기능 구현.
+- **주요 구현 내용**:
+  - `app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingModels.kt`: `DiaRatingGrade`, `DiaRatingRules`, `DiaRatingResult` 모델 정의.
+  - `app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingStorage.kt`: `SharedPreferences` + `StateFlow` 기반 평가 기준 및 다이아별 수동 등급 지정 저장소 구현.
+  - `app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingEvaluator.kt`: 운전시간, 총사업시간, 야간 취침역(`휴게`/`취침`/`숙박` ≥ 120분), 수동 지정 우선순위 판정 로직 구현.
+  - `app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingDialogs.kt`: 판정 근거·수동 등급 지정(`DiaRatingDetailDialog`) 및 기준 편집(`DiaRatingRulesDialog`) UI 구현.
+  - `ScheduleScreen.kt`, `DiaDetailCard.kt`, `LabsSettingsScreen.kt`, `LabFeature.kt`: 달력 셀 뱃지·배경 음영, 다이아 카드 헤더 뱃지, 실험실 설정 기준 버튼 연동.
+  - `app/src/test/java/com/example/crewmate/labs/diarating/DiaRatingEvaluatorTest.kt`: 평가 규칙 및 수동 지정 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).

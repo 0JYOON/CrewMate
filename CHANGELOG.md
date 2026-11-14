@@ -4,6 +4,24 @@
 
 ---
 
+## [v1.0.46] - 2026-11-15
+
+### 개요
+- 실험실 5호 기능 **다이아 평가 (`dia_rating`)** 안드로이드 구현 및 단위 테스트·빌드 검증·폰 설치 완료 (5대 실험실 기능 구현 100% 완료)
+
+### 주요 변경 사항
+- **다이아 평가 엔진 및 설정/오버라이드 저장소**:
+  - `DiaRatingModels.kt`, `DiaRatingEvaluator.kt`, `DiaRatingStorage.kt`: 운전시간·총사업시간·야간 취침역(선호/비선호) 기준 및 다이아별 수동 등급 지정(`경사업`/`보통`/`중사업`/`★ 선호`) 판정 및 `SharedPreferences` + `StateFlow` 실시간 반영
+  - `DiaRatingDialogs.kt`: 판정 근거 조회 및 수동 등급 지정 다이얼로그(`DiaRatingDetailDialog`), 평가 기준·취침역·셀 음영 설정 다이얼로그(`DiaRatingRulesDialog`)
+- **월별 근무표·다이아 상세·실험실 설정 연동**:
+  - `ScheduleScreen.kt`: 달력 날짜 셀 우상단 등급 뱃지(`경`/`중`/`강`/`★`) 및 선택적 배경 음영 표출
+  - `DiaDetailCard.kt`: 다이아 헤더 옆 평가 등급 뱃지 표출 및 탭 시 상세/수동 지정 팝업 연결
+  - `LabsSettingsScreen.kt` / `LabFeature.kt`: `DIA_RATING.isImplemented = true` 활성화 및 `⚙️ 평가 기준 설정` 진입 버튼 추가
+- **단위 테스트**:
+  - `DiaRatingEvaluatorTest.kt`: 운전·총사업시간 기준, 선호/비선호 취침역, 수동 지정 우선순위, 비승무(`S`/`연차`) 제외 검증 및 `LabsManagerTest.kt` 보완
+
+---
+
 ## [v1.0.45] - 2026-11-15
 
 ### 개요

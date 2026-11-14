@@ -28,6 +28,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import java.util.Locale
 import androidx.compose.runtime.mutableStateOf
@@ -78,10 +80,24 @@ fun DiaDetailCard(
     val context = androidx.compose.ui.platform.LocalContext.current
     val routeDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
     val handoverCrewLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.HANDOVER_CREW)
+    val diaRatingLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.DIA_RATING)
+    val ratingRules by com.example.crewmate.labs.diarating.DiaRatingStorage.rulesFlow.collectAsState()
+    LaunchedEffect(context) {
+        com.example.crewmate.labs.diarating.DiaRatingStorage.getRules(context)
+    }
     var showRouteDiagram by remember(routeDiagramLabEnabled, isCaptureMode) {
         mutableStateOf(routeDiagramLabEnabled && !isCaptureMode)
     }
     var selectedHandoverSegment by remember { mutableStateOf<DiaDetailSegment?>(null) }
+    var showDiaRatingDetail by remember { mutableStateOf(false) }
+    var showDiaRatingRules by remember { mutableStateOf(false) }
+    val diaRatingResult = remember(diaRatingLabEnabled, isCaptureMode, schedule, detail, ratingRules) {
+        if (diaRatingLabEnabled && !isCaptureMode) {
+            com.example.crewmate.labs.diarating.DiaRatingEvaluator.evaluate(schedule.diaNo, detail, schedule, ratingRules)
+        } else {
+            null
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
@@ -97,12 +113,34 @@ fun DiaDetailCard(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "${diaText} DIA",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "${diaText} DIA",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (diaRatingResult != null) {
+                        val badgeColor = Color(diaRatingResult.grade.colorHex)
+                        Surface(
+                            color = badgeColor.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f)),
+                            modifier = Modifier.clickable { showDiaRatingDetail = true }
+                        ) {
+                            Text(
+                                text = "${diaRatingResult.grade.shortBadge} ${diaRatingResult.grade.label}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = badgeColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 if (timeInfo.isNotEmpty()) {
                     Text(
                         text = timeInfo,
@@ -260,6 +298,21 @@ fun DiaDetailCard(
             allSegments = detail.segments,
             targetSegment = targetSeg,
             onDismiss = { selectedHandoverSegment = null }
+        )
+    }
+
+    if (showDiaRatingDetail && diaRatingResult != null && diaRatingLabEnabled && !isCaptureMode) {
+        com.example.crewmate.labs.diarating.DiaRatingDetailDialog(
+            diaNo = schedule.diaNo.orEmpty(),
+            result = diaRatingResult,
+            onDismiss = { showDiaRatingDetail = false },
+            onOpenRules = { showDiaRatingRules = true }
+        )
+    }
+
+    if (showDiaRatingRules && diaRatingLabEnabled && !isCaptureMode) {
+        com.example.crewmate.labs.diarating.DiaRatingRulesDialog(
+            onDismiss = { showDiaRatingRules = false }
         )
     }
 }

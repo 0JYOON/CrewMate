@@ -82,7 +82,7 @@ enum class LabFeature(
         stage = LabStage.EXPERIMENTAL,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,
-        isImplemented = false
+        isImplemented = true
     );
 
     companion object {

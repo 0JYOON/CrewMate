@@ -74,7 +74,7 @@ class LabsManagerTest {
     @Test
     fun `unimplemented features stay disabled even if toggled`() {
         val prefs = FakeSharedPreferences()
-        val unimplemented = LabFeature.entries.first { !it.isImplemented }
+        val unimplemented = LabFeature.entries.firstOrNull { !it.isImplemented } ?: return
 
         LabsManager.setEnabled(prefs, unimplemented, true)
         assertFalse(LabsManager.isEnabled(prefs, unimplemented))

@@ -26,6 +26,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +45,7 @@ fun LabsSettingsScreen(
     val context = LocalContext.current
     val labStates = rememberAllLabStates()
     val scrollState = rememberScrollState()
+    var showDiaRatingRulesDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -94,7 +99,20 @@ fun LabsSettingsScreen(
                     LabsManager.setEnabled(context, feature, next)
                     val stateMsg = if (next) "활성화" else "비활성화"
                     Toast.makeText(context, "${feature.title} $stateMsg", Toast.LENGTH_SHORT).show()
-                }
+                },
+                extraAction = if (feature == LabFeature.DIA_RATING && enabled) {
+                    {
+                        TextButton(onClick = { showDiaRatingRulesDialog = true }) {
+                            Text("⚙️ 평가 기준 설정", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else null
+            )
+        }
+
+        if (showDiaRatingRulesDialog) {
+            com.example.crewmate.labs.diarating.DiaRatingRulesDialog(
+                onDismiss = { showDiaRatingRulesDialog = false }
             )
         }
 
@@ -120,7 +138,8 @@ fun LabsSettingsScreen(
 private fun LabFeatureCard(
     feature: LabFeature,
     enabled: Boolean,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    extraAction: (@Composable () -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -172,6 +191,7 @@ private fun LabFeatureCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                extraAction?.invoke()
             }
             Switch(
                 checked = enabled,

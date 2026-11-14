@@ -382,6 +382,34 @@ private fun CalendarGrid(
     val context = androidx.compose.ui.platform.LocalContext.current
     val patternData = remember { com.example.crewmate.schedule.WorkPatternSettings.load(context) }
     val isMonthEmpty = remember(schedulesByDate) { schedulesByDate.values.all { it.isEmpty() } || schedulesByDate.isEmpty() }
+    val diaRatingLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.DIA_RATING)
+    val ratingRules by com.example.crewmate.labs.diarating.DiaRatingStorage.rulesFlow.collectAsState()
+    var cachedDiaDetails by remember { mutableStateOf<Map<String, com.example.crewmate.data.remote.xcrew.DiaDetailResponse>>(emptyMap()) }
+    LaunchedEffect(diaRatingLabEnabled) {
+        if (diaRatingLabEnabled) {
+            com.example.crewmate.labs.diarating.DiaRatingStorage.getRules(context)
+            cachedDiaDetails = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val db = com.example.crewmate.database.CrewMateDatabase.getInstance(context)
+                val parser = com.example.crewmate.data.remote.xcrew.DiaDetailParser()
+                val map = linkedMapOf<String, com.example.crewmate.data.remote.xcrew.DiaDetailResponse>()
+                runCatching {
+                    db.diaDetailDao().getAllDiaDetails().forEach { entity ->
+                        val key = entity.pdiaNo.trim().removePrefix("~")
+                        if (key.isNotEmpty() && key !in map) {
+                            runCatching { parser.parse(entity.detailJson) }.getOrNull()?.let { map[key] = it }
+                        }
+                    }
+                    db.diaCensusDao().getAllCensus().forEach { census ->
+                        val key = census.pdiaNo.trim().removePrefix("~")
+                        if (key.isNotEmpty() && key !in map) {
+                            runCatching { parser.parse(census.detailJson) }.getOrNull()?.let { map[key] = it }
+                        }
+                    }
+                }
+                map
+            }
+        }
+    }
     val weekdays = listOf("일", "월", "화", "수", "목", "금", "토")
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         weekdays.forEachIndexed { idx, day ->
@@ -402,6 +430,21 @@ private fun CalendarGrid(
                 val dayEvents = date?.let { deviceEventsByDate[it] }.orEmpty()
                 val dayMemos = date?.let { memosByDate[it.format(DateTimeFormatter.ISO_LOCAL_DATE)] }.orEmpty()
                 val patternBadge = if (isMonthEmpty && date != null) com.example.crewmate.schedule.WorkPatternSettings.getPatternForDate(patternData, date) else null
+                val dayRating = if (diaRatingLabEnabled && date != null) {
+                    val primaryDuty = daySchedules.firstOrNull { s ->
+                        val d = s.diaNo?.trim()?.removePrefix("~").orEmpty()
+                        d.isNotEmpty() && d != "S" && d != "연차"
+                    }
+                    if (primaryDuty != null) {
+                        val cleanDia = primaryDuty.diaNo?.trim()?.removePrefix("~").orEmpty()
+                        com.example.crewmate.labs.diarating.DiaRatingEvaluator.evaluate(
+                            diaNo = primaryDuty.diaNo,
+                            detail = cachedDiaDetails[cleanDia],
+                            schedule = primaryDuty,
+                            rules = ratingRules
+                        )
+                    } else null
+                } else null
                 ScheduleDateCell(
                     date = date,
                     dayOfWeekIndex = dayOfWeekIdx,
@@ -411,6 +454,8 @@ private fun CalendarGrid(
                     memos = dayMemos,
                     fontScale = fontScale,
                     patternBadge = patternBadge,
+                    diaRating = dayRating,
+                    showRatingTint = ratingRules.showCellTint,
                     resolveSecondTrain = { schedule -> date?.let { resolveSecondTrain(it, schedule) } },
                     modifier = Modifier.weight(1f).fillMaxHeight()
                 ) { date?.let(onDateClick) }
@@ -430,6 +475,8 @@ private fun ScheduleDateCell(
     memos: List<MemoEntity>,
     fontScale: Float,
     patternBadge: String? = null,
+    diaRating: com.example.crewmate.labs.diarating.DiaRatingResult? = null,
+    showRatingTint: Boolean = true,
     resolveSecondTrain: (WorkSchedule) -> String?,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
@@ -438,6 +485,7 @@ private fun ScheduleDateCell(
     val backgroundColor = when {
         date == null -> Color.Transparent
         isToday -> MaterialTheme.colorScheme.primaryContainer
+        diaRating != null && showRatingTint -> Color(diaRating.grade.colorHex).copy(alpha = 0.08f)
         hasWorkOrEvent -> MaterialTheme.colorScheme.surface
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
@@ -481,6 +529,22 @@ private fun ScheduleDateCell(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(date.dayOfMonth.toString().padStart(2, '0'), fontSize = 11.sp, fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold, color = dayNumColor)
                     if (showHolidayBadge) { Spacer(Modifier.width(2.dp)); Text("휴", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F)) }
+                }
+                if (diaRating != null) {
+                    val gradeColor = Color(diaRating.grade.colorHex)
+                    Box(
+                        modifier = Modifier
+                            .background(gradeColor.copy(alpha = 0.16f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 3.dp, vertical = 0.5.dp)
+                    ) {
+                        Text(
+                            text = diaRating.grade.shortBadge,
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = gradeColor,
+                            lineHeight = 9.sp
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(2.dp))
