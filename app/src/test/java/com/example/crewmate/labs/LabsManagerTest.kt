@@ -96,6 +96,22 @@ class LabsManagerTest {
     }
 
     @Test
+    fun `labs features stay disabled until labs menu is unlocked`() {
+        val prefs = FakeSharedPreferences()
+        assertFalse(LabsManager.isLabsUnlocked(prefs))
+
+        LabsManager.setEnabled(prefs, LabFeature.ROUTE_DIAGRAM, true)
+        assertFalse(LabsManager.isEnabled(prefs, LabFeature.ROUTE_DIAGRAM))
+
+        LabsManager.setLabsUnlocked(prefs, true)
+        assertTrue(LabsManager.isLabsUnlocked(prefs))
+        assertTrue(LabsManager.isEnabled(prefs, LabFeature.ROUTE_DIAGRAM))
+
+        LabsManager.setLabsUnlocked(prefs, false)
+        assertFalse(LabsManager.isEnabled(prefs, LabFeature.ROUTE_DIAGRAM))
+    }
+
+    @Test
     fun `runLabSafely catches exceptions without crashing`() {
         val failure = LabsManager.runLabSafely(LabFeature.PAY_STATEMENT) {
             error("simulated parser error")

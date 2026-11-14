@@ -21,16 +21,32 @@ object LabsManager {
     private const val TAG = "LabsManager"
     const val PREFS_NAME = "crewmate_prefs"
     const val PREF_KEY_PREFIX = "lab_enabled_"
+    const val PREF_KEY_LABS_UNLOCKED = "labs_menu_unlocked"
 
     fun prefKey(feature: LabFeature): String = "$PREF_KEY_PREFIX${feature.id}"
 
     private fun getPrefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    fun isLabsUnlocked(context: Context): Boolean =
+        isLabsUnlocked(getPrefs(context))
+
+    fun isLabsUnlocked(prefs: SharedPreferences): Boolean =
+        prefs.getBoolean(PREF_KEY_LABS_UNLOCKED, false)
+
+    fun setLabsUnlocked(context: Context, unlocked: Boolean) {
+        setLabsUnlocked(getPrefs(context), unlocked)
+    }
+
+    fun setLabsUnlocked(prefs: SharedPreferences, unlocked: Boolean) {
+        prefs.edit().putBoolean(PREF_KEY_LABS_UNLOCKED, unlocked).apply()
+    }
+
     fun isEnabled(context: Context, feature: LabFeature): Boolean =
         isEnabled(getPrefs(context), feature)
 
     fun isEnabled(prefs: SharedPreferences, feature: LabFeature): Boolean {
+        if (!isLabsUnlocked(prefs)) return false
         if (!feature.isImplemented) return false
         return prefs.getBoolean(prefKey(feature), feature.defaultEnabled)
     }
@@ -85,7 +101,7 @@ fun rememberLabEnabled(feature: LabFeature): Boolean {
     DisposableEffect(prefs, feature) {
         val targetKey = LabsManager.prefKey(feature)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-            if (key == targetKey || key == null) {
+            if (key == targetKey || key == LabsManager.PREF_KEY_LABS_UNLOCKED || key == null) {
                 enabled = LabsManager.isEnabled(sharedPreferences, feature)
             }
         }
@@ -109,7 +125,7 @@ fun rememberAllLabStates(): Map<LabFeature, Boolean> {
 
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-            if (key == null || key.startsWith(LabsManager.PREF_KEY_PREFIX)) {
+            if (key == null || key.startsWith(LabsManager.PREF_KEY_PREFIX) || key == LabsManager.PREF_KEY_LABS_UNLOCKED) {
                 states = LabsManager.getAllStates(sharedPreferences)
             }
         }
@@ -119,4 +135,28 @@ fun rememberAllLabStates(): Map<LabFeature, Boolean> {
         }
     }
     return states
+}
+
+@Composable
+fun rememberLabsUnlocked(): Boolean {
+    val context = LocalContext.current
+    val prefs = remember(context) {
+        context.applicationContext.getSharedPreferences(LabsManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var unlocked by remember(prefs) {
+        mutableStateOf(LabsManager.isLabsUnlocked(prefs))
+    }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == null || key == LabsManager.PREF_KEY_LABS_UNLOCKED) {
+                unlocked = LabsManager.isLabsUnlocked(sharedPreferences)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+    return unlocked
 }

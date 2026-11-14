@@ -527,3 +527,15 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   4. `LabFeature.kt`, `AppNavigation.kt`: `PAY_STATEMENT.isImplemented = true` 활성화 및 `LabSafeContainer` 격리 라우트(`lab-pay-statement`) 연결.
   5. `PayStatementParserTest.kt`: Xcrew 실응답 JSON 파싱 및 여비/수당/대기근무 판정 규칙 단위 테스트 추가.
 - **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).
+
+
+---
+
+## STEP 46: 실험실 5회 터치 활성화 UX 통일 및 웹앱 PC 상단 메뉴 스크롤 개선 (2026-11-15)
+- **작업 내용**:
+  1. `LabsManager.kt`, `LabsManagerTest.kt`: `labs_menu_unlocked` 잠금 해제 플래그(기본 `false`) 추가 및 `isEnabled` 연동, 실시간 관찰용 `rememberLabsUnlocked()` 추가.
+  2. `SettingsScreen.kt`: 상단 `"설정"` 타이틀 5회 터치 시 비밀번호 없는 실험실 활성화 ON/OFF `AlertDialog` 및 안내 문구 표출.
+  3. `AppNavigation.kt`: 햄버거 메뉴의 `실험실` 항목을 `rememberLabsUnlocked()`가 참일 때만 노출하도록 변경.
+  4. `LabsSettingsScreen.kt`: 상단 `< 뒤로` 버튼 제거.
+  5. `CrewMate-Alpha` (`app-runtime.js`, `dist/app-runtime.js`): 로고 5회 터치 비밀번호 모달을 ON/OFF 토글 팝업으로 교체, 헤더 `🧪 Lab` 뱃지 제거, 상단 `<nav>` 마우스 휠 가로 스크롤 및 `◀`/`▶` 스크롤 버튼 추가 (`6a7a266`).
+- **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).

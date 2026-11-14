@@ -263,6 +263,66 @@ fun SettingsScreen() {
     var adminPasswordError by remember { mutableStateOf(false) }
     var showCustomDatePicker by remember { mutableStateOf(false) }
 
+    var settingsTapCount by remember { mutableStateOf(0) }
+    var settingsLastTapMs by remember { mutableStateOf(0L) }
+    var showLabUnlockDialog by remember { mutableStateOf(false) }
+    val labsUnlocked = com.example.crewmate.labs.rememberLabsUnlocked()
+
+    if (showLabUnlockDialog) {
+        AlertDialog(
+            onDismissRequest = { showLabUnlockDialog = false },
+            title = {
+                Text("🧪 실험실 (CrewMate Labs)", fontWeight = FontWeight.ExtraBold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("실험실 기능 활성화", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(
+                                    "정식 도입 전 실험 기능을 켜고 끌 수 있습니다.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = labsUnlocked,
+                                onCheckedChange = { checked ->
+                                    com.example.crewmate.labs.LabsManager.setLabsUnlocked(context, checked)
+                                }
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (labsUnlocked) {
+                            "✅ 실험실이 활성화되었습니다.\n좌측 상단 ☰ 메뉴의 '설정' 아래에서 '실험실' 기능을 확인하실 수 있습니다."
+                        } else {
+                            "실험실 기능을 활성화하면 좌측 상단 ☰ 메뉴의 '설정' 아래에 '실험실' 메뉴가 나타납니다."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLabUnlockDialog = false }) {
+                    Text("닫기", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -273,7 +333,23 @@ fun SettingsScreen() {
             text = "설정",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null
+            ) {
+                val now = System.currentTimeMillis()
+                if (now - settingsLastTapMs > 2000L) {
+                    settingsTapCount = 1
+                } else {
+                    settingsTapCount += 1
+                    if (settingsTapCount >= 5) {
+                        settingsTapCount = 0
+                        showLabUnlockDialog = true
+                    }
+                }
+                settingsLastTapMs = now
+            }
         )
         Spacer(Modifier.height(16.dp))
 

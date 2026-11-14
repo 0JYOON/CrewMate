@@ -628,14 +628,16 @@ private fun CrewMateTopBar(
                                     onSelectMenu(Routes.Settings)
                                 },
                             )
-                            MenuDropdownRow(
-                                title = "실험실",
-                                selected = currentRoute == Routes.Labs,
-                                onClick = {
-                                    menuExpanded = false
-                                    onSelectMenu(Routes.Labs)
-                                },
-                            )
+                            if (com.example.crewmate.labs.rememberLabsUnlocked()) {
+                                MenuDropdownRow(
+                                    title = "실험실",
+                                    selected = currentRoute == Routes.Labs,
+                                    onClick = {
+                                        menuExpanded = false
+                                        onSelectMenu(Routes.Labs)
+                                    },
+                                )
+                            }
                             MenuDropdownRow(
                                 title = "정밀 알람",
                                 selected = currentRoute == Routes.WorkAlarmSettings,

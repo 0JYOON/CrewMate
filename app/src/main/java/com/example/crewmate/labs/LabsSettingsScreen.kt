@@ -50,24 +50,12 @@ fun LabsSettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) {
-                    Text("‹ 뒤로", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = "🧪 실험실 (CrewMate Labs)",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-        }
+        Text(
+            text = "🧪 실험실 (CrewMate Labs)",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
