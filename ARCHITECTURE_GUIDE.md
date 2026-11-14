@@ -81,6 +81,7 @@ com.example.crewmate
 | `util/` | [DiaCaptureHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt) | **공통 다이아 캡처 헬퍼 모듈**: 전 화면 다이아 캡처 옵션 팝업, 인쇄 레이아웃 및 무결점 비트맵 캡처 실행기 | **활성 (핵심)** |
 | `settings/` | [SettingsScreen.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt) | **일반 설정 화면**: 앱 테마, 주요 항목 사이 감시 숨기기, 가상 날짜 디버그 진입, 데이터 백업/복원, 자동 오프라인 관리, 실험실 진입 | **활성 (핵심)** |
 | `labs/` | `LabFeature.kt`, `LabsManager.kt`, `LabsSettingsScreen.kt`, `LabSafeContainer.kt` | **실험실(CrewMate Labs) 프레임워크**: 실험 기능 중앙 레지스트리, 실시간 토글 저장소, 오류 격리 컨테이너 및 설정 화면 | **활성 (신규)** |
+| `labs/routediagram/` | `RailwayMasterModels.kt`, `RailwayMasterRepository.kt`, `RouteDiagramBuilder.kt`, `RouteDiagramView.kt` | **승무 행로도 시각화 뷰 & 마스터 동기화**: GitHub↔Alpha 크로스체크 마스터 병합 및 Compose 행로도 렌더러 | **활성 (실험실 1호)** |
 | `util/` | [ScreenshotHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/ScreenshotHelper.kt) | **오프스크린 스크린샷 렌더러 및 갤러리 저장기**: DecorView 기반 무결점 고화질 비트맵 캡처 및 MediaStore 저장 | **활성 (핵심)** |
 | `ui/theme/` | [Color.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/Color.kt) | **M3 색상 팔레트**: M3 Tonal Color System 라이트/다크 모드 색상 정의 | **활성 (핵심)** |
 | `ui/theme/` | [Type.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/ui/theme/Type.kt) | **M3 타이포그래피 스케일**: 숫자, 시각, 열차번호 가독성 최적화 M3 서체 스케일 | **활성 (신규)** |

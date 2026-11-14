@@ -112,6 +112,62 @@ fun DiaDetailCard(
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             } else {
+                val isRouteDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
+                var showRouteDiagramMode by remember { mutableStateOf(false) }
+
+                if (isRouteDiagramLabEnabled && !isCaptureMode) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (!showRouteDiagramMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showRouteDiagramMode = false }
+                        ) {
+                            Text(
+                                text = "타임라인",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = if (!showRouteDiagramMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (showRouteDiagramMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showRouteDiagramMode = true }
+                        ) {
+                            Text(
+                                text = "🧪 행로도",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = if (showRouteDiagramMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (isRouteDiagramLabEnabled && showRouteDiagramMode && !isCaptureMode) {
+                    com.example.crewmate.labs.LabSafeContainer(
+                        feature = com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM,
+                        onDisable = { showRouteDiagramMode = false }
+                    ) {
+                        com.example.crewmate.labs.routediagram.RouteDiagramView(
+                            schedule = schedule,
+                            detail = detail
+                        )
+                    }
+                } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val prefs = remember { context.getSharedPreferences("crewmate_prefs", android.content.Context.MODE_PRIVATE) }
@@ -182,6 +238,7 @@ fun DiaDetailCard(
                             DiaSummaryContent(detail)
                         }
                     }
+                }
                 }
             }
         }

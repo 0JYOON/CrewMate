@@ -44,7 +44,7 @@ enum class LabFeature(
         stage = LabStage.BETA,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,
-        isImplemented = false
+        isImplemented = true
     ),
     PAY_STATEMENT(
         id = "pay_statement",

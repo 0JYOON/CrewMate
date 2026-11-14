@@ -488,3 +488,10 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 3. **클라우드 CI/CD 및 Private 소스 저장소 연동 (`.github/workflows/android-ci.yml`, `app/build.gradle.kts`)**:
    - `0JYOON/CrewMate-Source`를 `source` 원격 저장소로 연결하고, 푸시/PR마다 `test assembleDebug` 및 Debug APK 아티팩트를 생성하는 GitHub Actions 워크플로 추가.
    - `app/build.gradle.kts` 서명 설정이 환경 변수(`KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`)를 우선 참조하도록 개선해 GitHub Secrets 기반 Release APK 빌드 지원.
+
+
+### STEP 42: 실험실 1호 — 승무 행로도 시각화 뷰 및 노선 마스터 통합 관리 (2026-11-14)
+1. **노선/화물역/기지 마스터 통합 관리 (`RailwayMasterModels.kt`, `RailwayMasterRepository.kt`)**:
+   - 내장 `assets/railwayMasterData.json` + GitHub(`0JYOON/CrewMate`)·Web(`crewmate-alpha.pages.dev`) 버전 크로스체크 동기화 + 로컬 커스텀 오버라이드 3계층 구조 구축.
+2. **승무 행로도 시각화 뷰 (`RouteDiagramBuilder.kt`, `RouteDiagramView.kt`, `DiaDetailCard.kt`)**:
+   - 피드백 기반 5대 개선 적용(시각 강조, 감시 파란 얇은 선, 정리·승계·준비·휴게·입고정리 단일 구간 통합, 겹침 방지 간격, 하단 접이식 요약 기본 접힘).

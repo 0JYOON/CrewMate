@@ -4,6 +4,21 @@
 
 ---
 
+## [v1.0.15] - 2026-11-14
+
+### 🗺️ 실험실 1호: 승무 행로도 시각화 뷰 & GitHub↔Alpha 마스터 통합 관리 구축
+- **1. 승무 행로도 시각화 뷰 (`RouteDiagramBuilder.kt`, `RouteDiagramView.kt`, `DiaDetailCard.kt`)**:
+  - `DiaDetailCard` 상단에 `타임라인` | `🧪 행로도` 전환 토글 추가 (`LabFeature.ROUTE_DIAGRAM` 연동 및 `LabSafeContainer` 격리 적용).
+  - 시각 정보 가독성 강화(큰 볼드 폰트), `감시` 구간 파란색 얇은 선(`1.6dp`) 처리, 연속 대기(`정리·승계·준비·휴게·입고정리`) 단일 구간 통합 및 작은 폰트 적용, 행간 여유 확보로 라벨 겹침 제거.
+  - 최하단 **사업시간 / 거리 요약 보기** 접이식 카드(기본 접힘) 구현.
+- **2. 노선·화물역·기지 마스터 통합 관리 (`RailwayMasterModels.kt`, `RailwayMasterRepository.kt`, `assets/railwayMasterData.json`)**:
+  - 앱 내장 기본값 + `0JYOON/CrewMate` ↔ `crewmate-alpha.pages.dev` 크로스체크 동기화 + 로컬 커스텀 기지/별칭 오버라이드 3계층 병합 구조 구현.
+- **주요 수정/신설 파일**:
+  - `labs/routediagram/RailwayMasterModels.kt`, `labs/routediagram/RailwayMasterRepository.kt`, `labs/routediagram/RouteDiagramBuilder.kt`, `labs/routediagram/RouteDiagramView.kt`
+  - `app/src/main/assets/railwayMasterData.json`, `labs/LabFeature.kt`, `schedule/DiaDetailCard.kt`, `labs/routediagram/RouteDiagramBuilderTest.kt`
+
+---
+
 ## [v1.0.14] - 2026-11-14
 
 ### 🧪 실험실(CrewMate Labs) 기능 프레임워크 기반 구축 및 보안 정비
