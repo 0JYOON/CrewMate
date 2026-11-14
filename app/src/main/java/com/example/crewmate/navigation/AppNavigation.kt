@@ -433,13 +433,7 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     com.example.crewmate.schedule.NonOpStatusScreen(viewModel)
                 }
                 composable(Routes.Settings) {
-                    SettingsScreen(
-                        onOpenLabs = {
-                            navController.navigate(Routes.Labs) {
-                                launchSingleTop = true
-                            }
-                        }
-                    )
+                    SettingsScreen()
                 }
                 composable(Routes.Labs) {
                     com.example.crewmate.labs.LabsSettingsScreen(
@@ -615,6 +609,14 @@ private fun CrewMateTopBar(
                                 onClick = {
                                     menuExpanded = false
                                     onSelectMenu(Routes.Settings)
+                                },
+                            )
+                            MenuDropdownRow(
+                                title = "실험실",
+                                selected = currentRoute == Routes.Labs,
+                                onClick = {
+                                    menuExpanded = false
+                                    onSelectMenu(Routes.Labs)
                                 },
                             )
                             MenuDropdownRow(

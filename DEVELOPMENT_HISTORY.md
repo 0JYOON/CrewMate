@@ -506,3 +506,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   3. `RouteDiagramBuilderTest.kt`: `출고`, `편)`, `isBlueCore`(`출고준비`, `입환`, `감시` vs `정리·승계·준비·휴게·입고정리`) 검증 단위 테스트 추가.
   4. `CrewMate-Alpha` (`app-runtime.js`, `dist/app-runtime.js`)에 동일 로직 반영 후 `origin main` 푸시(`4fefc64`) 완료.
 - **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).
+
+
+---
+
+## STEP 44: 실험실 메뉴 햄버거 메뉴 독립 배치 (2026-11-14)
+- **작업 내용**:
+  1. `AppNavigation.kt`: 상단 `☰` 햄버거 드롭다운 메뉴의 `설정` 바로 아래(`정밀 알람` 위)에 `실험실`(`Routes.Labs`) 메뉴 항목 추가.
+  2. `SettingsScreen.kt`: 설정 화면 하단에 있던 `🧪 실험실` 카드 및 `onOpenLabs` 파라미터 제거.
+- **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).
