@@ -23,6 +23,16 @@ data class AttendanceStatusDto(
             val s = it.trim()
             s.isNotBlank() && s != "null" && s != "-"
         }
+
+    val isCheckedIn: Boolean
+        get() {
+            val act = actualTime?.trim()
+            val hasActual = !act.isNullOrBlank() && act != "null" && act != "-"
+            val status = gtwcGubunCd?.trim()
+            // 3: 도중출무완료, 5: 적합성미완료 (실제 출무 시각 존재 여부와 무관하게 이미 출무 단계 진입), 6: 적합성완료
+            val isCheckedStatus = status == "3" || status == "5" || status == "6"
+            return hasActual || isCheckedStatus
+        }
 }
 
 fun AttendanceStatusDto?.toGtwcGubunText(): String {

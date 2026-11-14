@@ -84,6 +84,11 @@ fun ScheduleContent(
         val date = schedule.workDate?.toLocalDateOrNull() ?: return@mapNotNull null
         if (YearMonth.from(date) == month) date to schedule else null
     }.groupBy({ (date, _) -> date }, { (_, schedule) -> schedule })
+        .mapValues { (_, dayList) ->
+            dayList.distinctBy {
+                "${it.diaNo}_${it.startTime}_${it.endTime}_${it.trainNo}_${it.trainNo2}_${it.alcSpecDvCd}_${it.hldyYn}_${it.nonActiveType}"
+            }
+        }
     
     var selectedDate by remember(month) { mutableStateOf<LocalDate?>(null) }
     var showMonthPicker by remember { mutableStateOf(value = false) }
@@ -570,14 +575,14 @@ private fun ScheduleDateCell(
                         text = memo.content,
                         fontSize = (8.5f * fontScale).sp,
                         lineHeight = (8.5f * fontScale).sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 1.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(2.dp))
                             .padding(horizontal = 2.dp, vertical = 0.dp)
                     )
                 }

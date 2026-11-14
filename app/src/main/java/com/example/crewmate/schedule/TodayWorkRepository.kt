@@ -32,25 +32,44 @@ class TodayWorkRepository(
     private val appContext: android.content.Context? = null,
     private val isOfflineModeProvider: () -> Boolean = { false }
 ) {
-    suspend fun getTodayOrNextWork(today: LocalDate = com.example.crewmate.util.AppDateProvider.today): TodayWorkResult? {
+    suspend fun getTodayOrNextWork(
+        today: LocalDate = com.example.crewmate.util.AppDateProvider.today,
+        localOnly: Boolean = false,
+    ): TodayWorkResult? {
+        val isOffline = isOfflineModeProvider() || localOnly
+        val shouldRefreshSchedule = !isOffline && (xcrewSession.isSessionCurrentlyValid() || xcrewSession.isMockReviewSession)
         val currentMonth = YearMonth.from(today)
-        val currentSchedules = workScheduleRepository.getSchedules(currentMonth.toApiMonth()).schedules
+        val currentSchedules = if (localOnly) {
+            workScheduleRepository.getCachedSchedulesOnly(currentMonth.toApiMonth()).schedules
+        } else {
+            workScheduleRepository.getSchedules(
+                month = currentMonth.toApiMonth(),
+                forceRefresh = shouldRefreshSchedule
+            ).schedules
+        }
         val candidates = currentSchedules.toDiaCandidates().filter { it.date >= today }
         val todayCandidates = candidates.filter { it.date == today }
 
         val yesterday = today.minusDays(1)
         val yesterdayMonth = YearMonth.from(yesterday)
-        val yesterdaySchedules = workScheduleRepository.getSchedules(yesterdayMonth.toApiMonth()).schedules
+        val yesterdaySchedules = if (yesterdayMonth == currentMonth) {
+            currentSchedules
+        } else if (localOnly) {
+            workScheduleRepository.getCachedSchedulesOnly(yesterdayMonth.toApiMonth()).schedules
+        } else {
+            workScheduleRepository.getSchedules(yesterdayMonth.toApiMonth()).schedules
+        }
         val yesterdayCandidates = yesterdaySchedules.toDiaCandidates().filter { it.date == yesterday }
+
+        val todayHasAlcSpec12 = currentSchedules.any {
+            it.workDate?.let(::parseDate) == today && it.alcSpecDvCd?.trim() == "12"
+        }
 
         val yesterdayOvernightCandidates = yesterdayCandidates.filter { cand ->
             val st = cand.schedule.startTime
             val et = cand.schedule.endTime
-            (st != null && et != null && st > et) || cand.schedule.isContinuation
-        }
-
-        val todayHasAlcSpec12 = currentSchedules.any {
-            it.workDate?.let(::parseDate) == today && it.alcSpecDvCd?.trim() == "12"
+            val isNight11 = cand.schedule.alcSpecDvCd?.trim() == "11"
+            (st != null && et != null && st > et) || cand.schedule.isContinuation || (isNight11 && todayHasAlcSpec12)
         }
 
         val selected = when {
@@ -70,8 +89,12 @@ class TodayWorkRepository(
             }
             else -> {
                 val nextMonth = currentMonth.plusMonths(1)
-                val nextCandidates = workScheduleRepository.getSchedules(nextMonth.toApiMonth())
-                    .schedules
+                val nextMonthSchedules = if (localOnly) {
+                    workScheduleRepository.getCachedSchedulesOnly(nextMonth.toApiMonth()).schedules
+                } else {
+                    workScheduleRepository.getSchedules(nextMonth.toApiMonth()).schedules
+                }
+                val nextCandidates = nextMonthSchedules
                     .toDiaCandidates()
                     .filter { it.date > today }
                 if (nextCandidates.isEmpty()) return null
@@ -79,20 +102,30 @@ class TodayWorkRepository(
                 nextCandidates.filter { it.date == nearestDate }
             }
         }
+        if (selected.isEmpty()) return null
 
         val unique = selected.distinctBy { it.date to (it.schedule.diaNo to it.schedule.isContinuation) }
         val details = unique.map { candidate ->
             try {
                 val pjtDt = candidate.date.format(DATE_FORMAT)
                 val diaNo = candidate.schedule.diaNo.orEmpty()
-                val primaryDetail = diaDetailRepository.fetchDiaDetail(
-                    pjtDt = pjtDt,
-                    pdiaNo = diaNo,
-                )
+                val primaryDetail = if (localOnly) {
+                    diaDetailRepository.getCachedDiaDetailOnly(pjtDt = pjtDt, pdiaNo = diaNo)
+                } else {
+                    diaDetailRepository.fetchDiaDetail(
+                        pjtDt = pjtDt,
+                        pdiaNo = diaNo,
+                    )
+                }
                 val detail = if (primaryDetail.segments.isEmpty() && candidate.schedule.isContinuation) {
                     val prevDt = candidate.date.minusDays(1).format(DATE_FORMAT)
-                    runCatching { diaDetailRepository.fetchDiaDetail(prevDt, diaNo) }
-                        .getOrDefault(primaryDetail)
+                    runCatching {
+                        if (localOnly) {
+                            diaDetailRepository.getCachedDiaDetailOnly(prevDt, diaNo)
+                        } else {
+                            diaDetailRepository.fetchDiaDetail(prevDt, diaNo)
+                        }
+                    }.getOrDefault(primaryDetail)
                 } else {
                     primaryDetail
                 }
@@ -112,81 +145,91 @@ class TodayWorkRepository(
         val empNm = xcrewSession.userInfo.value?.first ?: ""
 
         val selectedDateStr = selectedDate.format(DATE_FORMAT)
-        val shiftType = currentSchedules.determineShiftType(selectedDateStr)
 
-        val datesToQuery = when (shiftType) {
-            ShiftType.DAYTIME -> setOf(selectedDate)
-            ShiftType.OVERNIGHT_DAY1 -> setOf(selectedDate, selectedDate.plusDays(1))
-            ShiftType.OVERNIGHT_DAY2 -> setOf(selectedDate.minusDays(1), selectedDate)
+        val tomorrow = selectedDate.plusDays(1)
+        val tomorrowMonth = YearMonth.from(tomorrow)
+        val tomorrowSchedules = if (tomorrowMonth == currentMonth) {
+            currentSchedules
+        } else {
+            runCatching {
+                if (localOnly) {
+                    workScheduleRepository.getCachedSchedulesOnly(tomorrowMonth.toApiMonth()).schedules
+                } else {
+                    workScheduleRepository.getSchedules(tomorrowMonth.toApiMonth()).schedules
+                }
+            }.getOrDefault(emptyList())
         }
 
-        val isOffline = isOfflineModeProvider()
-        val attendanceStatuses = mutableListOf<AttendanceStatusDto>()
-        if (!isOffline) {
-            runCatching {
-                datesToQuery.forEach { dateToFetch ->
-                    try {
-                        val dateStr = dateToFetch.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
-                        val statuses = dataSource.fetchAttendanceStatus(empNm, dateStr)
-                        attendanceStatuses.addAll(statuses)
+        val allKnownSchedules = (yesterdaySchedules + currentSchedules + tomorrowSchedules)
+            .distinctBy { it.workDate to (it.diaNo to it.alcSpecDvCd) }
 
-                        // Save snapshot to local Room DB for offline mode
-                        if (appContext != null && statuses.isNotEmpty()) {
-                            try {
-                                val db = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
-                                val jsonArr = org.json.JSONArray()
-                                statuses.forEach { dto ->
-                                    val obj = org.json.JSONObject()
-                                    obj.put("trnNo", dto.trnNo)
-                                    obj.put("trnSttNm", dto.trnSttNm)
-                                    obj.put("gtwcEpctBlgNm", dto.gtwcEpctBlgNm)
-                                    obj.put("gtwcEpctTm", dto.gtwcEpctTm)
-                                    obj.put("gtwcGubunCd", dto.gtwcGubunCd)
-                                    obj.put("pjtDt", dto.pjtDt)
-                                    obj.put("gtwcTpDvCd", dto.gtwcTpDvCd)
-                                    obj.put("flg", dto.flg)
-                                    obj.put("tnsmTm", dto.tnsmTm)
-                                    obj.put("gtwcTm", dto.gtwcTm)
-                                    obj.put("actlTm", dto.actlTm)
-                                    jsonArr.put(obj)
-                                }
-                                val entity = com.example.crewmate.database.AttendanceStatusEntity(
-                                    pjtDt = dateStr,
-                                    jsonString = jsonArr.toString(),
-                                    updatedAt = java.time.LocalDateTime.now().toString()
-                                )
-                                db.attendanceStatusDao().insertAttendanceStatus(entity)
-                            } catch (_: Exception) {
-                            }
-                        }
-                    } catch (_: Exception) {
+        val shiftType = allKnownSchedules.determineShiftType(selectedDateStr)
+
+        val datesToQuery = when (shiftType) {
+            ShiftType.DAYTIME -> sortedSetOf(selectedDate)
+            ShiftType.OVERNIGHT_DAY1 -> sortedSetOf(selectedDate, selectedDate.plusDays(1))
+            ShiftType.OVERNIGHT_DAY2 -> sortedSetOf(selectedDate.minusDays(1), selectedDate)
+        }
+
+        val attendanceStatuses = mutableListOf<AttendanceStatusDto>()
+
+        // 1. 먼저 로컬 Room DB에 저장된 출무현황 스냅샷을 기본 로드 (오프라인/폴백 대비)
+        val ctx = appContext
+        val cachedByDate = mutableMapOf<String, List<AttendanceStatusDto>>()
+        if (ctx != null) {
+            datesToQuery.forEach { dateToFetch ->
+                val dateStr = dateToFetch.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
+                val snapshot = com.example.crewmate.alarm.AttendanceSnapshotStore.load(ctx, dateStr)
+                if (snapshot != null && snapshot.statuses.isNotEmpty()) {
+                    cachedByDate[dateStr] = snapshot.statuses
+                }
+            }
+        }
+
+        // 2. 온라인 모드일 때: 메뉴 진입 시마다 서버에서 실시간 최신 출무 현황 조회 (세션 유지 시 즉시 갱신)
+        if (!isOffline) {
+            datesToQuery.forEach { dateToFetch ->
+                val dateStr = dateToFetch.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
+                val cachedForDate = cachedByDate[dateStr].orEmpty()
+
+                try {
+                    val currentEmpNm = empNm.ifBlank { xcrewSession.userInfo.value?.first.orEmpty() }
+                    val rawStatuses = dataSource.fetchAttendanceStatus(currentEmpNm, dateStr)
+                    val statuses = rawStatuses.map { dto ->
+                        val cleanPjt = dto.pjtDt?.trim()?.replace("-", "")?.filter { it.isDigit() }
+                        val normalizedPjtDt = if (!cleanPjt.isNullOrEmpty() && cleanPjt.length == 8) cleanPjt else dateStr
+                        dto.copy(pjtDt = normalizedPjtDt)
                     }
+
+                    if (statuses.isNotEmpty()) {
+                        attendanceStatuses.addAll(statuses)
+                        if (ctx != null) {
+                            com.example.crewmate.alarm.AttendanceSnapshotStore.save(ctx, dateStr, statuses)
+                        }
+                    } else {
+                        attendanceStatuses.addAll(cachedForDate)
+                    }
+                } catch (_: Exception) {
+                    attendanceStatuses.addAll(cachedForDate)
                 }
             }
         } else {
-            // Offline Mode: Load cached attendance status snapshot from Room DB
-            if (appContext != null) {
-                runCatching {
-                    val db = com.example.crewmate.database.CrewMateDatabase.getInstance(appContext!!)
-                    datesToQuery.forEach { dateToFetch ->
-                        val dateStr = dateToFetch.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
-                        val cachedEntity = db.attendanceStatusDao().getAttendanceStatus(dateStr)
-                        if (cachedEntity != null && cachedEntity.jsonString.isNotBlank()) {
-                            val parser = com.example.crewmate.data.remote.xcrew.AttendanceStatusParser()
-                            val cachedList = parser.parse(cachedEntity.jsonString)
-                            attendanceStatuses.addAll(cachedList)
-                        }
-                    }
-                }
+            datesToQuery.forEach { dateToFetch ->
+                val dateStr = dateToFetch.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
+                attendanceStatuses.addAll(cachedByDate[dateStr].orEmpty())
             }
         }
 
         // For Daytime shifts, strictly filter attendance status by today's date
-        val finalAttendanceStatuses = if (shiftType == ShiftType.DAYTIME) {
+        val filteredAttendanceStatuses = if (shiftType == ShiftType.DAYTIME) {
             attendanceStatuses.filter { it.pjtDt == null || it.pjtDt == selectedDateStr }
         } else {
             attendanceStatuses
         }
+
+        val finalAttendanceStatuses = filteredAttendanceStatuses
+            .distinctBy { (it.pjtDt ?: "") to ((it.trnNo ?: "") to (it.gtwcEpctTm ?: "")) }
+            .sortedWith(compareBy({ it.pjtDt ?: "" }, { it.gtwcEpctTm ?: "" }))
 
         val result = TodayWorkResult(
             isToday = selectedDate == today,
@@ -195,41 +238,121 @@ class TodayWorkRepository(
             attendanceStatusList = finalAttendanceStatuses
         )
 
-        // Schedule alarms and auto-offline transitions if appContext is available
+        // Delegate scheduling of precision alarms, auto-offline, and telegram tracking to coordinator
         if (appContext != null && details.isNotEmpty()) {
             val allSegments = details.flatMap { it.detail.segments }
-            try {
-                com.example.crewmate.alarm.AutoOfflineManager.scheduleAutoOffline(appContext, allSegments, selectedDate)
-            } catch (e: Exception) {
-                android.util.Log.e("TodayWorkRepository", "Failed to schedule auto offline", e)
-            }
-            try {
-                val settingsStore = com.example.crewmate.alarm.WorkAlarmSettingsStore(appContext)
-                val settings = settingsStore.loadSettings()
-                if (settings.alarmEnabled) {
-                    val alarmItems = com.example.crewmate.alarm.WorkAlarmRuleEvaluator.evaluate(
-                        segments = allSegments,
-                        workDate = selectedDate,
-                        settings = settings,
-                        attendanceStatuses = finalAttendanceStatuses
-                    )
-                    val dateKey = selectedDate.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
-                    val bypassedKeys = settingsStore.getBypassedAlarmKeys(dateKey)
-                    val activeAlarms = alarmItems.filter { !bypassedKeys.contains(it.uniqueKey) }
-                    com.example.crewmate.alarm.WorkAlarmScheduler.scheduleAlarms(appContext, activeAlarms)
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("TodayWorkRepository", "Failed to schedule work alarms", e)
-            }
+            com.example.crewmate.alarm.WorkDutySyncCoordinator.sync(
+                context = appContext,
+                workDate = selectedDate,
+                segments = allSegments,
+                attendanceStatuses = finalAttendanceStatuses
+            )
         }
 
         return result
     }
 
+    /**
+     * 전체 화면(다이아/월간근무표)을 다시 불러오지 않고 오직 출무현황만 Xcrew로부터 새로 조회하여
+     * 스냅샷 및 정밀 알람(출무 완료 시 자동 해제)에 즉시 반영합니다.
+     */
+    suspend fun refreshAttendanceStatusesOnly(currentResult: TodayWorkResult): TodayWorkResult {
+        if (isOfflineModeProvider()) return currentResult
+
+        val selectedDate = currentResult.workDate
+        val selectedDateStr = selectedDate.format(DATE_FORMAT)
+        val yesterday = selectedDate.minusDays(1)
+        val tomorrow = selectedDate.plusDays(1)
+
+        val months = linkedSetOf(
+            YearMonth.from(yesterday).toApiMonth(),
+            YearMonth.from(selectedDate).toApiMonth(),
+            YearMonth.from(tomorrow).toApiMonth()
+        )
+        val allKnownSchedules = months.flatMap { m ->
+            runCatching { workScheduleRepository.getCachedSchedulesOnly(m).schedules }.getOrDefault(emptyList())
+        }.distinctBy { it.workDate to (it.diaNo to it.alcSpecDvCd) }
+
+        val shiftType = allKnownSchedules.determineShiftType(selectedDateStr)
+        val datesToQuery = when (shiftType) {
+            ShiftType.DAYTIME -> sortedSetOf(selectedDate)
+            ShiftType.OVERNIGHT_DAY1 -> sortedSetOf(selectedDate, selectedDate.plusDays(1))
+            ShiftType.OVERNIGHT_DAY2 -> sortedSetOf(selectedDate.minusDays(1), selectedDate)
+        }
+
+        val ctx = appContext
+        val cachedByDate = mutableMapOf<String, List<AttendanceStatusDto>>()
+        if (ctx != null) {
+            datesToQuery.forEach { dateToFetch ->
+                val dateStr = dateToFetch.format(DATE_FORMAT)
+                val snapshot = com.example.crewmate.alarm.AttendanceSnapshotStore.load(ctx, dateStr)
+                if (snapshot != null && snapshot.statuses.isNotEmpty()) {
+                    cachedByDate[dateStr] = snapshot.statuses
+                }
+            }
+        }
+
+        val empNm = xcrewSession.userInfo.value?.first.orEmpty()
+        val attendanceStatuses = mutableListOf<AttendanceStatusDto>()
+        var anyFetchError: Exception? = null
+
+        datesToQuery.forEach { dateToFetch ->
+            val dateStr = dateToFetch.format(DATE_FORMAT)
+            val cachedForDate = cachedByDate[dateStr].orEmpty()
+            try {
+                val currentEmpNm = empNm.ifBlank { xcrewSession.userInfo.value?.first.orEmpty() }
+                val rawStatuses = dataSource.fetchAttendanceStatus(currentEmpNm, dateStr)
+                val statuses = rawStatuses.map { dto ->
+                    val cleanPjt = dto.pjtDt?.trim()?.replace("-", "")?.filter { it.isDigit() }
+                    val normalizedPjtDt = if (!cleanPjt.isNullOrEmpty() && cleanPjt.length == 8) cleanPjt else dateStr
+                    dto.copy(pjtDt = normalizedPjtDt)
+                }
+                if (statuses.isNotEmpty()) {
+                    attendanceStatuses.addAll(statuses)
+                    if (ctx != null) {
+                        com.example.crewmate.alarm.AttendanceSnapshotStore.save(ctx, dateStr, statuses)
+                    }
+                } else {
+                    attendanceStatuses.addAll(cachedForDate)
+                }
+            } catch (e: Exception) {
+                anyFetchError = e
+                attendanceStatuses.addAll(cachedForDate)
+            }
+        }
+
+        if (attendanceStatuses.isEmpty() && anyFetchError != null) {
+            throw anyFetchError!!
+        }
+
+        val filteredAttendanceStatuses = if (shiftType == ShiftType.DAYTIME) {
+            attendanceStatuses.filter { it.pjtDt == null || it.pjtDt == selectedDateStr }
+        } else {
+            attendanceStatuses
+        }
+
+        val finalAttendanceStatuses = filteredAttendanceStatuses
+            .distinctBy { (it.pjtDt ?: "") to ((it.trnNo ?: "") to (it.gtwcEpctTm ?: "")) }
+            .sortedWith(compareBy({ it.pjtDt ?: "" }, { it.gtwcEpctTm ?: "" }))
+
+        val updatedResult = currentResult.copy(attendanceStatusList = finalAttendanceStatuses)
+
+        if (appContext != null && currentResult.dias.isNotEmpty()) {
+            val allSegments = currentResult.dias.flatMap { it.detail.segments }
+            com.example.crewmate.alarm.WorkDutySyncCoordinator.sync(
+                context = appContext,
+                workDate = selectedDate,
+                segments = allSegments,
+                attendanceStatuses = finalAttendanceStatuses
+            )
+        }
+
+        return updatedResult
+    }
+
     private fun List<WorkSchedule>.toDiaCandidates(): List<DutyCandidate> = mapNotNull { schedule ->
         val date = schedule.workDate?.let(::parseDate) ?: return@mapNotNull null
-        val diaNo = schedule.diaNo?.trim().orEmpty()
-        if (diaNo.isEmpty() || diaNo == "연차" || diaNo == "S" || !diaNo.matches(DIA_NUMBER)) {
+        if (!schedule.isValidActiveDia()) {
             return@mapNotNull null
         }
         DutyCandidate(date, schedule)

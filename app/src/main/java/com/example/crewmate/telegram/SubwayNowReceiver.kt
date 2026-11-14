@@ -14,6 +14,7 @@ class SubwayNowReceiver : BroadcastReceiver() {
         const val EXTRA_TARGET_STATION = "extra_target_station"
         const val EXTRA_INTERVAL = "extra_interval"
         const val EXTRA_START_TIME = "extra_start_time"
+        const val EXTRA_START_DATETIME_ISO = "extra_start_datetime_iso"
         const val EXTRA_RAW_COMMAND = "extra_raw_command"
     }
 
@@ -24,9 +25,16 @@ class SubwayNowReceiver : BroadcastReceiver() {
         val targetStation = intent.getStringExtra(EXTRA_TARGET_STATION).orEmpty()
         val interval = intent.getIntExtra(EXTRA_INTERVAL, 3)
         val startTime = intent.getStringExtra(EXTRA_START_TIME).orEmpty()
+        val startDateTimeIso = intent.getStringExtra(EXTRA_START_DATETIME_ISO)
         val rawCommand = intent.getStringExtra(EXTRA_RAW_COMMAND).orEmpty()
 
         if (trainNo.isBlank() || rawCommand.isBlank()) return
+
+        val todayKey = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd", java.util.Locale.ROOT))
+        if (SubwayNowSettings.isTrainStopped(context, trainNo, todayKey)) {
+            android.util.Log.i("SubwayNowReceiver", "$trainNo 열차는 사용자에 의해 중지되어 자동 발송을 건너뜁니다.")
+            return
+        }
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -37,7 +45,8 @@ class SubwayNowReceiver : BroadcastReceiver() {
                     targetStation = targetStation,
                     interval = interval,
                     startTime = startTime,
-                    rawCommand = rawCommand
+                    rawCommand = rawCommand,
+                    startDateTimeIso = startDateTimeIso
                 )
             } finally {
                 pendingResult.finish()

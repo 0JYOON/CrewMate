@@ -41,7 +41,8 @@ private const val XCREW_NON_OP_PATH = "/extrCrewMg/searchExtrNonActvPstt.do"
 private const val XCREW_IND_WRK_SPEC_URL = "https://xcrew.korail.com/extrCrewMg/searchExtrIndWrkSpec.do"
 private const val XCREW_IND_WRK_SPEC_PATH = "/extrCrewMg/searchExtrIndWrkSpec.do"
 private const val XCREW_XHR_ACCEPT = "application/json, text/javascript, */*; q=0.01"
-private const val XHR_TIMEOUT_MILLIS = 40_000L
+private const val XHR_TIMEOUT_MILLIS = 12_000L
+private const val SESSION_IDLE_TTL_MILLIS = 20 * 60 * 1_000L
 
 /** Retains the authenticated WebView across the login-to-schedule navigation. */
 class XcrewWebViewSession {
@@ -50,9 +51,13 @@ class XcrewWebViewSession {
         private set
     private val recoveryGate = SessionRecoveryGate()
     private val authEpoch = AtomicLong(0L)
+    private val lastActivityTimestampMillis = AtomicLong(0L)
     private val authLock = Any()
     private val _authenticationExpired = MutableStateFlow(false)
     val authenticationExpired: StateFlow<Boolean> = _authenticationExpired.asStateFlow()
+
+    private val _sessionAuthenticatedEpoch = MutableStateFlow(0L)
+    val sessionAuthenticatedEpoch: StateFlow<Long> = _sessionAuthenticatedEpoch.asStateFlow()
     
     private val _userInfo = MutableStateFlow<Pair<String, String>?>(null)
     val userInfo: StateFlow<Pair<String, String>?> = _userInfo.asStateFlow()
@@ -60,6 +65,45 @@ class XcrewWebViewSession {
     @Volatile
     var isMockReviewSession: Boolean = false
         private set
+
+    @Volatile
+    var isSessionAuthenticated: Boolean = false
+        private set
+
+    @Volatile
+    var offlineGuard: (() -> Boolean)? = null
+
+    fun isNetworkBlocked(): Boolean = offlineGuard?.invoke() == true
+
+    fun touchSessionActivity() {
+        lastActivityTimestampMillis.set(System.currentTimeMillis())
+    }
+
+    /**
+     * 장시간(20분 이상) 앱을 사용하지 않았다가 다시 진입한 경우,
+     * 서버 세션(JSESSIONID)이 만료되었을 확률이 매우 높으므로 즉시 재인증 대상으로 판정.
+     */
+    fun isSessionCurrentlyValid(): Boolean {
+        if (!isSessionAuthenticated) return false
+        val lastActive = lastActivityTimestampMillis.get()
+        if (lastActive > 0L && (System.currentTimeMillis() - lastActive) >= SESSION_IDLE_TTL_MILLIS) {
+            isSessionAuthenticated = false
+            return false
+        }
+        return true
+    }
+
+    private val reloginMutex = kotlinx.coroutines.sync.Mutex()
+    private var silentReloginProvider: (suspend () -> Boolean)? = null
+    private var userInfoSavedListener: ((String, String) -> Unit)? = null
+
+    fun setSilentReloginProvider(provider: suspend () -> Boolean) {
+        silentReloginProvider = provider
+    }
+
+    fun setUserInfoSavedListener(listener: (String, String) -> Unit) {
+        userInfoSavedListener = listener
+    }
 
     fun setMockReviewMode(enabled: Boolean) {
         isMockReviewSession = enabled
@@ -69,6 +113,7 @@ class XcrewWebViewSession {
 
     fun setUserInfo(name: String, affiliation: String) {
         _userInfo.value = Pair(name, affiliation)
+        userInfoSavedListener?.invoke(name, affiliation)
     }
 
     fun authenticationEpoch(): Long = authEpoch.get()
@@ -76,6 +121,7 @@ class XcrewWebViewSession {
     fun reportAuthenticationExpired(requestEpoch: Long) {
         synchronized(authLock) {
             if (requestEpoch != authEpoch.get()) return
+            isSessionAuthenticated = false
             if (recoveryGate.beginRecovery()) _authenticationExpired.value = true
         }
     }
@@ -83,11 +129,73 @@ class XcrewWebViewSession {
     /** Call after the login and authenticated schedule preflight both succeed. */
     fun markAuthenticated() {
         synchronized(authLock) {
-            authEpoch.incrementAndGet()
+            isSessionAuthenticated = true
+            touchSessionActivity()
+            val newEpoch = authEpoch.incrementAndGet()
+            _sessionAuthenticatedEpoch.value = newEpoch
             recoveryGate.completeRecovery()
             _authenticationExpired.value = false
         }
     }
+
+    suspend fun wakeUpWebView() {
+        val view = webView ?: return
+        withContext(Dispatchers.Main.immediate) {
+            runCatching {
+                view.onResume()
+                view.resumeTimers()
+            }
+            val currentUrl = view.url.orEmpty()
+            if (!pageReady.isCompleted && currentUrl.startsWith("https://xcrew.korail.com") && view.progress >= 100) {
+                markPageReady(currentUrl)
+            }
+        }
+    }
+
+    private suspend fun recoverPageReadyIfStuck() {
+        if (pageReady.isCompleted) return
+        val view = webView ?: return
+        withContext(Dispatchers.Main.immediate) {
+            runCatching {
+                view.onResume()
+                view.resumeTimers()
+            }
+            val currentUrl = view.url.orEmpty()
+            if (currentUrl.startsWith("https://xcrew.korail.com") && view.progress >= 100) {
+                expectedTargetPrefix = null
+                pageReady.complete(Unit)
+            } else {
+                resetPageReady("https://xcrew.korail.com")
+                view.loadUrl("https://xcrew.korail.com/loginView.do")
+            }
+        }
+    }
+
+    suspend fun trySilentRelogin(failedEpoch: Long): Boolean {
+        if (isNetworkBlocked()) return false
+        val provider = silentReloginProvider ?: return false
+        return reloginMutex.withLock {
+            if (isNetworkBlocked()) return@withLock false
+            if (isSessionCurrentlyValid() && authEpoch.get() > failedEpoch) {
+                return@withLock true
+            }
+            isSessionAuthenticated = false
+            wakeUpWebView()
+            try {
+                provider.invoke()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                recoverPageReadyIfStuck()
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Silent relogin failed: ${e::class.simpleName}")
+                recoverPageReadyIfStuck()
+                false
+            }
+        }
+    }
+
+    @Volatile
+    private var webViewAttached = CompletableDeferred<WebView>()
 
     @Volatile
     private var pageReady = CompletableDeferred<Unit>()
@@ -97,6 +205,13 @@ class XcrewWebViewSession {
 
     fun attach(webView: WebView) {
         this.webView = webView
+        webViewAttached.complete(webView)
+    }
+
+    suspend fun awaitWebView(): WebView {
+        webView?.let { return it }
+        return withTimeoutOrNull(10_000L) { webViewAttached.await() }
+            ?: throw MissingXcrewWebViewException()
     }
 
     fun markPageReady(loadedUrl: String? = null) {
@@ -113,19 +228,27 @@ class XcrewWebViewSession {
     }
 
     suspend fun awaitPageReady() {
+        wakeUpWebView()
         val current = pageReady
         if (current.isCompleted) return
-        if (withTimeoutOrNull(10_000L) { current.await() } == null) {
-            throw MissingXcrewWebViewException()
+        if (withTimeoutOrNull(8_000L) { current.await() } == null) {
+            recoverPageReadyIfStuck()
+            if (withTimeoutOrNull(4_000L) { pageReady.await() } == null) {
+                throw MissingXcrewWebViewException()
+            }
         }
     }
 
     suspend fun prepareForLogin() {
         withContext(Dispatchers.Main.immediate) {
             isMockReviewSession = false
-            _userInfo.value = null
+            isSessionAuthenticated = false
             _authenticationExpired.value = false
             webView?.let { view ->
+                runCatching {
+                    view.onResume()
+                    view.resumeTimers()
+                }
                 view.stopLoading()
                 resetPageReady()
             }
@@ -133,16 +256,22 @@ class XcrewWebViewSession {
     }
 
     suspend fun refreshWebViewPage(targetUrl: String = "https://xcrew.korail.com/extrCrewMg/extrRltmCrewWrkPstt.do") {
+        val view = runCatching { awaitWebView() }.getOrNull() ?: return
         withContext(Dispatchers.Main.immediate) {
-            val view = webView ?: return@withContext
+            runCatching {
+                view.onResume()
+                view.resumeTimers()
+            }
             view.stopLoading()
             resetPageReady("https://xcrew.korail.com/extrCrewMg/")
             view.loadUrl(targetUrl)
         }
-        runCatching {
-            withTimeout(12_000L) {
-                awaitPageReady()
-            }
+        val ready = withTimeoutOrNull(10_000L) {
+            pageReady.await()
+            true
+        } ?: false
+        if (!ready) {
+            recoverPageReadyIfStuck()
         }
     }
 
@@ -167,7 +296,8 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.getWorkSchedules(month, parser)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        val webView = session.awaitWebView()
         session.awaitPageReady()
 
         val empNm = session.userInfo.value?.first?.trim().orEmpty()
@@ -191,7 +321,7 @@ class XcrewWebViewXhrDataSource(
                 path = path,
                 url = url,
                 fields = fields,
-                logLabel = "month=$month empNm=$empNm",
+                logLabel = "month=$month hasEmpNm=${empNm.isNotBlank()}",
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -269,7 +399,8 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.fetchDiaDetail(pjtDt, pdiaNo)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        val webView = session.awaitWebView()
         session.awaitPageReady()
         val xhrResponse = request(
             webView = webView,
@@ -300,7 +431,8 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.fetchCrewWorkStatus(pjtDt)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        val webView = session.awaitWebView()
         session.awaitPageReady()
         val xhrResponse = request(
             webView = webView,
@@ -322,7 +454,8 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.fetchNonOpStatus(year)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        val webView = session.awaitWebView()
         session.awaitPageReady()
 
         val path = "/extrCrewMg/searchExtrNonAtulPstt.do"
@@ -356,12 +489,58 @@ class XcrewWebViewXhrDataSource(
         fields: List<Pair<String, String>>,
         logLabel: String,
     ): XcrewWebViewXhrResponse {
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        // 1. 아직 세션이 인증되지 않았거나 장시간(20분 이상) 미사용으로 TTL이 만료된 경우 선제적으로 백그라운드 무음 로그인 시도
+        if (!session.isSessionCurrentlyValid() && !session.isMockReviewSession) {
+            session.trySilentRelogin(session.authenticationEpoch())
+        }
+
         val requestAuthEpoch = session.authenticationEpoch()
+        val actionLabel = XcrewNetworkLogStore.resolveActionName(path)
         val response = withContext(Dispatchers.Main.immediate) {
             executeXhr(webView, path, fields)
         }
         Log.i(TAG, "response status=${response.status} contentType=${response.contentType} url=$url $logLabel")
+        XcrewNetworkLogStore.record(
+            context = webView.context,
+            actionName = actionLabel,
+            endpoint = path,
+            success = response.status in 200..299 && !response.isExpiredOrInvalidSession(),
+            summary = "HTTP ${response.status}"
+        )
+
+        // 2. 응답이 세션 만료로 판단되면 로그인 화면으로 강제 이동하지 않고 백그라운드 무음 재인증 후 1회 자동 재시도
+        if (response.isExpiredOrInvalidSession()) {
+            Log.i(TAG, "Session expired detected during XHR ($url), attempting silent relogin...")
+            val reloginSuccess = session.trySilentRelogin(requestAuthEpoch)
+            if (reloginSuccess) {
+                val retryEpoch = session.authenticationEpoch()
+                val retryResponse = withContext(Dispatchers.Main.immediate) {
+                    executeXhr(webView, path, fields)
+                }
+                Log.i(TAG, "retry response status=${retryResponse.status} contentType=${retryResponse.contentType} url=$url $logLabel")
+                XcrewNetworkLogStore.record(
+                    context = webView.context,
+                    actionName = "$actionLabel (재시도)",
+                    endpoint = path,
+                    success = retryResponse.status in 200..299 && !retryResponse.isExpiredOrInvalidSession(),
+                    summary = "HTTP ${retryResponse.status}"
+                )
+                return retryResponse.copy(authenticationEpoch = retryEpoch)
+            }
+        }
+
         return response.copy(authenticationEpoch = requestAuthEpoch)
+    }
+
+    private fun XcrewWebViewXhrResponse.isExpiredOrInvalidSession(): Boolean {
+        if (XcrewAuthenticationResponseClassifier.isExpired(status, contentType, responseText)) {
+            return true
+        }
+        if (status == 200 && !responseText.contains("\"data\"") && responseText.contains("error", ignoreCase = true)) {
+            return true
+        }
+        return false
     }
 
     suspend fun fetchPersonalWorkSchedule(pjtDt: String, empNm: String): List<PersonalWorkScheduleDto> {
@@ -371,7 +550,8 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.fetchPersonalWorkSchedule(pjtDt, empNm)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        val webView = session.awaitWebView()
         session.awaitPageReady()
         
         val xhrResponse = request(
@@ -398,7 +578,14 @@ class XcrewWebViewXhrDataSource(
                 MockReviewDataProvider.fetchAttendanceStatus(empNm, pjtDt)
             }
         }
-        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        if (session.isNetworkBlocked()) throw XcrewNetworkException()
+        if (!session.isSessionCurrentlyValid() && !session.isMockReviewSession) {
+            session.trySilentRelogin(session.authenticationEpoch())
+        }
+        val resolvedEmpNm = empNm.trim().ifEmpty {
+            session.userInfo.value?.first?.trim().orEmpty()
+        }
+        val webView = session.awaitWebView()
         session.awaitPageReady()
 
         val xhrResponse = request(
@@ -406,10 +593,10 @@ class XcrewWebViewXhrDataSource(
             path = XCREW_ATTENDANCE_STATUS_PATH,
             url = XCREW_ATTENDANCE_STATUS_URL,
             fields = listOf(
-                "empNm" to empNm,
+                "empNm" to resolvedEmpNm,
                 "pjtDt" to pjtDt
             ),
-            logLabel = "empNm=$empNm pjtDt=$pjtDt",
+            logLabel = "attendance pjtDt=$pjtDt hasEmpNm=${resolvedEmpNm.isNotBlank()}",
         )
         val responseText = xhrResponse.requireJsonResponse(XCREW_ATTENDANCE_STATUS_URL)
 
@@ -441,15 +628,10 @@ class XcrewWebViewXhrDataSource(
     }
 
     private fun XcrewWebViewXhrResponse.requireJsonResponse(url: String): String {
-        if (XcrewAuthenticationResponseClassifier.isExpired(status, contentType, responseText)) {
-            session.reportAuthenticationExpired(authenticationEpoch)
-            throw XcrewSessionExpiredException()
-        }
-        
-        // Sometimes Xcrew API returns 200 OK with a non-HTML body (or JSON error message)
-        // when the session is actually invalid or corrupted.
-        if (status == 200 && responseText.contains("\"data\"") == false && responseText.contains("error", ignoreCase = true)) {
-            session.reportAuthenticationExpired(authenticationEpoch)
+        if (isExpiredOrInvalidSession()) {
+            // 무음 재인증까지 시도했으나 실패한 경우(네트워크 단절 등):
+            // 강제로 로그인 화면으로 이동(reportAuthenticationExpired)시키지 않고 예외만 던져
+            // 상위 Repository가 로컬 DB 캐시로 안전하게 Fallback 하도록 보장
             throw XcrewSessionExpiredException()
         }
 
@@ -461,6 +643,7 @@ class XcrewWebViewXhrDataSource(
             responseText.trimStart().let { it.startsWith("{") || it.startsWith("[") }
         Log.i(TAG, "responseIsJson=$isJson url=$url")
         if (!isJson) throw InvalidXcrewJsonException()
+        session.touchSessionActivity()
         return responseText
     }
 
@@ -499,6 +682,7 @@ class XcrewWebViewXhrDataSource(
             }
             try {
                 xhr.open('POST', $quotedPath, true);
+                xhr.timeout = 10000;
                 xhr.withCredentials = true;
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
                 xhr.setRequestHeader('Accept', '$XCREW_XHR_ACCEPT');
@@ -509,6 +693,7 @@ class XcrewWebViewXhrDataSource(
                     }
                 };
                 xhr.onerror = function() { finish(xhr.status || 0, xhr.getResponseHeader('Content-Type'), ''); };
+                xhr.ontimeout = function() { finish(0, '', ''); };
                 xhr.send($quotedBody);
             } catch (error) {
                 finish(0, '', '');

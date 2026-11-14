@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -69,8 +70,17 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+internal object OfflineLookupRange {
+    fun contains(today: LocalDate, target: LocalDate): Boolean =
+        !target.isBefore(today.minusDays(1)) && !target.isAfter(today.plusDays(1))
+
+    fun clamp(today: LocalDate, target: LocalDate): LocalDate =
+        target.coerceIn(today.minusDays(1), today.plusDays(1))
+}
 
 data class TrainCrewV2SearchResult(
     val pjtDt: String,         // YYYYMMDD
@@ -96,6 +106,7 @@ fun TrainCrewLookupV2Screen(
     diaCensusDao: DiaCensusDao,
     crewWorkStatusDataSource: CrewWorkStatusDataSource? = null,
     diaDetailDataSource: DiaDetailDataSource? = null,
+    isOfflineMode: Boolean = false,
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -132,6 +143,15 @@ fun TrainCrewLookupV2Screen(
     var searchV2Results by remember { mutableStateOf<List<TrainCrewV2SearchResult>?>(null) }
     var searchErrorMessage by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(isOfflineMode) {
+        if (isOfflineMode) {
+            val today = LocalDate.now()
+            if (!OfflineLookupRange.contains(today, searchDate)) {
+                searchDate = OfflineLookupRange.clamp(today, searchDate)
+            }
+        }
+    }
+
     // 1단계 로컬 DB 진단 상태 변수들
     var diagDiaInput by remember { mutableStateOf("") }
     var diagDiaResults by remember { mutableStateOf<List<DiaCensusEntity>?>(null) }
@@ -151,9 +171,20 @@ fun TrainCrewLookupV2Screen(
             return
         }
         if (censusCount == 0) {
-            searchErrorMessage = "⚠️ 저장된 다이아 기초자료 조사 데이터가 없습니다. 하단의 [다이아 기초자료 조사 실행]을 먼저 진행해 주세요."
+            searchErrorMessage = if (isOfflineMode) {
+                "⚠️ 저장된 다이아 기초자료 조사 데이터가 없습니다. 온라인 모드에서 [다이아 기초자료 조사 실행]을 먼저 진행해 주세요."
+            } else {
+                "⚠️ 저장된 다이아 기초자료 조사 데이터가 없습니다. 하단의 [다이아 기초자료 조사 실행]을 먼저 진행해 주세요."
+            }
             searchV2Results = null
             return
+        }
+
+        if (isOfflineMode) {
+            val today = LocalDate.now()
+            if (!OfflineLookupRange.contains(today, searchDate)) {
+                searchDate = OfflineLookupRange.clamp(today, searchDate)
+            }
         }
 
         isSearchingV2 = true
@@ -173,6 +204,15 @@ fun TrainCrewLookupV2Screen(
                         runCatching { crewWorkStatusDataSource?.fetchCrewWorkStatus(prevDt).orEmpty() }.getOrDefault(emptyList())
                     }
                     Pair(todayDef.await(), prevDef.await())
+                }
+
+                if (isOfflineMode && assignmentsToday.isEmpty() && assignmentsPrev.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        isSearchingV2 = false
+                        searchV2Results = null
+                        searchErrorMessage = "⚠️ 저장된 소속 승무원 근무 현황 데이터가 없습니다. (오프라인 조회 가능 범위: 어제~내일)"
+                    }
+                    return@launch
                 }
 
                 val assignmentsByDiaToday = assignmentsToday.groupBy { it.pdiaNo.trim() }
@@ -359,13 +399,29 @@ fun TrainCrewLookupV2Screen(
                             modifier = Modifier
                                 .matchParentSize()
                                 .clickable(enabled = !isSearchingV2) {
-                                    DatePickerDialog(
+                                    val dialog = DatePickerDialog(
                                         context,
-                                        { _, year, month, day -> searchDate = LocalDate.of(year, month + 1, day) },
+                                        { _, year, month, day ->
+                                            val picked = LocalDate.of(year, month + 1, day)
+                                            searchDate = if (isOfflineMode) {
+                                                OfflineLookupRange.clamp(LocalDate.now(), picked)
+                                            } else {
+                                                picked
+                                            }
+                                        },
                                         searchDate.year,
                                         searchDate.monthValue - 1,
                                         searchDate.dayOfMonth,
-                                    ).show()
+                                    )
+                                    if (isOfflineMode) {
+                                        val zone = ZoneId.systemDefault()
+                                        val today = LocalDate.now()
+                                        dialog.datePicker.minDate =
+                                            today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                        dialog.datePicker.maxDate =
+                                            today.plusDays(1).atTime(23, 59, 59).atZone(zone).toInstant().toEpochMilli()
+                                    }
+                                    dialog.show()
                                 },
                         )
                     }
@@ -396,6 +452,16 @@ fun TrainCrewLookupV2Screen(
                         ),
                         singleLine = true,
                         enabled = !isSearchingV2 && !isRunningCensus,
+                    )
+                }
+
+                if (isOfflineMode) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "📌 오프라인 모드: 운행일자는 어제~내일 범위만 선택할 수 있습니다.",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -551,6 +617,18 @@ fun TrainCrewLookupV2Screen(
                     }
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = if (isOfflineMode) {
+                    "ℹ️ 오프라인 모드에서는 저장된 기초자료·캐시 기준으로 표시되며 실시간 Xcrew 변동사항이 반영되지 않습니다."
+                } else {
+                    "ℹ️ 열차·다이아 구간 정보는 수집된 기초자료(${latestUpdateDate}) 기반이며, 실시간 Xcrew 변경사항과 다를 수 있습니다."
+                },
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 15.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -589,12 +667,21 @@ fun TrainCrewLookupV2Screen(
                     lineHeight = 20.sp
                 )
 
-                Text(
-                    text = "⚠️ 조사 실행 도중 화면을 벗어나지 않는 것을 권장드립니다.",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
+                if (isOfflineMode) {
+                    Text(
+                        text = "ℹ️ 기초자료 조사는 온라인 모드에서 먼저 실행해 주세요. 이미 저장된 기초자료로는 오프라인에서도 승무원 조회가 가능합니다.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "⚠️ 조사 실행 도중 화면을 벗어나지 않는 것을 권장드립니다.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
 
                 if (isRunningCensus || censusProgressText.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
@@ -620,7 +707,7 @@ fun TrainCrewLookupV2Screen(
 
                 Button(
                     onClick = {
-                        if (isRunningCensus) return@Button
+                        if (isRunningCensus || isOfflineMode) return@Button
                         val today = LocalDate.now()
                         censusManager.startBackgroundCensus(
                             startDate = today.withDayOfMonth(1),
@@ -628,7 +715,7 @@ fun TrainCrewLookupV2Screen(
                         )
                         Toast.makeText(context, "기존 수집 데이터를 초기화하고 당월 기초자료 조사를 시작했습니다.", Toast.LENGTH_SHORT).show()
                     },
-                    enabled = !isRunningCensus,
+                    enabled = !isRunningCensus && !isOfflineMode,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp),
@@ -639,7 +726,11 @@ fun TrainCrewLookupV2Screen(
                     )
                 ) {
                     Text(
-                        text = if (isRunningCensus) "기초자료 조사 수집 진행 중..." else "다이아 기초자료 조사 실행",
+                        text = when {
+                            isOfflineMode -> "오프라인 모드에서는 실행할 수 없습니다"
+                            isRunningCensus -> "기초자료 조사 수집 진행 중..."
+                            else -> "다이아 기초자료 조사 실행"
+                        },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )

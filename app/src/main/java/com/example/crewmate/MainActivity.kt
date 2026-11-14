@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.crewmate.navigation.AppNavigation
+import com.example.crewmate.ui.theme.AppFontOption
 import com.example.crewmate.ui.theme.AppThemeMode
 import com.example.crewmate.ui.theme.CrewMateTheme
 
@@ -22,6 +23,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.crewmate.data.remote.xcrew.XcrewNetworkLogStore.init(this)
+        com.example.crewmate.login.DailyBanCheckReceiver.scheduleNextDailyCheck(this)
         initialRouteState.value = intent?.getStringExtra("target_route")
         if (intent?.getBooleanExtra("stopAlarmService", false) == true) {
             com.example.crewmate.alarm.AlarmLoopService.stop(this)
@@ -34,11 +37,16 @@ class MainActivity : ComponentActivity() {
             var themeModeName by remember {
                 mutableStateOf(prefs.getString("app_theme", AppThemeMode.SYSTEM.name) ?: AppThemeMode.SYSTEM.name)
             }
+            var fontOptionName by remember {
+                mutableStateOf(prefs.getString("app_font", AppFontOption.SYSTEM.name) ?: AppFontOption.SYSTEM.name)
+            }
 
             DisposableEffect(Unit) {
                 val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
                     if (key == "app_theme") {
                         themeModeName = sharedPreferences.getString("app_theme", AppThemeMode.SYSTEM.name) ?: AppThemeMode.SYSTEM.name
+                    } else if (key == "app_font") {
+                        fontOptionName = sharedPreferences.getString("app_font", AppFontOption.SYSTEM.name) ?: AppFontOption.SYSTEM.name
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -46,9 +54,10 @@ class MainActivity : ComponentActivity() {
             }
 
             val appThemeMode = AppThemeMode.entries.find { it.name == themeModeName } ?: AppThemeMode.SYSTEM
+            val appFontOption = AppFontOption.entries.find { it.name == fontOptionName } ?: AppFontOption.SYSTEM
             val targetRoute by initialRouteState
 
-            CrewMateTheme(appThemeMode = appThemeMode) {
+            CrewMateTheme(appThemeMode = appThemeMode, appFontOption = appFontOption) {
                 AppNavigation(initialTargetRoute = targetRoute)
             }
         }

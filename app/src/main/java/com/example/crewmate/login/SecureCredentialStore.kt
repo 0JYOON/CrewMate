@@ -18,6 +18,12 @@ class SecureCredentialStore(context: Context) {
     private val preferences: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
+    fun hasSavedCredentials(): Boolean {
+        return preferences.getBoolean(KEY_REMEMBER, false) &&
+            !preferences.getString(KEY_EMPLOYEE_NUMBER, null).isNullOrBlank() &&
+            !preferences.getString(KEY_PASSWORD, null).isNullOrBlank()
+    }
+
     suspend fun read(): CredentialReadResult = withContext(Dispatchers.IO) {
         if (!preferences.getBoolean(KEY_REMEMBER, false)) return@withContext CredentialReadResult.Empty
         val encryptedEmployeeNumber = preferences.getString(KEY_EMPLOYEE_NUMBER, null)

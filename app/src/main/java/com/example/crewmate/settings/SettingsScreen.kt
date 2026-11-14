@@ -33,11 +33,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.example.crewmate.BuildConfig
 import com.example.crewmate.alarm.*
 import com.example.crewmate.database.CrewMateDatabase
 import com.example.crewmate.navigation.Routes
+import com.example.crewmate.ui.theme.AppFontOption
 import com.example.crewmate.ui.theme.AppThemeMode
+import com.example.crewmate.util.AppUpdateManager
 import com.example.crewmate.util.DiaCaptureOption
+import com.example.crewmate.util.InstallPermissionDialog
+import com.example.crewmate.util.LatestVersionDialog
+import com.example.crewmate.util.UpdateNoticeDialog
+import com.example.crewmate.util.UpdateProgressDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -125,6 +132,7 @@ fun SettingsScreen() {
     }
 
     var hideSandwichedGamsi by remember { mutableStateOf(prefs.getBoolean("hide_sandwiched_gamsi", true)) }
+    var showPrepDivider by remember { mutableStateOf(prefs.getBoolean("show_prep_divider", true)) }
 
     var midnightAutoCapture by remember { mutableStateOf(prefs.getBoolean("midnight_auto_capture", false)) }
     var midnightAutoCaptureOption by remember {
@@ -145,6 +153,7 @@ fun SettingsScreen() {
     var autoOfflineReturnDelay by remember {
         mutableStateOf(prefs.getInt(AutoOfflineManager.PREF_RETURN_DELAY_MINUTES, 10))
     }
+    var showCustomReturnDelayDialog by remember { mutableStateOf(false) }
     var autoOfflineReturnSkipped by remember {
         mutableStateOf(prefs.getBoolean(AutoOfflineManager.PREF_RETURN_SKIPPED, false))
     }
@@ -170,6 +179,12 @@ fun SettingsScreen() {
                 }
                 AutoOfflineManager.PREF_RETURN_SKIPPED -> {
                     autoOfflineReturnSkipped = sharedPreferences.getBoolean(AutoOfflineManager.PREF_RETURN_SKIPPED, false)
+                }
+                "hide_sandwiched_gamsi" -> {
+                    hideSandwichedGamsi = sharedPreferences.getBoolean("hide_sandwiched_gamsi", true)
+                }
+                "show_prep_divider" -> {
+                    showPrepDivider = sharedPreferences.getBoolean("show_prep_divider", true)
                 }
             }
         }
@@ -262,6 +277,8 @@ fun SettingsScreen() {
     var adminPasswordInput by remember { mutableStateOf("") }
     var adminPasswordError by remember { mutableStateOf(false) }
     var showCustomDatePicker by remember { mutableStateOf(false) }
+    var showAdminHubDialog by remember { mutableStateOf(false) }
+    var showNetworkHistoryDialog by remember { mutableStateOf(false) }
 
     var settingsTapCount by remember { mutableStateOf(0) }
     var settingsLastTapMs by remember { mutableStateOf(0L) }
@@ -692,8 +709,8 @@ fun SettingsScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val delays = listOf(0 to "0분", 5 to "5분", 10 to "10분", 15 to "15분", 20 to "20분")
-                        delays.forEach { (mins, label) ->
+                        val fixedDelays = listOf(0 to "0분", 5 to "5분", 10 to "10분", 15 to "15분")
+                        fixedDelays.forEach { (mins, label) ->
                             val selected = autoOfflineReturnDelay == mins
                             FilterChip(
                                 selected = selected,
@@ -717,6 +734,76 @@ fun SettingsScreen() {
                                 modifier = Modifier.weight(1f)
                             )
                         }
+
+                        val isCustom = autoOfflineReturnDelay !in listOf(0, 5, 10, 15)
+                        val customLabel = if (isCustom) "${autoOfflineReturnDelay}분" else "n분"
+                        FilterChip(
+                            selected = isCustom,
+                            onClick = {
+                                showCustomReturnDelayDialog = true
+                            },
+                            label = {
+                                Text(
+                                    text = customLabel,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isCustom) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (showCustomReturnDelayDialog) {
+                        var customInput by remember {
+                            mutableStateOf(if (autoOfflineReturnDelay !in listOf(0, 5, 10, 15)) autoOfflineReturnDelay.toString() else "20")
+                        }
+                        AlertDialog(
+                            onDismissRequest = { showCustomReturnDelayDialog = false },
+                            title = { Text("온라인 복귀 시점 직접 입력", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        "정리/입고정리 시작 후 온라인으로 자동 복귀할 지연 시간(분)을 입력하세요.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    OutlinedTextField(
+                                        value = customInput,
+                                        onValueChange = { customInput = it.filter { ch -> ch.isDigit() } },
+                                        label = { Text("지연 시간 (분)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        val parsed = customInput.toIntOrNull() ?: 20
+                                        val finalMins = parsed.coerceAtLeast(0)
+                                        autoOfflineReturnDelay = finalMins
+                                        prefs.edit().putInt(AutoOfflineManager.PREF_RETURN_DELAY_MINUTES, finalMins).apply()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            AutoOfflineManager.syncFromDatabase(context.applicationContext)
+                                        }
+                                        android.widget.Toast.makeText(context, "온라인 복귀 시점이 [정리/입고정리 +${finalMins}분]으로 설정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                        showCustomReturnDelayDialog = false
+                                    }
+                                ) {
+                                    Text("확인", fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showCustomReturnDelayDialog = false }) {
+                                    Text("취소")
+                                }
+                            }
+                        )
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -1141,6 +1228,47 @@ fun SettingsScreen() {
 
         Spacer(Modifier.height(16.dp))
 
+        // 다이아 '준비' 상단 구분선 표시 토글 카드
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("다이아 '준비' 상단 구분선 표시", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "다이아 상세 타임라인에서 '준비' 및 '출고준비' 항목 상단에 포인트 구분선을 표시하여 출무 및 준비 구간을 명확히 구분합니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Switch(
+                    checked = showPrepDivider,
+                    onCheckedChange = { checked ->
+                        showPrepDivider = checked
+                        prefs.edit().putBoolean("show_prep_divider", checked).apply()
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // 앱 테마 설정 카드
         var themeDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -1213,12 +1341,226 @@ fun SettingsScreen() {
                                     selectedThemeMode = mode
                                     prefs.edit().putString("app_theme", mode.name).apply()
                                     themeDropdownExpanded = false
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        com.example.crewmate.widget.TodayDiaWidgetUpdater.updateAllWidgets(context)
+                                        com.example.crewmate.widget.MonthlyScheduleWidgetUpdater.updateAllWidgets(context)
+                                    }
                                 }
                             )
                         }
                     }
                 }
             }
+        }
+
+        // --- 글꼴(서체) 설정 카드 ---
+        Spacer(Modifier.height(16.dp))
+        var selectedFontOption by remember {
+            mutableStateOf(
+                AppFontOption.entries.find { it.name == prefs.getString("app_font", AppFontOption.SYSTEM.name) }
+                    ?: AppFontOption.SYSTEM
+            )
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("글꼴(서체) 설정", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "앱 전체 UI 및 위젯·캡처 이미지에 적용할 서체를 선택합니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AppFontOption.entries.chunked(2).forEach { rowOptions ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowOptions.forEach { option ->
+                                val isSelected = selectedFontOption == option
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedFontOption = option
+                                        prefs.edit().putString("app_font", option.name).apply()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            com.example.crewmate.widget.TodayDiaWidgetUpdater.updateAllWidgets(context)
+                                            com.example.crewmate.widget.MonthlyScheduleWidgetUpdater.updateAllWidgets(context)
+                                        }
+                                    },
+                                    label = {
+                                        Text(
+                                            text = option.title,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 12.5.sp,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 버전 정보 및 업데이트 카드 ---
+        Spacer(Modifier.height(16.dp))
+        var isCheckingUpdate by remember { mutableStateOf(false) }
+        var updateResult by remember { mutableStateOf<AppUpdateManager.UpdateCheckResult?>(null) }
+        var showLatestDialog by remember { mutableStateOf(false) }
+        var updateErrorText by remember { mutableStateOf<String?>(null) }
+
+        var isDownloadingUpdate by remember { mutableStateOf(false) }
+        var downloadProgress by remember { mutableStateOf(0f) }
+        var downloadedBytes by remember { mutableStateOf(0L) }
+        var totalBytes by remember { mutableStateOf(0L) }
+        var showInstallPermissionDialog by remember { mutableStateOf(false) }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "버전 정보 및 업데이트",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                            ) {
+                                Text(
+                                    text = "v${BuildConfig.VERSION_NAME}",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "공식 GitHub 저장소에서 최신 버전을 확인하고 업데이트합니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (!isCheckingUpdate && !isDownloadingUpdate) {
+                                isCheckingUpdate = true
+                                updateErrorText = null
+                                coroutineScope.launch {
+                                    val res = AppUpdateManager.checkForUpdate()
+                                    isCheckingUpdate = false
+                                    when (res) {
+                                        is AppUpdateManager.UpdateCheckResult.UpdateAvailable -> {
+                                            updateResult = res
+                                        }
+                                        is AppUpdateManager.UpdateCheckResult.Latest -> {
+                                            showLatestDialog = true
+                                        }
+                                        is AppUpdateManager.UpdateCheckResult.Error -> {
+                                            updateErrorText = res.message
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isCheckingUpdate && !isDownloadingUpdate,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text("업데이트 확인", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (updateErrorText != null) {
+                    Text(
+                        text = "⚠️ $updateErrorText",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        // 1. 신규 버전 안내 팝업
+        val currentUpdate = updateResult as? AppUpdateManager.UpdateCheckResult.UpdateAvailable
+        if (currentUpdate != null) {
+            UpdateNoticeDialog(
+                updateInfo = currentUpdate,
+                onDownloadAndInstall = {
+                    updateResult = null
+                    AppUpdateManager.openInBrowser(context, currentUpdate.downloadUrl)
+                },
+                onOpenInBrowser = {
+                    updateResult = null
+                    AppUpdateManager.openInBrowser(context, currentUpdate.downloadUrl)
+                },
+                onDismissForToday = {
+                    AppUpdateManager.dismissForToday(context, currentUpdate.latestVersion)
+                    updateResult = null
+                },
+                onDismiss = {
+                    updateResult = null
+                }
+            )
+        }
+
+        // 2. 최신 버전 상태 안내 다이얼로그
+        if (showLatestDialog) {
+            LatestVersionDialog(
+                currentVersion = BuildConfig.VERSION_NAME,
+                onDismiss = { showLatestDialog = false }
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -1241,10 +1583,10 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("앱 정보 및 만든 이", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("앱 정보 및 이용 유의사항", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "CrewMate 앱에 대한 정보와 안내 사항을 확인합니다.",
+                        "CrewMate 앱에 대한 정보와 이용 유의사항을 확인합니다.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1254,30 +1596,7 @@ fun SettingsScreen() {
         }
 
         if (showAppInfoDialog) {
-            AlertDialog(
-                onDismissRequest = { showAppInfoDialog = false },
-                title = { Text("ℹ️ 앱 정보", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("CrewMate (크루메이트) v1.0.10", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Text("한국철도공사 코레일 수도권동부본부 승무원 전용 스마트 오프라인 통합 업무 지원 솔루션입니다.")
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        Text("• 기기 캘린더 자동 동기화 지원")
-                        Text("• 근무표 / 다이아 / 출무현황 오프라인 캐싱")
-                        Text("• 초정밀 알람 및 워치 진동 알림 엔진 탑재")
-                        Text("• 운전 시간 자동 오프라인 전환 및 QA 관리")
-                        Text("• 미조회 월 순환 근무 패턴 빌더 탑재")
-                        Text("• 다이아 전체/요약 무결점 캡처 및 데이터 백업/복원")
-                        Spacer(Modifier.height(4.dp))
-                        Text("만든 이: 승무원 pair programming 프로젝트", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showAppInfoDialog = false }) {
-                        Text("닫기", fontWeight = FontWeight.Bold)
-                    }
-                }
-            )
+            com.example.crewmate.util.AppInfoAndTermsDialog(onDismiss = { showAppInfoDialog = false })
         }
 
         if (showAdminPasswordDialog) {
@@ -1290,10 +1609,10 @@ fun SettingsScreen() {
                 containerColor = MaterialTheme.colorScheme.surface,
                 shape = MaterialTheme.shapes.extraLarge,
                 tonalElevation = 6.dp,
-                title = { Text("🛠️ 관리자 디버그 모드", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                title = { Text("🛠️ 관리자 특별 설정 및 테스트", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("가상 날짜 설정 메뉴에 진입하려면 비밀번호 4자리를 입력하세요.", fontSize = 13.sp)
+                        Text("관리자 전용 메뉴에 진입하려면 비밀번호 4자리를 입력하세요.", fontSize = 13.sp)
                         BasicTextField(
                             value = adminPasswordInput,
                             onValueChange = {
@@ -1318,7 +1637,7 @@ fun SettingsScreen() {
                             showAdminPasswordDialog = false
                             adminPasswordInput = ""
                             adminPasswordError = false
-                            showCustomDatePicker = true
+                            showAdminHubDialog = true
                         } else {
                             adminPasswordError = true
                         }
@@ -1333,6 +1652,147 @@ fun SettingsScreen() {
                         adminPasswordError = false
                     }) {
                         Text("취소")
+                    }
+                }
+            )
+        }
+
+        if (showAdminHubDialog) {
+            AlertDialog(
+                onDismissRequest = { showAdminHubDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.extraLarge,
+                tonalElevation = 6.dp,
+                title = { Text("🛠️ 관리자 특별 설정 및 테스트", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "사용할 관리자 기능 또는 테스트 메뉴를 선택하세요.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = {
+                                showAdminHubDialog = false
+                                showCustomDatePicker = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🗓️ 가상 날짜 지정")
+                        }
+                        Button(
+                            onClick = {
+                                showAdminHubDialog = false
+                                showNetworkHistoryDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("📡 Xcrew 네트워크 통신 이력 조회")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAdminHubDialog = false }) {
+                        Text("닫기")
+                    }
+                }
+            )
+        }
+
+        if (showNetworkHistoryDialog) {
+            var networkLogs by remember {
+                mutableStateOf(com.example.crewmate.data.remote.xcrew.XcrewNetworkLogStore.getLogs(context))
+            }
+            val logFmt = remember {
+                java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss", java.util.Locale.KOREA)
+            }
+            AlertDialog(
+                onDismissRequest = { showNetworkHistoryDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.extraLarge,
+                tonalElevation = 6.dp,
+                title = { Text("📡 Xcrew 네트워크 통신 이력", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "당일 포함 앞뒤 1일(어제 ~ 내일) 통신 이력 (${networkLogs.size}건)",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (networkLogs.isEmpty()) {
+                            Text(
+                                "기록된 Xcrew 네트워크 통신 이력이 없습니다.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        } else {
+                            networkLogs.forEach { log ->
+                                val timeStr = java.time.Instant.ofEpochMilli(log.timestampMillis)
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .format(logFmt)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = log.actionName,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (log.success) "성공" else "실패",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (log.success) Color(0xFF0D9488) else MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        Text(
+                                            text = "$timeStr · ${log.summary}",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (log.endpoint.isNotBlank()) {
+                                            Text(
+                                                text = log.endpoint,
+                                                fontSize = 10.5.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showNetworkHistoryDialog = false }) {
+                        Text("닫기")
+                    }
+                },
+                dismissButton = {
+                    if (networkLogs.isNotEmpty()) {
+                        TextButton(onClick = {
+                            com.example.crewmate.data.remote.xcrew.XcrewNetworkLogStore.clearLogs(context)
+                            networkLogs = emptyList()
+                        }) {
+                            Text("이력 비우기", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             )

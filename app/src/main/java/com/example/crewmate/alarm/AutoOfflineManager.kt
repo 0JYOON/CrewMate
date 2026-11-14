@@ -9,6 +9,12 @@ import android.util.Log
 import com.example.crewmate.data.remote.xcrew.DiaDetailParser
 import com.example.crewmate.data.remote.xcrew.DiaDetailSegment
 import com.example.crewmate.database.CrewMateDatabase
+import com.example.crewmate.schedule.OfflineCrewPrefetcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -212,13 +218,22 @@ object AutoOfflineManager {
         if (!now.isBefore(activeOrNext.offlineTriggerTime) && now.isBefore(activeOrNext.onlineTriggerTime)) {
             val lastTriggeredWindow = prefs.getString(PREF_LAST_TRIGGERED_WINDOW, "")
             if (lastTriggeredWindow != windowKey) {
-                val nowFormatted = now.format(LOG_TIME_FORMAT)
-                prefs.edit()
-                    .putBoolean("is_offline_mode", true)
-                    .putString(PREF_LAST_TRIGGERED_WINDOW, windowKey)
-                    .putString(PREF_LAST_OFFLINE_TIME, "$nowFormatted (운전구간 진입 즉시전환)")
-                    .apply()
-                Log.i(TAG, "Immediately switched to OFFLINE mode inside active window: $windowKey")
+                prefs.edit().putString(PREF_LAST_TRIGGERED_WINDOW, windowKey).apply()
+                val appCtx = context.applicationContext
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    runCatching {
+                        withTimeoutOrNull(12_000L) {
+                            OfflineCrewPrefetcher.prefetchWindowForAutoOffline(appCtx, LocalDate.now())
+                        }
+                    }
+                    val nowFormatted = LocalDateTime.now().format(LOG_TIME_FORMAT)
+                    prefs.edit()
+                        .putBoolean("is_offline_mode", true)
+                        .putString(PREF_LAST_TRIGGERED_WINDOW, windowKey)
+                        .putString(PREF_LAST_OFFLINE_TIME, "$nowFormatted (운전구간 진입 즉시전환)")
+                        .apply()
+                    Log.i(TAG, "Immediately switched to OFFLINE mode inside active window: $windowKey")
+                }
             }
         } else if (activeOrNext.offlineTriggerTime.isAfter(now)) {
             // Schedule offline transition (RequestCode: 7701)

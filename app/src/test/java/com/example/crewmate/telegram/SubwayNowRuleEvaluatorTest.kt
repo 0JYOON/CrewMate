@@ -116,4 +116,111 @@ class SubwayNowRuleEvaluatorTest {
         assertEquals("13:35", t.trackStartTimeStr)
         assertEquals("K4594 구로 3 13:35", t.rawCommand)
     }
+
+    @Test
+    fun `test 출고준비 exclusion - starting with 출고준비 or followed by drive is excluded`() {
+        val segs = listOf(
+            createSegment("출고준비", "K101", "구로기지", "구로기지", "05:00", "05:30"),
+            createSegment("운전", "K101", "구로기지", "구로", "05:30", "05:45"),
+            createSegment("정리", null, "구로", "구로", "05:45", "06:00"),
+            createSegment("휴게", null, "구로", "구로", "06:00", "07:00"),
+            createSegment("운전", "K505", "구로", "인천", "07:10", "08:00")
+        )
+
+        val targets = SubwayNowRuleEvaluator.evaluateTargets(
+            segments = segs,
+            workDate = LocalDate.of(2026, 10, 28),
+            sendLeadMinutes = 30,
+            trackLeadMinutes = 15,
+            trackInterval = 3
+        )
+
+        // K101 (출고준비 및 그 직후 연결된 운전)은 제외되고, 휴게 후 새로 시작하는 K505만 포함되어야 함
+        assertEquals(1, targets.size)
+        assertEquals("K505", targets[0].trainNo)
+        assertEquals("구로", targets[0].targetStation)
+    }
+
+    @Test
+    fun `test station replacement - replaces 4서울 with 서울`() {
+        val segs = listOf(
+            createSegment("운전", "K507", "4서울", "수원", "14:30", "15:15")
+        )
+
+        val targets = SubwayNowRuleEvaluator.evaluateTargets(
+            segments = segs,
+            workDate = LocalDate.of(2026, 10, 28),
+            sendLeadMinutes = 30,
+            trackLeadMinutes = 15,
+            trackInterval = 3,
+            stationReplacements = mapOf("4서울" to "서울")
+        )
+
+        assertEquals(1, targets.size)
+        val t = targets[0]
+        assertEquals("K507", t.trainNo)
+        assertEquals("서울", t.targetStation)
+        assertEquals("K507 서울 3 14:15", t.rawCommand)
+    }
+
+    @Test
+    fun `test overnight duty next-day crossing`() {
+        val segs = listOf(
+            createSegment("운전", "K199", "구로", "수원", "23:30", "00:15"),
+            createSegment("정리", null, "수원", "수원", "00:15", "00:30"),
+            createSegment("휴게", null, "수원", "수원", "00:30", "05:00"),
+            createSegment("운전", "K201", "수원", "청량리", "05:30", "06:40")
+        )
+
+        val workDate = LocalDate.of(2026, 10, 28)
+        val targets = SubwayNowRuleEvaluator.evaluateTargets(
+            segments = segs,
+            workDate = workDate,
+            sendLeadMinutes = 30,
+            trackLeadMinutes = 15,
+            trackInterval = 3
+        )
+
+        assertEquals(2, targets.size)
+        assertEquals(workDate, targets[0].baseDateTime.toLocalDate())
+        // 05:30 열차는 자정을 넘긴 익일(10월 29일)로 매핑되어야 함
+        assertEquals(workDate.plusDays(1), targets[1].baseDateTime.toLocalDate())
+        assertEquals(LocalTime.of(5, 30), targets[1].baseDepartureTime)
+    }
+
+    @Test
+    fun `test user override modifies rawCommand and times`() {
+        val segs = listOf(
+            createSegment("운전", "K507", "수원", "천안", "14:30", "15:15")
+        )
+
+        val targets = SubwayNowRuleEvaluator.evaluateTargets(
+            segments = segs,
+            workDate = LocalDate.of(2026, 10, 28),
+            sendLeadMinutes = 30,
+            trackLeadMinutes = 15,
+            trackInterval = 3
+        )
+
+        assertEquals(1, targets.size)
+        assertEquals("K507 수원 3 14:15", targets[0].rawCommand)
+        assertFalse(targets[0].isUserOverridden)
+
+        val overrides = mapOf(
+            "K507" to TrackTargetOverride(
+                rawCommand = "K507 수원 1 14:20",
+                trackStartTimeStr = "14:20",
+                sendTimeStr = "14:00"
+            )
+        )
+
+        val overridden = SubwayNowRuleEvaluator.applyOverrides(targets, overrides)
+        assertEquals(1, overridden.size)
+        val ot = overridden[0]
+        assertTrue(ot.isUserOverridden)
+        assertEquals("K507 수원 1 14:20", ot.rawCommand)
+        assertEquals("14:20", ot.trackStartTimeStr)
+        assertEquals(LocalTime.of(14, 20), ot.trackStartDateTime.toLocalTime())
+        assertEquals(LocalTime.of(14, 0), ot.sendDateTime.toLocalTime())
+    }
 }

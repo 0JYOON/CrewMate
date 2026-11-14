@@ -19,7 +19,8 @@ data class SubwayNowTrackTarget(
     val rawCommand: String,           // 봇 전송용 명령어 (e.g. "K507 수원 3 14:15")
     val trackStartTimeStr: String,    // 추적 개시 시각 문자열 (e.g. "14:15")
     val trackStartDateTime: LocalDateTime,
-    val sendDateTime: LocalDateTime   // 예약 전송 시각 (e.g. 출발 30분 전)
+    val sendDateTime: LocalDateTime,  // 예약 전송 시각 (e.g. 출발 30분 전)
+    val isUserOverridden: Boolean = false
 )
 
 object SubwayNowRuleEvaluator {
@@ -63,17 +64,18 @@ object SubwayNowRuleEvaluator {
         workDate: LocalDate,
         sendLeadMinutes: Int = 30,
         trackLeadMinutes: Int = 15,
-        trackInterval: Int = 3
+        trackInterval: Int = 3,
+        stationReplacements: Map<String, String> = emptyMap()
     ): List<SubwayNowTrackTarget> {
         if (segments.isEmpty()) return emptyList()
 
-        // 1. 자정 교차를 고려한 일시 매핑
+        // 1. 자정 교차를 고려한 일시 매핑 (이전 시각보다 작아지면 다음 날로 매핑)
         var currentDate = workDate
         var lastTime = LocalTime.MIN
         val mappedSegments = segments.map { seg ->
             val dpt = parseTime(seg.dptTm)
             val arv = parseTime(seg.arvTm)
-            if (dpt != null && dpt < lastTime && lastTime.hour >= 18 && dpt.hour <= 12) {
+            if (dpt != null && dpt < lastTime) {
                 currentDate = currentDate.plusDays(1)
             }
             if (dpt != null) lastTime = dpt
@@ -92,18 +94,41 @@ object SubwayNowRuleEvaluator {
             val pjtName = seg.pjtHrDvNm.orEmpty()
             val rawTrainNo = seg.trnNo?.trim().orEmpty()
 
+            // 출고준비 업무 자체는 텔레그램 위치 추적 대상에서 제외
+            if (pjtName.contains("출고준비")) {
+                continue
+            }
+
             // 규칙 1: 1순위 업무이고 열차번호가 존재하는 구간
             if (!isRank1(pjtName) || rawTrainNo.isEmpty()) {
                 continue
             }
 
-            // 시작역 검증 (열차가 진입하여 승무원이 타야 하는 역)
-            val startStation = seg.dptStnNm?.trim().orEmpty().ifEmpty {
-                seg.arvStnNm?.trim().orEmpty()
+            // 첫 시작이 '출고준비'로 시작된 연속 업무인지 검사 (출고준비 -> 운전 또는 출고준비 -> 감시 -> 운전)
+            var precededByPrep = false
+            for (j in i - 1 downTo 0) {
+                val (prevSeg, _, _) = mappedSegments[j]
+                val prevName = prevSeg.pjtHrDvNm.orEmpty()
+                if (prevName.contains("출고준비")) {
+                    precededByPrep = true
+                    break
+                } else if (prevName.contains("휴게") || prevName.contains("대기") || prevName.contains("정리") || isRank1(prevName)) {
+                    break
+                }
             }
-            if (startStation.isEmpty()) {
+            if (precededByPrep) {
+                // 출고준비 직후 연결된 업무이므로 추적 제외
                 continue
             }
+
+            // 시작역 검증 (열차가 진입하여 승무원이 타야 하는 역) 및 역명 치환 적용
+            val rawStartStation = seg.dptStnNm?.trim().orEmpty().ifEmpty {
+                seg.arvStnNm?.trim().orEmpty()
+            }
+            if (rawStartStation.isEmpty()) {
+                continue
+            }
+            val startStation = stationReplacements[rawStartStation] ?: rawStartStation
 
             // 직전 업무 검증 (감시 여부 및 Sandwiched Duty 판별)
             var hasPrecedingGamsi = false
@@ -183,5 +208,45 @@ object SubwayNowRuleEvaluator {
         }
 
         return targets
+    }
+
+    fun applyOverrides(
+        targets: List<SubwayNowTrackTarget>,
+        overrides: Map<String, TrackTargetOverride>
+    ): List<SubwayNowTrackTarget> {
+        if (overrides.isEmpty()) return targets
+        return targets.map { target ->
+            val override = overrides[target.trainNo.trim().uppercase()] ?: return@map target
+
+            val parsedStart = parseTime(override.trackStartTimeStr)
+            val updatedStartDateTime = if (parsedStart != null) {
+                var d = target.baseDateTime.toLocalDate()
+                if (target.baseDepartureTime < parsedStart && parsedStart.hour >= 20 && target.baseDepartureTime.hour <= 4) {
+                    d = d.minusDays(1)
+                }
+                d.atTime(parsedStart)
+            } else {
+                target.trackStartDateTime
+            }
+
+            val parsedSend = parseTime(override.sendTimeStr)
+            val updatedSendDateTime = if (parsedSend != null) {
+                var d = target.baseDateTime.toLocalDate()
+                if (target.baseDepartureTime < parsedSend && parsedSend.hour >= 20 && target.baseDepartureTime.hour <= 4) {
+                    d = d.minusDays(1)
+                }
+                d.atTime(parsedSend)
+            } else {
+                target.sendDateTime
+            }
+
+            target.copy(
+                rawCommand = override.rawCommand.trim().ifEmpty { target.rawCommand },
+                trackStartTimeStr = override.trackStartTimeStr.trim().ifEmpty { target.trackStartTimeStr },
+                trackStartDateTime = updatedStartDateTime,
+                sendDateTime = updatedSendDateTime,
+                isUserOverridden = true
+            )
+        }
     }
 }

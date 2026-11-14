@@ -30,6 +30,8 @@ import com.example.crewmate.data.remote.xcrew.DiaDetailResponse
 import com.example.crewmate.schedule.DiaDetailCard
 import com.example.crewmate.schedule.WorkSchedule
 import com.example.crewmate.ui.theme.CrewMateTheme
+import com.example.crewmate.ui.theme.getAppThemeMode
+import com.example.crewmate.ui.theme.isDarkThemeActive
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -59,7 +61,8 @@ object DiaCaptureHelper {
         headerTitle: String,
         workDate: LocalDate,
         dias: List<DiaCaptureItem>,
-        option: DiaCaptureOption
+        option: DiaCaptureOption,
+        badgeText: String? = null
     ): Boolean {
         if (dias.isEmpty()) {
             Toast.makeText(context, "캡처할 다이아 상세 정보가 없습니다.", Toast.LENGTH_SHORT).show()
@@ -67,20 +70,21 @@ object DiaCaptureHelper {
         }
 
         return try {
-            val screenWidthPx = context.resources.displayMetrics.widthPixels
-            val bitmap = ScreenshotHelper.captureComposableToBitmap(
+            val appThemeMode = context.getAppThemeMode()
+            val isDark = context.isDarkThemeActive(appThemeMode)
+            val prefs = context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
+            val showPrepDivider = prefs.getBoolean("show_prep_divider", true)
+
+            val bitmap = DiaCaptureRenderer.renderToBitmap(
                 context = context,
-                widthPx = screenWidthPx
-            ) {
-                CrewMateTheme {
-                    DiaCaptureLayout(
-                        headerTitle = headerTitle,
-                        workDate = workDate,
-                        dias = dias,
-                        option = option
-                    )
-                }
-            }
+                headerTitle = headerTitle,
+                workDate = workDate,
+                dias = dias,
+                option = option,
+                isDark = isDark,
+                showPrepDivider = showPrepDivider,
+                badgeText = badgeText
+            )
 
             if (bitmap != null) {
                 val saved = ScreenshotHelper.saveBitmapToGallery(

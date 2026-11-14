@@ -16,7 +16,8 @@ data class WorkAlarmItem(
     val message: String,
     val trainNo: String,
     val dptStnNm: String,
-    val dptTimeStr: String
+    val dptTimeStr: String,
+    val pjtDt: String? = null
 ) {
     val uniqueKey: String get() = "${triggerDateTime}_${ruleTitle}_${trainNo}_$cat"
 }
@@ -55,7 +56,8 @@ object WorkAlarmRuleEvaluator {
         segments: List<DiaDetailSegment>,
         workDate: LocalDate,
         settings: WorkAlarmSettings,
-        attendanceStatuses: List<com.example.crewmate.data.remote.xcrew.AttendanceStatusDto> = emptyList()
+        attendanceStatuses: List<com.example.crewmate.data.remote.xcrew.AttendanceStatusDto> = emptyList(),
+        checkedInKeys: Set<String> = emptySet()
     ): List<WorkAlarmItem> {
         if (!settings.alarmEnabled || (segments.isEmpty() && attendanceStatuses.isEmpty())) return emptyList()
 
@@ -108,13 +110,9 @@ object WorkAlarmRuleEvaluator {
         if (settings.attendanceEnabled && attendanceStatuses.isNotEmpty()) {
             val now = LocalDateTime.now()
             attendanceStatuses.forEachIndexed { attIdx, att ->
-                val actualTime = att.actualTime?.trim()
-                val hasActualTime = !actualTime.isNullOrBlank() && actualTime != "-" && actualTime != "null"
-                val isCompletedStatus = att.gtwcGubunCd?.trim() == "3" || att.gtwcGubunCd?.trim() == "6"
-                val isAlreadyAttended = hasActualTime || isCompletedStatus
-
-                // 출무 상태(적합성미완료 등)와 무관하게 실제 출무시각이 확인되면 출무 알람 자동 해제
-                if (!isAlreadyAttended) {
+                // 출무 상태(적합성미완료 5, 도중출무완료 3, 적합성완료 6 등) 또는 실제 출무시각이 확인되었거나 래치된 경우 출무 알람 100% 자동 해제
+                val isLatched = AttendanceCheckInLatch.keyOf(att)?.let { it in checkedInKeys } ?: false
+                if (!att.isCheckedIn && !isLatched) {
                     val scheduledTime = parseTimeSafe(att.gtwcEpctTm)
                     if (scheduledTime != null) {
                         // 1) Use AttendanceStatus's own pjtDt ("YYYYMMDD") if present
@@ -136,17 +134,25 @@ object WorkAlarmRuleEvaluator {
                             val blgNm = att.gtwcEpctBlgNm?.trim()?.takeIf { it.isNotEmpty() } ?: "출무소"
                             val dptTimeStr = att.gtwcEpctTm?.trim() ?: "-"
 
+                            val itemDateHash = attendanceDate.hashCode()
+                            val datePrefix = if (attendanceDate != workDate) {
+                                "${attendanceDate.format(DateTimeFormatter.ofPattern("MM.dd"))} "
+                            } else ""
+
+                            val targetPjtDt = attendanceDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+
                             alarms.add(
                                 WorkAlarmItem(
-                                    id = (dateHash * 31 + attIdx * 100 + 99) and 0x7FFFFFFF,
+                                    id = (itemDateHash * 31 + attIdx * 100 + 99) and 0x7FFFFFFF,
                                     triggerDateTime = triggerTime,
                                     ruleTitle = ruleTitle,
                                     cat = "출무",
-                                    title = "출무 ${leadMins}분 전",
+                                    title = "${datePrefix}출무 ${leadMins}분 전",
                                     message = "[$trnNo] $blgNm 예정 출무 ($dptTimeStr)",
                                     trainNo = trnNo,
                                     dptStnNm = blgNm,
-                                    dptTimeStr = dptTimeStr
+                                    dptTimeStr = dptTimeStr,
+                                    pjtDt = targetPjtDt
                                 )
                             )
                         }

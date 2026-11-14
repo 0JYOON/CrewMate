@@ -75,6 +75,12 @@ fun DiaDetailCard(
         else -> ""
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val routeDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
+    var showRouteDiagram by remember(routeDiagramLabEnabled, isCaptureMode) {
+        mutableStateOf(routeDiagramLabEnabled && !isCaptureMode)
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -108,59 +114,33 @@ fun DiaDetailCard(
             if (detail.segments.isEmpty()) {
                 Text(
                     text = "상세 구간이 없습니다.",
-                    color = Color(0xFF64748B),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             } else {
-                val isRouteDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
-                var showRouteDiagramMode by remember { mutableStateOf(false) }
-
-                if (isRouteDiagramLabEnabled && !isCaptureMode) {
+                if (routeDiagramLabEnabled && !isCaptureMode) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (!showRouteDiagramMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { showRouteDiagramMode = false }
-                        ) {
-                            Text(
-                                text = "타임라인",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                color = if (!showRouteDiagramMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (showRouteDiagramMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { showRouteDiagramMode = true }
-                        ) {
-                            Text(
-                                text = "🧪 행로도",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                color = if (showRouteDiagramMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
-                        }
+                        androidx.compose.material3.FilterChip(
+                            selected = !showRouteDiagram,
+                            onClick = { showRouteDiagram = false },
+                            label = { Text("타임라인", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        androidx.compose.material3.FilterChip(
+                            selected = showRouteDiagram,
+                            onClick = { showRouteDiagram = true },
+                            label = { Text("🧪 행로도", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
                     }
                 }
-
-                if (isRouteDiagramLabEnabled && showRouteDiagramMode && !isCaptureMode) {
+                if (routeDiagramLabEnabled && showRouteDiagram && !isCaptureMode) {
                     com.example.crewmate.labs.LabSafeContainer(
                         feature = com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM,
-                        onDisable = { showRouteDiagramMode = false }
+                        onDisable = { showRouteDiagram = false }
                     ) {
                         com.example.crewmate.labs.routediagram.RouteDiagramView(
                             schedule = schedule,
@@ -168,10 +148,24 @@ fun DiaDetailCard(
                         )
                     }
                 } else {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val prefs = remember { context.getSharedPreferences("crewmate_prefs", android.content.Context.MODE_PRIVATE) }
-                    val hideSandwichedGamsi = prefs.getBoolean("hide_sandwiched_gamsi", true)
+                    var hideSandwichedGamsi by remember { mutableStateOf(prefs.getBoolean("hide_sandwiched_gamsi", true)) }
+                    var showPrepDivider by remember { mutableStateOf(prefs.getBoolean("show_prep_divider", true)) }
+
+                    androidx.compose.runtime.DisposableEffect(prefs) {
+                        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+                            if (key == "hide_sandwiched_gamsi") {
+                                hideSandwichedGamsi = sp.getBoolean("hide_sandwiched_gamsi", true)
+                            }
+                            if (key == "show_prep_divider") {
+                                showPrepDivider = sp.getBoolean("show_prep_divider", true)
+                            }
+                        }
+                        prefs.registerOnSharedPreferenceChangeListener(listener)
+                        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+                    }
 
                     val categorizedSegments = remember(detail.segments, workDate) { categorizeSegments(detail.segments, workDate) }
 
@@ -192,13 +186,17 @@ fun DiaDetailCard(
                         val isRank3 = item.rank == 3
                         val isRank1 = item.rank == 1
                         
-                        // 구분선 (준비, 출고준비 위) - 단 이전 항목이 준비/출고준비가 아닐 때만
+                        // 구분선 (준비, 출고준비 위) - 설정 토글이 켜져있고 이전 항목이 준비/출고준비가 아닐 때만
                         val isPrep = rawCat.contains("준비") || rawCat.contains("출고준비")
                         val prevCat = if (index > 0) categorizedSegments[index-1].name else ""
                         val prevIsPrep = prevCat.contains("준비") || prevCat.contains("출고준비")
                         
-                        if (isPrep && !prevIsPrep && index > 0) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
+                        if (showPrepDivider && isPrep && !prevIsPrep && index > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                thickness = 1.5.dp
+                            )
                         }
 
                         val isSandwiched = item.isSandwichedGamsi && hideSandwichedGamsi

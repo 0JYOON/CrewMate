@@ -38,6 +38,7 @@ object ScreenshotHelper {
     suspend fun captureComposableToBitmap(
         context: Context,
         widthPx: Int,
+        backgroundColor: Int? = null,
         content: @Composable () -> Unit
     ): Bitmap? {
         val activity = findActivity(context) ?: return null
@@ -79,7 +80,11 @@ object ScreenshotHelper {
 
             val bitmap = Bitmap.createBitmap(measuredWidth, measuredHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            canvas.drawColor(Color.WHITE)
+            if (backgroundColor != null) {
+                canvas.drawColor(backgroundColor)
+            } else {
+                canvas.drawColor(Color.TRANSPARENT)
+            }
             composeView.draw(canvas)
             bitmap
         } catch (e: Exception) {

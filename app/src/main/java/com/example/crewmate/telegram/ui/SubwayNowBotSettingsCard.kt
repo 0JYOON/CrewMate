@@ -2,8 +2,10 @@ package com.example.crewmate.telegram.ui
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,6 +49,10 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
     var pinRemainingSeconds by remember { mutableIntStateOf(300) }
     var isRequestingPin by remember { mutableStateOf(false) }
     var showHistoryDialog by remember { mutableStateOf(false) }
+    var isDetailExpanded by remember { mutableStateOf(false) }
+    var showSendLeadCustomDialog by remember { mutableStateOf(false) }
+    var showTrackLeadCustomDialog by remember { mutableStateOf(false) }
+    var showTrackIntervalCustomDialog by remember { mutableStateOf(false) }
 
     fun refreshConfig() {
         config = SubwayNowSettings.getConfig(context)
@@ -98,12 +104,33 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                 // Chat ID 및 상호 PIN 인증 섹션
-                Text(
-                    text = "텔레그램 계정 연동 (Chat ID)",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "텔레그램 계정 연동 (Chat ID)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        color = if (config.isVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                        shape = RoundedCornerShape(6.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (config.isVerified) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                        )
+                    ) {
+                        Text(
+                            text = if (config.isVerified) "인증 완료" else "인증 필요",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (config.isVerified) Color(0xFF2E7D32) else Color(0xFFE65100),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
 
                 Row(
@@ -125,66 +152,45 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
                         modifier = Modifier.weight(1f)
                     )
 
-                    // 인증 상태 뱃지 및 인증 버튼
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            color = if (config.isVerified) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                if (config.isVerified) Color(0xFF4CAF50) else Color(0xFFFF9800)
-                            )
-                        ) {
-                            Text(
-                                text = if (config.isVerified) "인증 완료" else "인증 필요",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (config.isVerified) Color(0xFF2E7D32) else Color(0xFFE65100),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                    Button(
+                        onClick = {
+                            if (chatIdInput.isBlank()) {
+                                Toast.makeText(context, "Chat ID를 먼저 입력해주세요.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            scope.launch {
+                                isRequestingPin = true
+                                val genPin = (100000..999999).random().toString()
+                                currentPin = genPin
+                                pinRemainingSeconds = 300
 
-                        Spacer(Modifier.height(4.dp))
-
-                        Button(
-                            onClick = {
-                                if (chatIdInput.isBlank()) {
-                                    Toast.makeText(context, "Chat ID를 먼저 입력해주세요.", Toast.LENGTH_SHORT).show()
-                                    return@Button
+                                val res = SubwayNowApiClient.requestPin(
+                                    serverUrl = config.serverUrl,
+                                    chatId = chatIdInput,
+                                    pin = genPin
+                                )
+                                isRequestingPin = false
+                                if (res.isSuccess) {
+                                    showPinDialog = true
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "인증 요청 실패: ${res.exceptionOrNull()?.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 }
-                                scope.launch {
-                                    isRequestingPin = true
-                                    val genPin = (100000..999999).random().toString()
-                                    currentPin = genPin
-                                    pinRemainingSeconds = 300
-
-                                    val res = SubwayNowApiClient.requestPin(
-                                        serverUrl = config.serverUrl,
-                                        chatId = chatIdInput,
-                                        pin = genPin
-                                    )
-                                    isRequestingPin = false
-                                    if (res.isSuccess) {
-                                        showPinDialog = true
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "인증 요청 실패: ${res.exceptionOrNull()?.message}",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-                                }
-                            },
-                            enabled = !isRequestingPin && chatIdInput.isNotBlank(),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
-                            Text(
-                                text = if (config.isVerified) "재인증" else "인증 시작",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                            }
+                        },
+                        enabled = !isRequestingPin && chatIdInput.isNotBlank(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(52.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (config.isVerified) "재인증" else "인증 시작",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
@@ -192,168 +198,555 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
                     text = "* Chat ID는 텔레그램에서 @SubwayNowBot 또는 @userinfobot 에게 /start를 보내어 확인하실 수 있습니다.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
                 )
 
-                // 1. 예약 전송 시각 (CrewMate -> 봇 전송)
-                Text(
-                    text = "예약 전송 시각 (CrewMate 발송)",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // 상세 설정 접기/펼치기 토글
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isDetailExpanded = !isDetailExpanded },
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
-                    val sendLeadOptions = listOf(
-                        -1 to "출근 시 일괄",
-                        60 to "60분 전",
-                        45 to "45분 전",
-                        30 to "30분 전"
-                    )
-                    sendLeadOptions.forEach { (minutes, label) ->
-                        val selected = config.sendLeadMinutes == minutes
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                SubwayNowSettings.setSendLeadMinutes(context, minutes)
-                                refreshConfig()
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center
-                                )
-                            },
-                            modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("⚙️", fontSize = 13.sp)
+                            Text(
+                                text = "텔레그램 상세 설정",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = if (isDetailExpanded) "접기 ▲" else "펼치기 ▼",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
-
-                // 2. 추적 시작 시각 (봇 위치 추적 개시)
-                Text(
-                    text = "추적 시작 시각 (SubwayNowBot 개시)",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val trackLeadOptions = listOf(
-                        30 to "30분 전",
-                        20 to "20분 전",
-                        15 to "15분 전",
-                        10 to "10분 전"
-                    )
-                    trackLeadOptions.forEach { (minutes, label) ->
-                        val selected = config.trackLeadMinutes == minutes
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                SubwayNowSettings.setTrackLeadMinutes(context, minutes)
-                                refreshConfig()
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center
-                                )
-                            },
-                            modifier = Modifier.weight(1f)
+                AnimatedVisibility(visible = isDetailExpanded) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                        // 1. 예약 전송 시각 (CrewMate -> 봇 전송)
+                        Text(
+                            text = "예약 전송 시각 (CrewMate 발송)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    }
-                }
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val isBatchSelected = config.sendLeadMinutes < 0
+                            FilterChip(
+                                selected = isBatchSelected,
+                                onClick = {
+                                    SubwayNowSettings.setSendLeadMinutes(context, -1)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "출근 일괄",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
 
-                Spacer(Modifier.height(10.dp))
+                            val isSendCustom = config.sendLeadMinutes > 0 && config.sendLeadMinutes !in listOf(30, 45)
+                            val sendCustomLabel = if (isSendCustom) "${config.sendLeadMinutes}분 전" else "n분 전"
+                            FilterChip(
+                                selected = isSendCustom,
+                                onClick = {
+                                    showSendLeadCustomDialog = true
+                                },
+                                label = {
+                                    Text(
+                                        text = sendCustomLabel,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
 
-                // 3. 추적 알림 주기 (N개 역 이동 시)
-                Text(
-                    text = "알림 발송 주기 (역 간격)",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val intervalOptions = listOf(
-                        1 to "1개 역마다",
-                        2 to "2개 역마다",
-                        3 to "3개 역마다"
-                    )
-                    intervalOptions.forEach { (interval, label) ->
-                        val selected = config.trackInterval == interval
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                SubwayNowSettings.setTrackInterval(context, interval)
-                                refreshConfig()
-                            },
-                            label = {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center
-                                )
-                            },
-                            modifier = Modifier.weight(1f)
+                            val is45Selected = config.sendLeadMinutes == 45
+                            FilterChip(
+                                selected = is45Selected,
+                                onClick = {
+                                    SubwayNowSettings.setSendLeadMinutes(context, 45)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "45분 전",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            val is30Selected = config.sendLeadMinutes == 30
+                            FilterChip(
+                                selected = is30Selected,
+                                onClick = {
+                                    SubwayNowSettings.setSendLeadMinutes(context, 30)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "30분 전",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // 2. 추적 시작 시각 (봇 위치 추적 개시)
+                        Text(
+                            text = "추적 시작 시각 (SubwayNowBot 개시)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    }
-                }
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val isTrackCustom = config.trackLeadMinutes !in listOf(10, 15, 20)
+                            val trackCustomLabel = if (isTrackCustom) "${config.trackLeadMinutes}분 전" else "n분 전"
+                            FilterChip(
+                                selected = isTrackCustom,
+                                onClick = {
+                                    showTrackLeadCustomDialog = true
+                                },
+                                label = {
+                                    Text(
+                                        text = trackCustomLabel,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
 
-                Spacer(Modifier.height(14.dp))
+                            val isTrack20Selected = config.trackLeadMinutes == 20
+                            FilterChip(
+                                selected = isTrack20Selected,
+                                onClick = {
+                                    SubwayNowSettings.setTrackLeadMinutes(context, 20)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "20분 전",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
 
-                // 하단 보조 액션 버튼들
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                val pingRes = SubwayNowApiClient.ping(config.serverUrl)
-                                if (pingRes.isSuccess && pingRes.getOrThrow()) {
-                                    Toast.makeText(context, "✅ 서버 연결 정상 (200 OK)", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "❌ 서버 응답 없음: ${pingRes.exceptionOrNull()?.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                            val isTrack15Selected = config.trackLeadMinutes == 15
+                            FilterChip(
+                                selected = isTrack15Selected,
+                                onClick = {
+                                    SubwayNowSettings.setTrackLeadMinutes(context, 15)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "15분 전",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            val isTrack10Selected = config.trackLeadMinutes == 10
+                            FilterChip(
+                                selected = isTrack10Selected,
+                                onClick = {
+                                    SubwayNowSettings.setTrackLeadMinutes(context, 10)
+                                    refreshConfig()
+                                },
+                                label = {
+                                    Text(
+                                        text = "10분 전",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // 3. 추적 알림 주기 (1, 2, 3, n개 역마다)
+                        Text(
+                            text = "알림 발송 주기 (역 간격)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val intervalOptions = listOf(
+                                1 to "1개 역마다",
+                                2 to "2개 역마다",
+                                3 to "3개 역마다"
+                            )
+                            intervalOptions.forEach { (interval, label) ->
+                                val selected = config.trackInterval == interval
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = {
+                                        SubwayNowSettings.setTrackInterval(context, interval)
+                                        refreshConfig()
+                                    },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            val isIntervalCustom = config.trackInterval !in listOf(1, 2, 3)
+                            val intervalCustomLabel = if (isIntervalCustom) "${config.trackInterval}개 역마다" else "n개 역마다"
+                            FilterChip(
+                                selected = isIntervalCustom,
+                                onClick = {
+                                    showTrackIntervalCustomDialog = true
+                                },
+                                label = {
+                                    Text(
+                                        text = intervalCustomLabel,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // 4. 출발역 역명 치환 설정 (다이아 출발역 -> 실제 역명 교체)
+                        var replacements by remember { mutableStateOf(SubwayNowSettings.getStationReplacements(context)) }
+                        var fromStnInput by remember { mutableStateOf("") }
+                        var toStnInput by remember { mutableStateOf("") }
+
+                        Text(
+                            text = "출발역 역명 치환 설정",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "다이아 역명이 축약되거나 불일치할 때(예: '4서울' ➔ '서울'), 봇에 전송할 올바른 역명으로 자동 치환합니다.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = fromStnInput,
+                                onValueChange = { fromStnInput = it },
+                                label = { Text("다이아 역명", fontSize = 11.sp) },
+                                placeholder = { Text("예: 4서울", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                            )
+                            Text("➔", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            OutlinedTextField(
+                                value = toStnInput,
+                                onValueChange = { toStnInput = it },
+                                label = { Text("교체될 역명", fontSize = 11.sp) },
+                                placeholder = { Text("예: 서울", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                            )
+                            Button(
+                                onClick = {
+                                    val f = fromStnInput.trim()
+                                    val t = toStnInput.trim()
+                                    if (f.isNotEmpty() && t.isNotEmpty()) {
+                                        SubwayNowSettings.addStationReplacement(context, f, t)
+                                        replacements = SubwayNowSettings.getStationReplacements(context)
+                                        fromStnInput = ""
+                                        toStnInput = ""
+                                        Toast.makeText(context, "'$f' ➔ '$t' 치환 규칙이 저장되었습니다.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier.height(48.dp)
+                            ) {
+                                Text("저장", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (replacements.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                replacements.forEach { (fromStn, toStn) ->
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "$fromStn ➔ $toStn",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    SubwayNowSettings.removeStationReplacement(context, fromStn)
+                                                    replacements = SubwayNowSettings.getStationReplacements(context)
+                                                    Toast.makeText(context, "'$fromStn' 치환 규칙이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(Icons.Default.Close, contentDescription = "삭제", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        },
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("📡 서버 연결 확인", fontSize = 12.sp)
-                    }
+                        }
 
-                    Button(
-                        onClick = { showHistoryDialog = true },
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Text("📋 봇 전송 이력", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(14.dp))
+
+                        // 하단 보조 액션 버튼들
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        val pingRes = SubwayNowApiClient.ping(config.serverUrl)
+                                        if (pingRes.isSuccess && pingRes.getOrThrow()) {
+                                            Toast.makeText(context, "✅ 서버 연결 정상 (200 OK)", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "❌ 서버 응답 없음: ${pingRes.exceptionOrNull()?.message}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("📡 서버 연결 확인", fontSize = 12.sp)
+                            }
+
+                            Button(
+                                onClick = { showHistoryDialog = true },
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("📋 봇 전송 이력", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    // --- 예약 전송 시각 n분 전 직접 입력 다이얼로그 ---
+    if (showSendLeadCustomDialog) {
+        var inputVal by remember {
+            mutableStateOf(if (config.sendLeadMinutes > 0 && config.sendLeadMinutes !in listOf(30, 45)) config.sendLeadMinutes.toString() else "60")
+        }
+        AlertDialog(
+            onDismissRequest = { showSendLeadCustomDialog = false },
+            title = { Text("예약 전송 시각 직접 입력", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "열차 출발 몇 분 전에 텔레그램 봇으로 명령어를 자동 예약 전송할지 입력하세요 (분).",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = inputVal,
+                        onValueChange = { inputVal = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("전송 시각 (출발 n분 전)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val parsed = inputVal.toIntOrNull() ?: 60
+                        val finalMin = parsed.coerceAtLeast(1)
+                        SubwayNowSettings.setSendLeadMinutes(context, finalMin)
+                        refreshConfig()
+                        showSendLeadCustomDialog = false
+                    }
+                ) {
+                    Text("확인", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendLeadCustomDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
+    // --- 추적 시작 시각 n분 전 직접 입력 다이얼로그 ---
+    if (showTrackLeadCustomDialog) {
+        var inputVal by remember {
+            mutableStateOf(if (config.trackLeadMinutes !in listOf(10, 15, 20)) config.trackLeadMinutes.toString() else "30")
+        }
+        AlertDialog(
+            onDismissRequest = { showTrackLeadCustomDialog = false },
+            title = { Text("추적 시작 시각 직접 입력", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "출발 몇 분 전부터 봇이 열차 위치 추적을 개시할지 입력하세요 (분).",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = inputVal,
+                        onValueChange = { inputVal = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("추적 개시 (출발 n분 전)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val parsed = inputVal.toIntOrNull() ?: 30
+                        val finalMin = parsed.coerceAtLeast(1)
+                        SubwayNowSettings.setTrackLeadMinutes(context, finalMin)
+                        refreshConfig()
+                        showTrackLeadCustomDialog = false
+                    }
+                ) {
+                    Text("확인", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrackLeadCustomDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
+    // --- 알림 발송 주기 n개 역마다 직접 입력 다이얼로그 ---
+    if (showTrackIntervalCustomDialog) {
+        var inputVal by remember {
+            mutableStateOf(if (config.trackInterval !in listOf(1, 2, 3)) config.trackInterval.toString() else "4")
+        }
+        AlertDialog(
+            onDismissRequest = { showTrackIntervalCustomDialog = false },
+            title = { Text("알림 발송 주기 직접 입력", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "몇 개 역을 이동할 때마다 텔레그램 위치 알림을 수신할지 입력하세요 (역 수).",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = inputVal,
+                        onValueChange = { inputVal = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("알림 주기 (n개 역마다)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val parsed = inputVal.toIntOrNull() ?: 4
+                        val finalInterval = parsed.coerceAtLeast(1)
+                        SubwayNowSettings.setTrackInterval(context, finalInterval)
+                        refreshConfig()
+                        showTrackIntervalCustomDialog = false
+                    }
+                ) {
+                    Text("확인", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrackIntervalCustomDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
     }
 
     // --- 6자리 PIN 상호 인증 다이얼로그 ---
@@ -473,7 +866,7 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📋 봇 전송 이력 및 제어",
+                            text = "📋 봇 전송 이력",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -502,19 +895,7 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(histories, key = { it.id }) { item ->
-                                BotCommandHistoryRow(
-                                    item = item,
-                                    onCancelTrack = { trainNo ->
-                                        scope.launch {
-                                            val res = SubwayNowManager.cancelTarget(context, trainNo)
-                                            if (res.isSuccess) {
-                                                Toast.makeText(context, "$trainNo 열차 추적이 취소되었습니다.", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                Toast.makeText(context, "취소 실패: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                )
+                                BotCommandHistoryRow(item = item)
                             }
                         }
                     }
@@ -543,8 +924,7 @@ fun SubwayNowBotSettingsCard(modifier: Modifier = Modifier) {
 
 @Composable
 private fun BotCommandHistoryRow(
-    item: BotCommandHistoryEntity,
-    onCancelTrack: (String) -> Unit
+    item: BotCommandHistoryEntity
 ) {
     val (statusBg, statusFg, statusText) = when (item.status) {
         "SUCCESS" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "전송완료")
@@ -585,18 +965,6 @@ private fun BotCommandHistoryRow(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-
-                if (item.status == "SUCCESS") {
-                    OutlinedButton(
-                        onClick = { onCancelTrack(item.trainNo) },
-                        modifier = Modifier.height(28.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, Color.Red)
-                    ) {
-                        Text("추적 중지", fontSize = 11.sp, color = Color.Red)
-                    }
                 }
             }
 

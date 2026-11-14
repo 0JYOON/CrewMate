@@ -279,6 +279,20 @@ fun DiaLookupScreen(
                     detail = state.detail,
                     workDate = date
                 )
+                val isOfflineMode = remember(context) {
+                    context.getSharedPreferences("crewmate_prefs", android.content.Context.MODE_PRIVATE)
+                        .getBoolean("is_offline_mode", false)
+                }
+                if (isOfflineMode) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "ℹ️ 오프라인 모드에서는 저장된 기초자료·캐시 기준으로 표시되며 실시간 Xcrew 변동사항이 반영되지 않습니다.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
             }
             is DiaDetailLoadState.Error -> {
                 Surface(

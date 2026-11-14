@@ -33,15 +33,25 @@ object DataBackupManager {
         "session",
         "credential",
         "token",
-        "auto_offline_last_window_key"
+        "auto_offline_last_window_key",
+        "auto_offline_last_",
+        "cached_user_name",
+        "cached_user_affil",
+        "telegram_chat_id",
+        "telegram_verified",
+        "telegram_stopped_trains_",
+        "telegram_target_overrides_"
     )
 
-    private fun isSensitiveKey(key: String): Boolean {
+    fun isSensitiveKey(key: String): Boolean {
         val lower = key.lowercase()
-        return EXCLUDED_PREF_KEYS.any { lower.contains(it) } ||
+        return EXCLUDED_PREF_KEYS.any { lower.contains(it.lowercase()) } ||
                 lower.contains("password") ||
                 lower.contains("secret") ||
-                lower.contains("keystore")
+                lower.contains("keystore") ||
+                lower.contains("chat_id") ||
+                lower.contains("user_name") ||
+                lower.contains("empnm")
     }
 
     suspend fun createBackupJson(context: Context): String {

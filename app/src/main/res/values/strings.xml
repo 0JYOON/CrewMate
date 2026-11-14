@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CrewMate</string>
+    <string name="widget_today_dia_name">오늘의 근무 다이아</string>
+    <string name="widget_today_dia_desc">오늘 예정된 승무 다이아 타임라인과 출퇴근 시각을 홈 화면에서 바로 확인합니다.</string>
+    <string name="widget_monthly_schedule_name">월별 승무근무표</string>
+    <string name="widget_monthly_schedule_desc">월간 승무근무표 달력(주간/야간/휴일/연차)을 홈 화면에서 바로 확인합니다.</string>
+</resources>

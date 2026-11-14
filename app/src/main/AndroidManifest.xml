@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Explicitly declare telephony hardware not required -->
@@ -35,6 +36,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
             <intent-filter>
@@ -65,6 +67,16 @@
         <service
             android:name=".alarm.AlarmLoopService"
             android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
+        <receiver
+            android:name=".alarm.AttendancePrecheckReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <service
+            android:name=".alarm.AttendanceVerificationService"
+            android:foregroundServiceType="dataSync"
             android:exported="false" />
 
         <receiver
@@ -99,5 +111,53 @@
                 <action android:name="com.example.crewmate.telegram.ACTION_DISPATCH_TRACK" />
             </intent-filter>
         </receiver>
+
+        <!-- 오늘의 근무 승무 다이아 전용 홈 화면 위젯 (4x4 ~ 4x5 가변 리사이즈) -->
+        <receiver
+            android:name=".widget.TodayDiaWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_today_dia_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="kr.crewmate.app.action.REFRESH_WIDGET" />
+                <action android:name="kr.crewmate.app.action.UPDATE_TODAY_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_dia_widget_info" />
+        </receiver>
+
+        <!-- 월별 승무근무표 달력 홈 화면 위젯 (4x4 ~ 4x5 가변 리사이즈) -->
+        <receiver
+            android:name=".widget.MonthlyScheduleWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_monthly_schedule_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="kr.crewmate.app.action.REFRESH_MONTHLY_WIDGET" />
+                <action android:name="kr.crewmate.app.action.UPDATE_MONTHLY_WIDGET" />
+                <action android:name="kr.crewmate.app.action.MONTHLY_WIDGET_PREV" />
+                <action android:name="kr.crewmate.app.action.MONTHLY_WIDGET_NEXT" />
+                <action android:name="kr.crewmate.app.action.MONTHLY_WIDGET_TODAY" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/monthly_schedule_widget_info" />
+        </receiver>
+        <!-- 매일 새벽 03:00 백그라운드 접근 제어 확인 리시버 -->
+        <receiver
+            android:name=".login.DailyBanCheckReceiver"
+            android:exported="false" />
+
+        <!-- 인앱 APK 설치용 FileProvider 등록 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

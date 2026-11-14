@@ -12,13 +12,17 @@ import java.time.ZoneId
 object WorkAlarmScheduler {
     private const val TAG = "WorkAlarmScheduler"
 
+    fun cancelAllAlarms(context: Context) {
+        scheduleAlarms(context, emptyList())
+    }
+
     @SuppressLint("ScheduleExactAlarm")
     fun scheduleAlarms(context: Context, items: List<WorkAlarmItem>) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val now = java.time.LocalDateTime.now()
 
-        // Cancel previous alarms
-        for (i in 0..15) {
+        // Cancel previous alarms (0..63) and pre-check alarms (1000..1063)
+        for (i in 0..63) {
             val intent = Intent(context, WorkAlarmReceiver::class.java)
             val pending = PendingIntent.getBroadcast(
                 context,
@@ -29,6 +33,18 @@ object WorkAlarmScheduler {
             if (pending != null) {
                 alarmManager.cancel(pending)
                 pending.cancel()
+            }
+
+            val preIntent = Intent(context, AttendancePrecheckReceiver::class.java)
+            val pendingPre = PendingIntent.getBroadcast(
+                context,
+                1000 + i,
+                preIntent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            if (pendingPre != null) {
+                alarmManager.cancel(pendingPre)
+                pendingPre.cancel()
             }
         }
 
@@ -45,6 +61,7 @@ object WorkAlarmScheduler {
                 putExtra("trainNo", item.trainNo)
                 putExtra("dptStn", item.dptStnNm)
                 putExtra("dptTimeStr", item.dptTimeStr)
+                putExtra("pjtDt", item.pjtDt)
             }
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
@@ -73,6 +90,40 @@ object WorkAlarmScheduler {
                     }
                 } else {
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, epochMilli, pendingIntent)
+                }
+            }
+
+            // 출무 알람인 경우: 사이렌 15초 전 출무 여부 백그라운드 사전 검증 알람 예약
+            if (item.cat == "출무") {
+                val precheckTime = AttendancePrecheckCoordinator.precheckTimeFor(item.triggerDateTime)
+                if (precheckTime.isAfter(now)) {
+                    val preEpochMilli = precheckTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val preIntent = Intent(context, AttendancePrecheckReceiver::class.java).apply {
+                        putExtra("pjtDt", item.pjtDt)
+                        putExtra("trainNo", item.trainNo)
+                        putExtra("dptTimeStr", item.dptTimeStr)
+                    }
+                    val prePending = PendingIntent.getBroadcast(
+                        context,
+                        1000 + index,
+                        preIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            if (alarmManager.canScheduleExactAlarms()) {
+                                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, preEpochMilli, prePending)
+                            } else {
+                                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, preEpochMilli, prePending)
+                            }
+                        } else {
+                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, preEpochMilli, prePending)
+                        }
+                        Log.i(TAG, "Scheduled attendance pre-check alarm for ${item.trainNo} at $precheckTime")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to schedule pre-check alarm", e)
+                    }
                 }
             }
         }

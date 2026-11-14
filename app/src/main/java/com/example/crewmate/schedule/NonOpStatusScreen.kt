@@ -36,6 +36,8 @@ fun NonOpStatusScreen(
     val nonOpData by viewModel.nonOpData.collectAsState()
     val annualLeave by viewModel.annualLeave.collectAsState()
     val carriedOverLeaves by viewModel.carriedOverLeaves.collectAsState()
+    val holidayReport by viewModel.holidayReport.collectAsState()
+    val isHolidayLoading by viewModel.isHolidayLoading.collectAsState()
 
     var showYearPicker by remember { mutableStateOf(false) }
 
@@ -162,6 +164,16 @@ fun NonOpStatusScreen(
 
         Spacer(Modifier.height(20.dp))
 
+        // 중단: 휴일근무 현황 조회 영역 (alcSpecDvCd == "02" 휴일 배정 근무)
+        HolidayWorkSection(
+            year = year,
+            holidayReport = holidayReport,
+            isLoading = isHolidayLoading,
+            onQuery = viewModel::queryHolidayWork
+        )
+
+        Spacer(Modifier.height(20.dp))
+
         // 하단: 연차 관리 영역
         LeaveManagementSection(
             annualLeave = annualLeave,
@@ -171,6 +183,206 @@ fun NonOpStatusScreen(
             onUpdateCarriedOverLeave = viewModel::updateCarriedOverLeave,
             onDeleteCarriedOverLeave = viewModel::deleteCarriedOverLeave
         )
+    }
+}
+
+@Composable
+fun HolidayWorkSection(
+    year: Int,
+    holidayReport: HolidayWorkReport?,
+    isLoading: Boolean,
+    onQuery: () -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "${year}년 휴일근무 현황",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 17.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (holidayReport != null && holidayReport.queriedDate.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        val examDesc = if (holidayReport.examinedDaysCount > 0) " (총 ${holidayReport.examinedDaysCount}일치 분석)" else ""
+                        Text(
+                            text = "최근 조회: ${holidayReport.queriedDate}$examDesc",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = onQuery,
+                    enabled = !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("조회 중...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text(if (holidayReport != null) "다시 조회" else "현황 조회", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+            if (holidayReport == null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "우측 상단의 [현황 조회] 버튼을 눌러\n${year}년도 휴일근무(주간/야간) 누적 내역을 계산하세요.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExpanded = !isExpanded }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "누적 휴일근무 : ",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "총 ${holidayReport.totalCount}개",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = if (isExpanded) "▲ 상세 접기" else "▼ 주간/야간 보기",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = isExpanded) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("☀️ 주간근무", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("${holidayReport.dayCount}개", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("🌙 야간근무", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("${holidayReport.nightCount}개", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("(2일 연속 1개 단위)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        if (holidayReport.items.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "세부 일자별 내역 (${holidayReport.items.size}건):",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            holidayReport.items.forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(
+                                                    if (item.isNight) Color(0xFF8B5CF6) else Color(0xFFF59E0B),
+                                                    RoundedCornerShape(3.dp)
+                                                )
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = "${item.dateStr} [${item.diaNo}]",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Text(
+                                        text = item.timeDesc.replace(" (전일 야간 1일차와 1개 단위 통합)", ""),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

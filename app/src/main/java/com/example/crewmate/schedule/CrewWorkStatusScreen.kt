@@ -1,6 +1,8 @@
 package com.example.crewmate.schedule
 
 import android.app.DatePickerDialog
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class CrewWorkStatusViewModel(private val repository: CrewWorkStatusRepository) : ViewModel() {
@@ -59,7 +62,7 @@ class CrewWorkStatusViewModel(private val repository: CrewWorkStatusRepository) 
                 val assignments = repository.getCrewWorkStatus(dateText)
                 _uiState.value = assignments
             } catch (_: Exception) {
-                _uiState.value = emptyList() // or error handling
+                _uiState.value = emptyList()
             } finally {
                 _isLoading.value = false
             }
@@ -84,8 +87,32 @@ fun CrewWorkStatusScreen(
     val date by viewModel.date.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    
+
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
+    var isOfflineMode by remember { mutableStateOf(prefs.getBoolean("is_offline_mode", false)) }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == "is_offline_mode") {
+                isOfflineMode = sharedPreferences.getBoolean("is_offline_mode", false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    LaunchedEffect(isOfflineMode) {
+        if (isOfflineMode) {
+            val today = LocalDate.now()
+            if (!OfflineLookupRange.contains(today, date)) {
+                viewModel.setDate(OfflineLookupRange.clamp(today, date))
+            }
+        }
+    }
+
     var currentPage by remember { mutableIntStateOf(0) }
     val itemsPerPage = 20
 
@@ -173,20 +200,43 @@ fun CrewWorkStatusScreen(
                             modifier = Modifier
                                 .matchParentSize()
                                 .clickable {
-                                    DatePickerDialog(
+                                    val dialog = DatePickerDialog(
                                         context,
-                                        { _, year, month, day -> viewModel.setDate(LocalDate.of(year, month + 1, day)) },
+                                        { _, year, month, day ->
+                                            val picked = LocalDate.of(year, month + 1, day)
+                                            val targetDate = if (isOfflineMode) {
+                                                OfflineLookupRange.clamp(LocalDate.now(), picked)
+                                            } else {
+                                                picked
+                                            }
+                                            viewModel.setDate(targetDate)
+                                        },
                                         date.year,
                                         date.monthValue - 1,
                                         date.dayOfMonth,
-                                    ).show()
+                                    )
+                                    if (isOfflineMode) {
+                                        val zone = ZoneId.systemDefault()
+                                        val today = LocalDate.now()
+                                        dialog.datePicker.minDate =
+                                            today.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                        dialog.datePicker.maxDate =
+                                            today.plusDays(1).atTime(23, 59, 59).atZone(zone).toInstant().toEpochMilli()
+                                    }
+                                    dialog.show()
                                 },
                         )
                     }
                     Button(
-                        onClick = { 
+                        onClick = {
+                            if (isOfflineMode) {
+                                val today = LocalDate.now()
+                                if (!OfflineLookupRange.contains(today, date)) {
+                                    viewModel.setDate(OfflineLookupRange.clamp(today, date))
+                                }
+                            }
                             currentPage = 0
-                            viewModel.search() 
+                            viewModel.search()
                         },
                         modifier = Modifier.weight(1f).height(56.dp).padding(top = 8.dp),
                         shape = RoundedCornerShape(12.dp),
@@ -195,6 +245,15 @@ fun CrewWorkStatusScreen(
                     ) {
                         Text("조회", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+                if (isOfflineMode) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "오프라인 모드: 어제·오늘·내일(3일)의 저장된 근무 현황만 조회할 수 있습니다.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -252,7 +311,6 @@ fun CrewWorkStatusScreen(
                                 val st = item.gwkTm?.let { if (it.length == 4) "${it.substring(0,2)}:${it.substring(2,4)}" else it } ?: ""
                                 val et = item.loiwTm?.let { if (it.length == 4) "${it.substring(0,2)}:${it.substring(2,4)}" else it } ?: ""
                                 val timeStr = if (st.isNotEmpty() || et.isNotEmpty()) "$st~$et" else ""
-                                val crewStr = item.crewMembers.joinToString("·")
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth().clickable { selectedAssignment = item }.padding(vertical = 12.dp, horizontal = 12.dp),

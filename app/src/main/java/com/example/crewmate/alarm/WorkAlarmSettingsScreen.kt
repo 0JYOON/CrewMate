@@ -165,36 +165,55 @@ fun WorkAlarmSettingsScreen(
             val schedules = db.workScheduleDao().getSchedulesForMonth(monthStr)
             val todaySchedules = schedules.filter { it.date == todayStr && !it.diaNo.isNullOrBlank() }
 
-            val parser = DiaDetailParser()
             val allSegments = mutableListOf<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>()
 
             todaySchedules.forEach { sched ->
-                val key = "$todayStr|${sched.diaNo.orEmpty()}"
-                val cachedDetail = db.diaDetailDao().getDiaDetail(key)
-                if (cachedDetail != null && cachedDetail.detailJson.isNotBlank()) {
-                    runCatching {
-                        val detailResponse = parser.parse(cachedDetail.detailJson)
-                        allSegments.addAll(detailResponse.segments)
-                    }
-                }
+                val segs = WorkDutySyncCoordinator.loadCachedSegmentsForDia(
+                    db = db,
+                    dateStr = todayStr,
+                    diaNo = sched.diaNo.orEmpty()
+                )
+                allSegments.addAll(segs)
             }
 
+            val prefs = context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
+            val isOffline = prefs.getBoolean("is_offline_mode", false)
             val empNm = xcrewSession.userInfo.value?.first ?: ""
-            val attendanceStatuses = if (empNm.isNotBlank()) {
+            val cachedStatuses = AttendanceSnapshotStore.load(context, todayStr)?.statuses.orEmpty()
+            val attendanceStatuses = if (!isOffline && empNm.isNotBlank()) {
                 val scheduleDataSource = com.example.crewmate.data.remote.xcrew.XcrewWebViewXhrDataSource(
                     xcrewSession,
                     com.example.crewmate.data.remote.xcrew.XcrewWorkScheduleParser()
                 )
-                runCatching { scheduleDataSource.fetchAttendanceStatus(empNm, todayStr) }.getOrDefault(emptyList())
+                val fetched = runCatching { scheduleDataSource.fetchAttendanceStatus(empNm, todayStr) }.getOrDefault(emptyList())
+                if (fetched.isNotEmpty()) {
+                    AttendanceSnapshotStore.save(context, todayStr, fetched)
+                    fetched
+                } else {
+                    cachedStatuses
+                }
             } else {
-                emptyList()
+                cachedStatuses
             }
 
-            val upcoming = WorkAlarmRuleEvaluator.evaluate(
+            val syncResult = if (allSegments.isNotEmpty() || attendanceStatuses.isNotEmpty()) {
+                WorkDutySyncCoordinator.sync(
+                    context = context,
+                    workDate = today,
+                    segments = allSegments,
+                    attendanceStatuses = attendanceStatuses
+                )
+            } else {
+                WorkDutySyncCoordinator.syncFromLocalDatabase(context, today)
+            }
+            MidnightCaptureReceiver.scheduleNextMidnight(context)
+
+            val upcoming = syncResult?.alarms ?: WorkAlarmRuleEvaluator.evaluate(
                 segments = allSegments,
                 workDate = today,
                 settings = alarmSettings,
-                attendanceStatuses = attendanceStatuses
+                attendanceStatuses = attendanceStatuses,
+                checkedInKeys = AttendanceCheckInLatch.allKeys(context)
             )
             withContext(Dispatchers.Main) {
                 todayUpcomingAlarms = upcoming
@@ -356,6 +375,8 @@ fun WorkAlarmSettingsScreen(
                                 val updated = alarmSettings.copy(alarmEnabled = false)
                                 alarmSettings = updated
                                 alarmSettingsStore.saveSettings(updated)
+                                WorkAlarmScheduler.cancelAllAlarms(context)
+                                MidnightCaptureReceiver.scheduleNextMidnight(context)
                             }
                         },
                         colors = SwitchDefaults.colors(

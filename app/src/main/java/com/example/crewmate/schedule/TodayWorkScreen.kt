@@ -24,6 +24,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -63,7 +65,24 @@ fun TodayWorkScreen(
     onBack: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
-    TodayWorkContent(state, onNavigateToAlarmSettings, viewModel::retry)
+    val isRefreshingAttendance by viewModel.isRefreshingAttendance.collectAsState()
+    val context = LocalContext.current
+    TodayWorkContent(
+        state = state,
+        onNavigateToAlarmSettings = onNavigateToAlarmSettings,
+        onRetry = viewModel::retry,
+        isRefreshingAttendance = isRefreshingAttendance,
+        onRefreshAttendance = {
+            val prefs = context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("is_offline_mode", false)) {
+                android.widget.Toast.makeText(context, "오프라인 모드에서는 출무현황을 새로고침할 수 없습니다.", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                viewModel.refreshAttendanceOnly { _, message ->
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -71,6 +90,8 @@ private fun TodayWorkContent(
     state: TodayWorkUiState,
     onNavigateToAlarmSettings: () -> Unit,
     onRetry: () -> Unit,
+    isRefreshingAttendance: Boolean = false,
+    onRefreshAttendance: () -> Unit = {},
 ) {
     val overrideDate by com.example.crewmate.util.AppDateProvider.overrideDate.collectAsState()
     val today = overrideDate ?: com.example.crewmate.util.AppDateProvider.today
@@ -111,12 +132,16 @@ private fun TodayWorkContent(
                     detail = it.detail
                 )
             }
+            val badgeText = if (!successState.result.isToday) {
+                "${successState.result.workDate.format(java.time.format.DateTimeFormatter.ofPattern("MM.dd"))} 근무"
+            } else null
             com.example.crewmate.util.DiaCaptureHelper.executeCapture(
                 context = currentContext,
-                headerTitle = if (successState.result.isToday) "오늘의 근무" else "${successState.result.workDate.format(DateTimeFormatter.ofPattern("MM.dd"))} 근무",
+                headerTitle = "승무 다이아 상세",
                 workDate = successState.result.workDate,
                 dias = captureItems,
-                option = option
+                option = option,
+                badgeText = badgeText
             )
         } finally {
             isCapturing = false
@@ -296,7 +321,23 @@ private fun TodayWorkContent(
                         }
                         
                         Spacer(Modifier.height(16.dp))
-                        AttendanceStatusSection(result.attendanceStatusList, targetState, onNavigateToAlarmSettings)
+                        AttendanceStatusSection(
+                            attendanceList = result.attendanceStatusList,
+                            state = targetState,
+                            onNavigateToAlarmSettings = onNavigateToAlarmSettings,
+                            isRefreshingAttendance = isRefreshingAttendance,
+                            onRefreshAttendance = onRefreshAttendance
+                        )
+                        if (isOfflineMode) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "ℹ️ 오프라인 모드에서는 저장된 기초자료·캐시 기준으로 표시되며 실시간 Xcrew 변동사항이 반영되지 않습니다.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -308,7 +349,9 @@ private fun TodayWorkContent(
 private fun AttendanceStatusSection(
     attendanceList: List<AttendanceStatusDto>,
     state: TodayWorkUiState,
-    onNavigateToAlarmSettings: () -> Unit
+    onNavigateToAlarmSettings: () -> Unit,
+    isRefreshingAttendance: Boolean = false,
+    onRefreshAttendance: () -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -322,53 +365,44 @@ private fun AttendanceStatusSection(
         var isTelegramEnabled by remember { mutableStateOf(com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)) }
         var showTelegramControlDialog by remember { mutableStateOf(false) }
         var todayTrackTargets by remember { mutableStateOf<List<com.example.crewmate.telegram.SubwayNowTrackTarget>>(emptyList()) }
+        var currentDiaSegments by remember { mutableStateOf<List<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>>(emptyList()) }
         val dateKey = state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT))
         val alarmStore = remember(context) { com.example.crewmate.alarm.WorkAlarmSettingsStore(context) }
         var bypassedAlarmKeys by remember(dateKey) { mutableStateOf(alarmStore.getBypassedAlarmKeys(dateKey)) }
 
-        androidx.compose.runtime.LaunchedEffect(state) {
+        androidx.compose.runtime.LaunchedEffect(state, bypassedAlarmKeys) {
             val db = com.example.crewmate.database.CrewMateDatabase.getInstance(context)
             val alarmStore = com.example.crewmate.alarm.WorkAlarmSettingsStore(context)
             val alarmSettings = alarmStore.loadSettings()
             isAlarmEnabled = alarmSettings.alarmEnabled
             isTelegramEnabled = com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)
             
-            val parser = com.example.crewmate.data.remote.xcrew.DiaDetailParser()
             val allSegments = mutableListOf<com.example.crewmate.data.remote.xcrew.DiaDetailSegment>()
             state.result.dias.forEach { dia ->
-                val key = "${state.result.workDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"))}|${dia.schedule.diaNo.orEmpty()}"
-                val cachedDetail = db.diaDetailDao().getDiaDetail(key)
-                if (cachedDetail != null && cachedDetail.detailJson.isNotBlank()) {
-                    runCatching {
-                        val detailResponse = parser.parse(cachedDetail.detailJson)
-                        allSegments.addAll(detailResponse.segments)
-                    }
+                if (dia.detail.segments.isNotEmpty()) {
+                    allSegments.addAll(dia.detail.segments)
+                } else {
+                    val diaDateStr = dia.schedule.workDate?.filter { it.isDigit() }
+                        ?: state.result.workDate.format(DateTimeFormatter.BASIC_ISO_DATE)
+                    val segs = com.example.crewmate.alarm.WorkDutySyncCoordinator.loadCachedSegmentsForDia(
+                        db = db,
+                        dateStr = diaDateStr,
+                        diaNo = dia.schedule.diaNo.orEmpty()
+                    )
+                    allSegments.addAll(segs)
                 }
             }
+            currentDiaSegments = allSegments
 
-            if (alarmSettings.alarmEnabled) {
-                val upcoming = com.example.crewmate.alarm.WorkAlarmRuleEvaluator.evaluate(
-                    segments = allSegments,
-                    workDate = state.result.workDate,
-                    settings = alarmSettings,
-                    attendanceStatuses = state.result.attendanceStatusList
-                )
-                upcomingAlarmsCount = upcoming.size
-                upcomingAlarmsList = upcoming
-            }
-
-            if (com.example.crewmate.telegram.SubwayNowManager.isConfigured(context)) {
-                val config = com.example.crewmate.telegram.SubwayNowSettings.getConfig(context)
-                val targets = com.example.crewmate.telegram.SubwayNowRuleEvaluator.evaluateTargets(
-                    segments = allSegments,
-                    workDate = state.result.workDate,
-                    sendLeadMinutes = config.sendLeadMinutes,
-                    trackLeadMinutes = config.trackLeadMinutes,
-                    trackInterval = config.trackInterval
-                )
-                todayTrackTargets = targets
-                com.example.crewmate.telegram.SubwayNowManager.syncTodayDiaSchedule(context, allSegments, state.result.workDate)
-            }
+            val syncResult = com.example.crewmate.alarm.WorkDutySyncCoordinator.sync(
+                context = context,
+                workDate = state.result.workDate,
+                segments = allSegments,
+                attendanceStatuses = state.result.attendanceStatusList
+            )
+            upcomingAlarmsList = syncResult.alarms
+            upcomingAlarmsCount = syncResult.alarms.size
+            todayTrackTargets = syncResult.telegramTargets
         }
 
         if (isAlarmEnabled) {
@@ -525,6 +559,13 @@ private fun AttendanceStatusSection(
 
         if (showTelegramControlDialog) {
             val scope = rememberCoroutineScope()
+            var editingTarget by remember { mutableStateOf<com.example.crewmate.telegram.SubwayNowTrackTarget?>(null) }
+            var stoppedTrainNos by remember(dateKey) {
+                mutableStateOf(todayTrackTargets.filter {
+                    com.example.crewmate.telegram.SubwayNowSettings.isTrainStopped(context, it.trainNo, dateKey)
+                }.map { it.trainNo }.toSet())
+            }
+
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showTelegramControlDialog = false },
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -545,17 +586,27 @@ private fun AttendanceStatusSection(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "설정된 시각표에 맞춰 SubwayNowBot으로 명령어가 자동 전송되어 텔레그램으로 열차 현위치를 안내받습니다.",
+                            text = "설정된 시각표에 맞춰 SubwayNowBot으로 명령어가 자동 전송되어 텔레그램으로 열차 현위치를 안내받습니다. (카드를 터치하면 명령어 및 시각을 직접 수정할 수 있습니다)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         todayTrackTargets.forEach { target ->
+                            val isTargetStopped = stoppedTrainNos.contains(target.trainNo) ||
+                                    com.example.crewmate.telegram.SubwayNowSettings.isTrainStopped(context, target.trainNo, dateKey)
+
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { editingTarget = target },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isTargetStopped) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                                    else if (target.isUserOverridden) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                    else MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(
@@ -563,18 +614,46 @@ private fun AttendanceStatusSection(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = "${target.trainNo} (${target.targetStation}역)",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "출발: ${target.baseDepartureTime}",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "${target.trainNo} (${target.targetStation}역)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (target.isUserOverridden) {
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "수정됨",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "출발: ${target.baseDepartureTime}",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "✏️",
+                                                fontSize = 11.sp
+                                            )
+                                        }
                                     }
 
                                     Spacer(Modifier.height(4.dp))
@@ -591,52 +670,96 @@ private fun AttendanceStatusSection(
                                     )
 
                                     Spacer(Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
+
+                                    if (isTargetStopped) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = "🛑 추적 중지됨 (재개를 누르기 전까지 자동 발송 차단)",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                        Spacer(Modifier.height(6.dp))
                                         Button(
                                             onClick = {
                                                 scope.launch {
-                                                    val res = com.example.crewmate.telegram.SubwayNowManager.dispatchTarget(
+                                                    val res = com.example.crewmate.telegram.SubwayNowManager.resumeTarget(
                                                         context = context,
                                                         target = target,
-                                                        isManual = true
+                                                        workDate = state.result.workDate
                                                     )
                                                     if (res.isSuccess) {
-                                                        android.widget.Toast.makeText(context, "${target.trainNo} 봇 전송 완료!", android.widget.Toast.LENGTH_SHORT).show()
+                                                        stoppedTrainNos = stoppedTrainNos - target.trainNo
+                                                        android.widget.Toast.makeText(context, "${target.trainNo} 추적이 재개되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
                                                     } else {
-                                                        android.widget.Toast.makeText(context, "전송 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                        android.widget.Toast.makeText(context, "재개 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
                                                     }
                                                 }
                                             },
-                                            modifier = Modifier.weight(1f).height(32.dp),
+                                            modifier = Modifier.fillMaxWidth().height(32.dp),
                                             shape = RoundedCornerShape(6.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                         ) {
-                                            Text("🚀 즉시 전송", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("▶️ 추적 재개", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    val res = com.example.crewmate.telegram.SubwayNowManager.cancelTarget(
-                                                        context = context,
-                                                        trainNo = target.trainNo
-                                                    )
-                                                    if (res.isSuccess) {
-                                                        android.widget.Toast.makeText(context, "${target.trainNo} 추적이 취소되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
-                                                    } else {
-                                                        android.widget.Toast.makeText(context, "취소 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            },
-                                            modifier = Modifier.weight(1f).height(32.dp),
-                                            shape = RoundedCornerShape(6.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                    } else {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("🛑 추적 취소", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                            Button(
+                                                onClick = {
+                                                    scope.launch {
+                                                        val res = com.example.crewmate.telegram.SubwayNowManager.dispatchTarget(
+                                                            context = context,
+                                                            target = target,
+                                                            isManual = true
+                                                        )
+                                                        if (res.isSuccess) {
+                                                            android.widget.Toast.makeText(context, "${target.trainNo} 봇 전송 완료!", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "전송 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_LONG).show()
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f).height(32.dp),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                            ) {
+                                                Text("🚀 즉시 전송", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        val res = com.example.crewmate.telegram.SubwayNowManager.cancelTarget(
+                                                            context = context,
+                                                            trainNo = target.trainNo,
+                                                            workDate = state.result.workDate
+                                                        )
+                                                        if (res.isSuccess) {
+                                                            stoppedTrainNos = stoppedTrainNos + target.trainNo
+                                                            android.widget.Toast.makeText(context, "${target.trainNo} 추적이 중지되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "취소 실패: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f).height(32.dp),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                            ) {
+                                                Text("🛑 추적 중지", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                            }
                                         }
                                     }
                                 }
@@ -650,6 +773,194 @@ private fun AttendanceStatusSection(
                     }
                 }
             )
+
+            if (editingTarget != null) {
+                val targetToEdit = editingTarget!!
+                val tokens = targetToEdit.rawCommand.trim().split(" ")
+                val initialPrefix = if (tokens.size > 1) tokens.dropLast(1).joinToString(" ") else targetToEdit.rawCommand
+                var editCommandPrefix by remember(targetToEdit) { mutableStateOf(initialPrefix) }
+                var editTrackStartTime by remember(targetToEdit) { mutableStateOf(targetToEdit.trackStartTimeStr) }
+                var editSendTime by remember(targetToEdit) {
+                    mutableStateOf(targetToEdit.sendDateTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)))
+                }
+
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { editingTarget = null },
+                    title = {
+                        Text(
+                            "✏️ ${targetToEdit.trainNo} 추적 설정 직접 수정",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "이 열차 1건에 대해 전송될 봇 명령어와 시각표를 원하는 값으로 덮어씁니다(Override).",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            OutlinedTextField(
+                                value = editCommandPrefix,
+                                onValueChange = { editCommandPrefix = it },
+                                label = { Text("전송 명령어 (열차/목표역/주기)") },
+                                trailingIcon = {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = editTrackStartTime,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    fontSize = 12.sp
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text(
+                                text = "최종 전송 명령어: ${editCommandPrefix.trim()} ${editTrackStartTime.trim()}",
+                                fontSize = 11.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = editTrackStartTime,
+                                    onValueChange = { editTrackStartTime = it },
+                                    label = { Text("추적 개시 (HH:mm)") },
+                                    placeholder = { Text("14:15") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = editSendTime,
+                                    onValueChange = { editSendTime = it },
+                                    label = { Text("예약 전송 (HH:mm)") },
+                                    placeholder = { Text("13:45") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Text(
+                                text = "기준 출발: ${targetToEdit.baseDepartureTime} | 현재 설정: 전송 ${targetToEdit.sendDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))} ➔ 개시 ${targetToEdit.trackStartTimeStr}",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (targetToEdit.isUserOverridden) {
+                                OutlinedButton(
+                                    onClick = {
+                                        com.example.crewmate.telegram.SubwayNowSettings.removeTargetOverride(
+                                            context,
+                                            dateKey,
+                                            targetToEdit.trainNo
+                                        )
+                                        val overrides = com.example.crewmate.telegram.SubwayNowSettings.getTargetOverrides(context, dateKey)
+                                        val config = com.example.crewmate.telegram.SubwayNowSettings.getConfig(context)
+                                        val replacements = com.example.crewmate.telegram.SubwayNowSettings.getStationReplacements(context)
+                                        val baseTargets = com.example.crewmate.telegram.SubwayNowRuleEvaluator.evaluateTargets(
+                                            segments = currentDiaSegments,
+                                            workDate = state.result.workDate,
+                                            sendLeadMinutes = config.sendLeadMinutes,
+                                            trackLeadMinutes = config.trackLeadMinutes,
+                                            trackInterval = config.trackInterval,
+                                            stationReplacements = replacements
+                                        )
+                                        val updated = com.example.crewmate.telegram.SubwayNowRuleEvaluator.applyOverrides(baseTargets, overrides)
+                                        todayTrackTargets = updated
+                                        val resetTarget = updated.find { it.trainNo == targetToEdit.trainNo }
+                                        if (resetTarget != null) {
+                                            com.example.crewmate.telegram.SubwayNowManager.rescheduleTarget(context, resetTarget, state.result.workDate)
+                                        }
+                                        android.widget.Toast.makeText(context, "${targetToEdit.trainNo} 기본 계산값으로 초기화되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                        editingTarget = null
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("초기화", fontSize = 12.sp)
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    val prefix = editCommandPrefix.trim()
+                                    val trackSt = editTrackStartTime.trim()
+                                    val sendSt = editSendTime.trim()
+                                    if (prefix.isBlank() || trackSt.isBlank() || sendSt.isBlank()) {
+                                        android.widget.Toast.makeText(context, "모든 입력값을 입력해주세요.", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    val finalCommand = "$prefix $trackSt"
+                                    val overrideObj = com.example.crewmate.telegram.TrackTargetOverride(
+                                        rawCommand = finalCommand,
+                                        trackStartTimeStr = trackSt,
+                                        sendTimeStr = sendSt
+                                    )
+                                    com.example.crewmate.telegram.SubwayNowSettings.setTargetOverride(
+                                        context,
+                                        dateKey,
+                                        targetToEdit.trainNo,
+                                        overrideObj
+                                    )
+
+                                    val overrides = com.example.crewmate.telegram.SubwayNowSettings.getTargetOverrides(context, dateKey)
+                                    val config = com.example.crewmate.telegram.SubwayNowSettings.getConfig(context)
+                                    val replacements = com.example.crewmate.telegram.SubwayNowSettings.getStationReplacements(context)
+                                    val baseTargets = com.example.crewmate.telegram.SubwayNowRuleEvaluator.evaluateTargets(
+                                        segments = currentDiaSegments,
+                                        workDate = state.result.workDate,
+                                        sendLeadMinutes = config.sendLeadMinutes,
+                                        trackLeadMinutes = config.trackLeadMinutes,
+                                        trackInterval = config.trackInterval,
+                                        stationReplacements = replacements
+                                    )
+                                    val updated = com.example.crewmate.telegram.SubwayNowRuleEvaluator.applyOverrides(baseTargets, overrides)
+                                    todayTrackTargets = updated
+                                    val savedTarget = updated.find { it.trainNo == targetToEdit.trainNo }
+                                    if (savedTarget != null) {
+                                        com.example.crewmate.telegram.SubwayNowManager.rescheduleTarget(context, savedTarget, state.result.workDate)
+                                    }
+                                    android.widget.Toast.makeText(context, "${targetToEdit.trainNo} 추적 설정이 수정되었습니다.", android.widget.Toast.LENGTH_SHORT).show()
+                                    editingTarget = null
+                                }
+                            ) {
+                                Text("저장 및 적용", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { editingTarget = null }) {
+                            Text("취소")
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -677,11 +988,47 @@ private fun AttendanceStatusSection(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    text = if (isExpanded) "▲" else "▼",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            isExpanded = true
+                            onRefreshAttendance()
+                        },
+                        enabled = !isRefreshingAttendance,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        if (isRefreshingAttendance) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.8.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "조회 중",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Text(
+                                text = "🔄 새로고침",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (isExpanded) "▲" else "▼",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             AnimatedVisibility(visible = isExpanded) {

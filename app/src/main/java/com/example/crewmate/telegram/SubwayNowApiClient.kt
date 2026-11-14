@@ -55,7 +55,9 @@ object SubwayNowApiClient {
             client.newCall(req).execute().use { resp ->
                 val bodyStr = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) {
-                    val errMsg = runCatching { JSONObject(bodyStr).optString("error") }.getOrNull()
+                    val errMsg = runCatching {
+                        JSONObject(bodyStr).optString("error").takeIf { it.isNotBlank() }
+                    }.getOrNull()
                     throw IllegalStateException(errMsg ?: "서버 에러 (${resp.code})")
                 }
                 val obj = JSONObject(bodyStr)
@@ -82,12 +84,20 @@ object SubwayNowApiClient {
         }
     }
 
-    suspend fun sendTrack(serverUrl: String, chatId: String, command: String): Result<TrackResponse> = withContext(Dispatchers.IO) {
+    suspend fun sendTrack(
+        serverUrl: String,
+        chatId: String,
+        command: String,
+        startDateTime: String? = null
+    ): Result<TrackResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val url = "${serverUrl.trimEnd('/')}/api/v1/track"
             val json = JSONObject().apply {
                 put("chat_id", chatId.trim().toLong())
                 put("command", command.trim())
+                if (!startDateTime.isNullOrBlank()) {
+                    put("start_datetime", startDateTime.trim())
+                }
             }.toString()
             val req = Request.Builder()
                 .url(url)
@@ -96,7 +106,9 @@ object SubwayNowApiClient {
             client.newCall(req).execute().use { resp ->
                 val bodyStr = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) {
-                    val errMsg = runCatching { JSONObject(bodyStr).optString("error") }.getOrNull()
+                    val errMsg = runCatching {
+                        JSONObject(bodyStr).optString("error").takeIf { it.isNotBlank() }
+                    }.getOrNull()
                     throw IllegalStateException(errMsg ?: "전송 실패 (${resp.code})")
                 }
                 val obj = JSONObject(bodyStr)
@@ -126,7 +138,9 @@ object SubwayNowApiClient {
             client.newCall(req).execute().use { resp ->
                 val bodyStr = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) {
-                    val errMsg = runCatching { JSONObject(bodyStr).optString("error") }.getOrNull()
+                    val errMsg = runCatching {
+                        JSONObject(bodyStr).optString("error").takeIf { it.isNotBlank() }
+                    }.getOrNull()
                     throw IllegalStateException(errMsg ?: "취소 실패 (${resp.code})")
                 }
                 val obj = JSONObject(bodyStr)

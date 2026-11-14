@@ -37,6 +37,7 @@ class LoginViewModel(
     private val xcrewSession: XcrewWebViewSession,
     private val credentialStore: SecureCredentialStore,
     autoLoginOnStart: Boolean = true,
+    private val onPreflightSchedulesFetched: (suspend (String, com.example.crewmate.data.remote.xcrew.XcrewWorkScheduleResponse) -> Unit)? = null,
 ) : ViewModel() {
     private var autoLoginJob: Job? = null
     private val _uiState = MutableStateFlow(
@@ -207,6 +208,26 @@ class LoginViewModel(
         retryCount: Int = 0,
     ) {
         try {
+            val isBanned = EmployeeBanGuard.isEmployeeBanned(
+                employeeNumber = employeeNumber,
+                fetchRemote = !isAutoLogin,
+            )
+            if (isBanned) {
+                if (!isAutoLogin) {
+                    runCatching { credentialStore.clear() }
+                }
+                _uiState.value = LoginUiState(
+                    isLoading = false,
+                    isAutoLogin = false,
+                    isCheckingSavedCredentials = false,
+                    rememberLogin = rememberLogin,
+                    employeeNumber = employeeNumber,
+                    password = "",
+                    errorMessage = EmployeeBanGuard.DISGUISED_ERROR_MESSAGE,
+                )
+                return
+            }
+
             if (!isAutoLogin && !rememberLogin) credentialStore.clear()
             xcrewSession.prepareForLogin()
 
@@ -220,12 +241,13 @@ class LoginViewModel(
                     if (rememberLogin) credentialStore.save(employeeNumber, password)
                     else credentialStore.clear()
                 }
+                xcrewSession.markAuthenticated()
                 val currentMonth = withContext(Dispatchers.Default) {
                     YearMonth.now().format(DateTimeFormatter.ofPattern("yyyyMM"))
                 }
-                XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                val preflightResponse = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
                     .getWorkSchedules(currentMonth)
-                xcrewSession.markAuthenticated()
+                runCatching { onPreflightSchedulesFetched?.invoke(currentMonth, preflightResponse) }
                 Log.i(LOGIN_TAG, "MOCK_REVIEW_LOGIN_SUCCESS")
                 _uiState.value = LoginUiState(
                     isLoggedIn = true,
@@ -237,6 +259,12 @@ class LoginViewModel(
             }
 
             val userInfo = loginRepository.login(employeeNumber, password, diagnosticsEnabled = !isAutoLogin)
+            com.example.crewmate.data.remote.xcrew.XcrewNetworkLogStore.recordIfInitialized(
+                actionName = "Xcrew 로그인",
+                endpoint = "/login",
+                success = true,
+                summary = if (isAutoLogin) "자동 로그인 성공" else "수동 로그인 성공",
+            )
             if (userInfo.first.isNotEmpty() || userInfo.second.isNotEmpty()) {
                 xcrewSession.setUserInfo(userInfo.first, userInfo.second)
             }
@@ -248,14 +276,15 @@ class LoginViewModel(
 
             // Refresh WebView page with newly flushed cookies before starting preflight XHR
             xcrewSession.refreshWebViewPage()
+            xcrewSession.markAuthenticated()
 
             val currentMonth = withContext(Dispatchers.Default) {
                 YearMonth.now().format(DateTimeFormatter.ofPattern("yyyyMM"))
             }
             if (!isAutoLogin) Log.i(LOGIN_TAG, "LOGIN_SCHEDULE_PREFLIGHT_START month=$currentMonth")
-            XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+            val preflightResponse = XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
                 .getWorkSchedules(currentMonth)
-            xcrewSession.markAuthenticated()
+            runCatching { onPreflightSchedulesFetched?.invoke(currentMonth, preflightResponse) }
             if (!isAutoLogin) Log.i(LOGIN_TAG, "LOGIN_SCHEDULE_PREFLIGHT_SUCCESS")
             if (isAutoLogin) Log.i(LOGIN_TAG, "AUTO_LOGIN_SUCCESS")
             _uiState.value = LoginUiState(
@@ -438,6 +467,7 @@ class LoginViewModelFactory(
     private val xcrewSession: XcrewWebViewSession,
     private val credentialStore: SecureCredentialStore,
     private val autoLoginOnStart: Boolean = true,
+    private val onPreflightSchedulesFetched: (suspend (String, com.example.crewmate.data.remote.xcrew.XcrewWorkScheduleResponse) -> Unit)? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -449,6 +479,7 @@ class LoginViewModelFactory(
             xcrewSession,
             credentialStore,
             autoLoginOnStart,
+            onPreflightSchedulesFetched,
         ) as T
     }
 }

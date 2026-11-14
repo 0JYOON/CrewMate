@@ -10,7 +10,6 @@ import com.example.crewmate.data.remote.xcrew.XcrewNetworkException
 import com.example.crewmate.data.remote.xcrew.XcrewSessionExpiredException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,9 +86,25 @@ class ScheduleViewModel(
 
     fun nextMonth() = loadMonth(selectedMonth.plusMonths(1), debounce = true)
 
-    fun retrySelectedMonth() = loadMonth(selectedMonth)
+    fun retrySelectedMonth() = loadMonth(selectedMonth, forceRefresh = true)
 
-    private fun loadMonth(monthValue: YearMonth, debounce: Boolean = false) {
+    fun refreshCurrentMonthFromServer() {
+        val month = selectedMonth.toApiMonth()
+        val requestId = ++requestGeneration
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            try {
+                val result = repository.getSchedules(month, forceRefresh = true)
+                if (requestId == requestGeneration) {
+                    _uiState.value = ScheduleUiState.Success(result.month, result.schedules)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+    }
+
+    private fun loadMonth(monthValue: YearMonth, debounce: Boolean = false, forceRefresh: Boolean = false) {
         loadJob?.cancel()
         selectedMonth = monthValue
         observeMemos(monthValue)
@@ -99,7 +114,7 @@ class ScheduleViewModel(
         loadJob = viewModelScope.launch {
             try {
                 if (debounce) delay(MONTH_CHANGE_DEBOUNCE_MILLIS)
-                val result = repository.getSchedules(month)
+                val result = repository.getSchedules(month, forceRefresh = forceRefresh)
                 if (requestId == requestGeneration) {
                     _uiState.value = ScheduleUiState.Success(result.month, result.schedules)
                 }
