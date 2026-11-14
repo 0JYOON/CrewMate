@@ -485,3 +485,6 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
    - `LabsManager.kt`: `crewmate_prefs` 기반 실시간 관찰(`rememberLabEnabled`, `rememberAllLabStates`) 및 `runLabSafely` 안전 실행 래퍼 구현.
    - `LabSafeContainer.kt`: 실험실 UI 예외/오류 시 앱 본체 영향을 차단하고 원클릭 비활성화를 제공하는 폴백 컨테이너 구현.
    - `LabsSettingsScreen.kt`, `SettingsScreen.kt`, `AppNavigation.kt`: 설정 진입 카드, 전용 실험실 관리 화면(`Routes.Labs`), 독립 화면형 실험실의 햄버거 메뉴 동적 노출 구조 연동.
+3. **클라우드 CI/CD 및 Private 소스 저장소 연동 (`.github/workflows/android-ci.yml`, `app/build.gradle.kts`)**:
+   - `0JYOON/CrewMate-Source`를 `source` 원격 저장소로 연결하고, 푸시/PR마다 `test assembleDebug` 및 Debug APK 아티팩트를 생성하는 GitHub Actions 워크플로 추가.
+   - `app/build.gradle.kts` 서명 설정이 환경 변수(`KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`)를 우선 참조하도록 개선해 GitHub Secrets 기반 Release APK 빌드 지원.

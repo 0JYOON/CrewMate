@@ -15,9 +15,11 @@
   - `SettingsScreen`에 `🧪 실험실 (CrewMate Labs)` 진입 카드 및 전용 설정 화면(`Routes.Labs`) 추가, 활성화된 독립 화면형 실험실의 햄버거 메뉴 동적 노출 구조 완비.
 - **3. 보안 정비 (`.gitignore`)**:
   - `crewmate-release-key.jks`를 Git 추적에서 분리하고 `*.jks`, `*.keystore`, `.env` 무시 규칙 추가.
+- **4. GitHub Actions 클라우드 APK 빌드·테스트 자동화 (`.github/workflows/android-ci.yml`, `app/build.gradle.kts`)**:
+  - Private 소스 저장소(`0JYOON/CrewMate-Source`) 푸시 시 단위 테스트 및 Debug APK 자동 빌드·아티팩트 업로드, 태그/수동 실행 시 GitHub Secrets 기반 Release 서명 APK 빌드 파이프라인 구축.
 - **주요 수정/신설 파일**:
   - `labs/LabFeature.kt`, `labs/LabsManager.kt`, `labs/LabSafeContainer.kt`, `labs/LabsSettingsScreen.kt`, `labs/LabsManagerTest.kt`
-  - `settings/SettingsScreen.kt`, `navigation/AppNavigation.kt`, `.gitignore`
+  - `settings/SettingsScreen.kt`, `navigation/AppNavigation.kt`, `.gitignore`, `.github/workflows/android-ci.yml`, `app/build.gradle.kts`
 
 ---
 

@@ -20,9 +20,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("${rootDir}/crewmate-release-key.jks")
-            storePassword = "crewmate2026!"
-            keyAlias = "crewmate_key"
-            keyPassword = "crewmate2026!"
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "crewmate2026!"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "crewmate_key"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "crewmate2026!"
         }
     }
 
