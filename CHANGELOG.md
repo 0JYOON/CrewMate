@@ -4,6 +4,23 @@
 
 ---
 
+## [v1.0.18] - 2026-11-15
+
+### 🧾 실험실 2호(우선순위 3번): 개인근무명세서 조회 및 예상 승무여비·승무수당 판정 기능 구현
+- **Xcrew 개인근무명세서 API 실데이터 연동 (`XcrewWebViewXhrDataSource.kt`)**:
+  - `https://xcrew.korail.com/extrCrewMg/searchExtrIndWrkSpec.do` (`pjtDt=yyyyMMdd`) 엔드포인트 연동 (`fetchPersonalWorkSpec`).
+- **핵심 5개 항목 표출 & 최하단 합계 (`PayStatementModels.kt`, `PayStatementParser.kt`, `PayStatementScreen.kt`, `PayStatementViewModel.kt`)**:
+  - 일자·다이아번호와 함께 `시간(totPjtTnum)`, `거리(totPjtDst)`, `휴일(hldyTnum)`, `연장(extnTnum)`, `야간(nihtTnum)` 항목만 간결하게 표출하고 최하단에 전체 합계를 산출.
+- **예상 승무여비·승무수당 충족 여부 카드 및 900번대 대기근무 별도 판정**:
+  - **승무여비**: 휴일근무 포함 승무실적(거리 > 0) 근무일수 **20일 이상** 시 전액 지급 충족 판정.
+  - **승무수당**: 휴일근무 제외 승무실적(거리 > 0) 근무일수 **17일 이상** 시 전액 지급 충족 판정.
+  - **900번대 대기근무(거리 0)** 감지 시, 미승무 대기를 제외한 실제 지급 산정 일수와 대기 포함 단순 출근일수를 분리 표출하여 혼동을 방지.
+- **실험실 활성화 연동 (`LabFeature.kt`, `AppNavigation.kt`)**:
+  - `실험실`에서 `개인근무명세서 조회`를 켜면 상단 `☰` 햄버거 메뉴에 `🧪 개인근무명세서 조회` 메뉴가 동적 노출.
+- **단위 테스트 추가 (`PayStatementParserTest.kt`)**: JSON 파싱, 합계, 휴일·대기근무 규칙 단위 테스트 통과.
+
+---
+
 ## [v1.0.17] - 2026-11-14
 
 ### 🧪 실험실 진입 메뉴 위치 개선 (햄버거 메뉴 독립 배치)

@@ -54,7 +54,7 @@ enum class LabFeature(
         entryType = LabEntryType.STANDALONE_SCREEN,
         requiresOnline = true,
         route = "lab-pay-statement",
-        isImplemented = false
+        isImplemented = true
     ),
     COLLEAGUE_COMPARE(
         id = "colleague_compare",

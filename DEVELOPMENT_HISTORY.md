@@ -515,3 +515,15 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   1. `AppNavigation.kt`: 상단 `☰` 햄버거 드롭다운 메뉴의 `설정` 바로 아래(`정밀 알람` 위)에 `실험실`(`Routes.Labs`) 메뉴 항목 추가.
   2. `SettingsScreen.kt`: 설정 화면 하단에 있던 `🧪 실험실` 카드 및 `onOpenLabs` 파라미터 제거.
 - **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).
+
+
+---
+
+## STEP 45: 실험실 `개인근무명세서 조회` 실데이터 연동 및 여비/수당 판정 기능 구현 (2026-11-15)
+- **작업 내용**:
+  1. `XcrewWebViewXhrDataSource.kt`: `/extrCrewMg/searchExtrIndWrkSpec.do` (`pjtDt=yyyyMMdd`) 연동 메서드 `fetchPersonalWorkSpec` 추가.
+  2. `labs/paystatement/PayStatementModels.kt`, `PayStatementParser.kt`: `totPjtTnum`(시간), `totPjtDst`(거리), `hldyTnum`(휴일), `extnTnum`(연장), `nihtTnum`(야간) 파싱·합계·승무여비(휴일 포함 20일) 및 승무수당(휴일 제외 17일, 거리 > 0 실적 필수)·900번대 대기근무(거리 0 제외) 별도 판정 엔진 구현.
+  3. `labs/paystatement/PayStatementViewModel.kt`, `PayStatementScreen.kt`: 월별 조회/새로고침 바, 핵심 5열 표 + 최하단 합계 행, 예상 승무여비·승무수당 충족 여부 카드(900번대 대기근무 분리 안내 포함) UI 구현.
+  4. `LabFeature.kt`, `AppNavigation.kt`: `PAY_STATEMENT.isImplemented = true` 활성화 및 `LabSafeContainer` 격리 라우트(`lab-pay-statement`) 연결.
+  5. `PayStatementParserTest.kt`: Xcrew 실응답 JSON 파싱 및 여비/수당/대기근무 판정 규칙 단위 테스트 추가.
+- **검증**: `./gradlew.bat test assembleDebug` 0 오류 통과 (`BUILD SUCCESSFUL`).

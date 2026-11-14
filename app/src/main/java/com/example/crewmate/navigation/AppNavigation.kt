@@ -446,6 +446,23 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                         xcrewSession = xcrewSession
                     )
                 }
+                composable(com.example.crewmate.labs.LabFeature.PAY_STATEMENT.route!!) {
+                    val dataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    val viewModel: com.example.crewmate.labs.paystatement.PayStatementViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(
+                            factory = com.example.crewmate.labs.paystatement.PayStatementViewModelFactory(dataSource)
+                        )
+                    com.example.crewmate.labs.LabSafeContainer(
+                        feature = com.example.crewmate.labs.LabFeature.PAY_STATEMENT,
+                        onDisable = {
+                            navController.popBackStack()
+                        }
+                    ) {
+                        com.example.crewmate.labs.paystatement.PayStatementScreen(viewModel = viewModel)
+                    }
+                }
             }
         }
 

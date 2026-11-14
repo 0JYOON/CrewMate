@@ -38,6 +38,8 @@ private const val XCREW_IND_CREW_WRK_URL = "https://xcrew.korail.com/extrCrewMg/
 private const val XCREW_IND_CREW_WRK_PATH = "/extrCrewMg/searchExtrIndCrewWrk.do"
 private const val XCREW_NON_OP_URL = "https://xcrew.korail.com/extrCrewMg/searchExtrNonActvPstt.do"
 private const val XCREW_NON_OP_PATH = "/extrCrewMg/searchExtrNonActvPstt.do"
+private const val XCREW_IND_WRK_SPEC_URL = "https://xcrew.korail.com/extrCrewMg/searchExtrIndWrkSpec.do"
+private const val XCREW_IND_WRK_SPEC_PATH = "/extrCrewMg/searchExtrIndWrkSpec.do"
 private const val XCREW_XHR_ACCEPT = "application/json, text/javascript, */*; q=0.01"
 private const val XHR_TIMEOUT_MILLIS = 40_000L
 
@@ -413,6 +415,28 @@ class XcrewWebViewXhrDataSource(
 
         return withContext(Dispatchers.Default) {
             AttendanceStatusParser().parse(responseText)
+        }
+    }
+
+    /**
+     * 개인근무명세서(/extrCrewMg/searchExtrIndWrkSpec.do) 조회.
+     */
+    suspend fun fetchPersonalWorkSpec(pjtDt: String): List<com.example.crewmate.labs.paystatement.PayStatementRow> {
+        require(pjtDt.matches(Regex("\\d{8}"))) { "pjtDt must be yyyyMMdd" }
+        val webView = session.webView ?: throw MissingXcrewWebViewException()
+        session.awaitPageReady()
+
+        val xhrResponse = request(
+            webView = webView,
+            path = XCREW_IND_WRK_SPEC_PATH,
+            url = XCREW_IND_WRK_SPEC_URL,
+            fields = listOf("pjtDt" to pjtDt),
+            logLabel = "pjtDt=$pjtDt",
+        )
+        val responseText = xhrResponse.requireJsonResponse(XCREW_IND_WRK_SPEC_URL)
+
+        return withContext(Dispatchers.Default) {
+            com.example.crewmate.labs.paystatement.PayStatementParser.parse(responseText)
         }
     }
 
