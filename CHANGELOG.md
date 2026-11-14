@@ -4,6 +4,26 @@
 
 ---
 
+## [v1.0.44] - 2026-11-15
+
+### 개요
+- 실험실 3호 기능 **동료 근무 비교 (`colleague_compare`)** 안드로이드 구현 및 단위 테스트/빌드 검증 완료
+
+### 주요 변경 사항
+- **동료 근무 비교 화면 및 상태 관리**:
+  - `ColleagueCompareScreen.kt` / `ColleagueCompareViewModel.kt`: 좌측 이름 열 고정 + 상단 날짜 헤더 연동 가로 스크롤 캘린더 그리드 구현
+  - 본인 월간 근무 자동 로드 (`WorkScheduleRepositoryImpl`), 사번/이름 기반 Xcrew 동료 검색 및 월간 근무표 조회 (`CrewAssignmentDao` + `fetchCrewWorkStatus` + `fetchPersonalWorkSchedule`)
+  - 가상 인물 추가/편집 및 순환 패턴(`.xlsx` / `.csv` / `.txt`) 파일 임포트, 가상 셀 수동 오버라이드 및 출퇴근 시간 표시 옵션 (`⚙️ 옵션`) 지원
+- **로컬 저장 및 파서**:
+  - `ColleagueCompareModels.kt`, `ColleagueCompareStorage.kt`, `PatternFileParser.kt`: UTF-8/EUC-KR 텍스트·CSV 및 `ZipInputStream` + `DocumentBuilderFactory` 기반 `.xlsx` 파싱, SharedPreferences JSON 영속화
+- **네비게이션 및 실험실 등록**:
+  - `LabFeature.kt`: `COLLEAGUE_COMPARE` (`isImplemented = true`) 활성화
+  - `AppNavigation.kt`: `lab-colleague-compare` 라우트 연결
+- **단위 테스트**:
+  - `PatternFileParserTest.kt`: `.txt`/`.csv`, `.xlsx` 파싱 및 순환 패턴/수동 오버라이드 계산 검증
+
+---
+
 ## [v1.0.43] - 2026-11-15
 
 ### 🧪 v1.0.42 최신 정식 베이스 복구 + 실험실(CrewMate Labs) · 행로도 · 개인근무명세서 통합

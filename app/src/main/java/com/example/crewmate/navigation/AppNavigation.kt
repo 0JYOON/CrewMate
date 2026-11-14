@@ -788,6 +788,33 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                         com.example.crewmate.labs.paystatement.PayStatementScreen(viewModel = viewModel)
                     }
                 }
+                composable(com.example.crewmate.labs.LabFeature.COLLEAGUE_COMPARE.route!!) {
+                    val dataSource = remember(xcrewSession) {
+                        XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
+                    }
+                    val database = remember(appContext) {
+                        com.example.crewmate.database.CrewMateDatabase.getInstance(appContext)
+                    }
+                    val storage = remember(appContext) {
+                        com.example.crewmate.labs.colleaguecompare.ColleagueCompareStorage(appContext)
+                    }
+                    val viewModel: com.example.crewmate.labs.colleaguecompare.ColleagueCompareViewModel =
+                        androidx.lifecycle.viewmodel.compose.viewModel(
+                            factory = com.example.crewmate.labs.colleaguecompare.ColleagueCompareViewModelFactory(
+                                dataSource = dataSource,
+                                workScheduleDao = database.workScheduleDao(),
+                                crewAssignmentDao = database.crewAssignmentDao(),
+                                storage = storage,
+                                isOfflineModeProvider = { isOfflineMode }
+                            )
+                        )
+                    com.example.crewmate.labs.LabSafeContainer(
+                        feature = com.example.crewmate.labs.LabFeature.COLLEAGUE_COMPARE,
+                        onDisable = { navController.popBackStack() }
+                    ) {
+                        com.example.crewmate.labs.colleaguecompare.ColleagueCompareScreen(viewModel = viewModel)
+                    }
+                }
             }
         }
 

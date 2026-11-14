@@ -64,7 +64,7 @@ enum class LabFeature(
         entryType = LabEntryType.STANDALONE_SCREEN,
         requiresOnline = false,
         route = "lab-colleague-compare",
-        isImplemented = false
+        isImplemented = true
     ),
     HANDOVER_CREW(
         id = "handover_crew",

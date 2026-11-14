@@ -1130,3 +1130,15 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 3. **실험실 1호(행로도) & 2호(개인근무명세서) 재연결**:
    - `DiaDetailCard.kt`에 `RouteDiagramView` 연결, `XcrewWebViewXhrDataSource.kt`에 `fetchPersonalWorkSpec`(`/extrCrewMg/searchExtrIndWrkSpec.do`) 연결 및 `PayStatementScreen` 라우팅 완료.
 4. **검증**: `./gradlew.bat test assembleDebug` 전 단위 테스트 및 디버그 APK 빌드 0 오류 통과 (`BUILD SUCCESSFUL`).
+
+
+### STEP 71: 실험실 3호 '동료 근무 비교 (`colleague_compare`)' 구현 (`v1.0.44`)
+- **배경**: 본인 근무표와 동료(Xcrew 조회) 및 가상 인물(순환 패턴·파일 임포트)의 월간 근무를 한눈에 비교하는 실험실 3호 기능 구현.
+- **주요 구현 내용**:
+  - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareModels.kt`: 비교 셀(`CompareDayCell`), 인물(`ComparePerson`), 표시 옵션(`CompareDisplayOptions`) 데이터 모델 정의.
+  - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/PatternFileParser.kt`: `.txt`/`.csv`(UTF-8/EUC-KR) 및 `.xlsx`(ZIP+XML) 순환 패턴 파서와 기준일 기반 순환 다이아 계산(`resolveCyclicDia`) 구현.
+  - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareStorage.kt`: 비교 대상 목록, 가상 인물 설정 및 셀 수동 오버라이드, 표시 옵션의 `SharedPreferences` JSON 저장/복원 구현.
+  - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareViewModel.kt`: 본인 월간 근무 조회, Xcrew 동료 검색 및 월간 근무표 연동, 가상 인물/오버라이드 관리 및 온라인 새로고침 상태 관리.
+  - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt`: 좌측 인물 열 고정·날짜 가로 스크롤 비교 표, 동료 검색 다이얼로그, 가상 인물 및 `.xlsx/.csv/.txt` 파일 선택 다이얼로그, 옵션/셀 편집 UI 구현.
+  - `LabFeature.kt` 및 `AppNavigation.kt`: `COLLEAGUE_COMPARE` 활성화 및 `lab-colleague-compare` 라우트 연결.
+  - `app/src/test/java/com/example/crewmate/labs/colleaguecompare/PatternFileParserTest.kt`: 파서 및 순환 다이아 계산 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
