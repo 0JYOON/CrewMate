@@ -4,6 +4,23 @@
 
 ---
 
+## [v1.0.14] - 2026-11-14
+
+### 🧪 실험실(CrewMate Labs) 기능 프레임워크 기반 구축 및 보안 정비
+- **1. 실험실 중앙 레지스트리 및 실시간 상태 관리 (`LabFeature.kt`, `LabsManager.kt`)**:
+  - 향후 도입될 5대 실험실 기능(`route_diagram`, `pay_statement`, `colleague_compare`, `handover_crew`, `dia_rating`)을 CrewMate-Alpha와 동일한 ID 체계로 통합 관리하는 레지스트리 신설.
+  - `crewmate_prefs`의 `lab_enabled_<id>` 키를 통해 `DataBackupManager` 백업/복원에 자동 연동되며, `rememberLabEnabled`/`rememberAllLabStates`로 앱 재시작 없이 UI를 즉시 갱신.
+- **2. 오류 격리 및 설정·네비게이션 연동 (`LabSafeContainer.kt`, `LabsSettingsScreen.kt`, `SettingsScreen.kt`, `AppNavigation.kt`)**:
+  - 실험실 기능 오류 시 앱 본체를 보호하고 원클릭 비활성화 폴백을 제공하는 `LabSafeContainer` 및 `LabsManager.runLabSafely` 도입.
+  - `SettingsScreen`에 `🧪 실험실 (CrewMate Labs)` 진입 카드 및 전용 설정 화면(`Routes.Labs`) 추가, 활성화된 독립 화면형 실험실의 햄버거 메뉴 동적 노출 구조 완비.
+- **3. 보안 정비 (`.gitignore`)**:
+  - `crewmate-release-key.jks`를 Git 추적에서 분리하고 `*.jks`, `*.keystore`, `.env` 무시 규칙 추가.
+- **주요 수정/신설 파일**:
+  - `labs/LabFeature.kt`, `labs/LabsManager.kt`, `labs/LabSafeContainer.kt`, `labs/LabsSettingsScreen.kt`, `labs/LabsManagerTest.kt`
+  - `settings/SettingsScreen.kt`, `navigation/AppNavigation.kt`, `.gitignore`
+
+---
+
 ## [v1.0.13] - 2026-10-28
 
 ### 🤖 SubwayNowBot 텔레그램 열차 추적 자동 연동 및 다이아 기반 관제 시스템 완비

@@ -82,7 +82,9 @@ enum class CalendarFontScaleOption(val scale: Float, val title: String) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onOpenLabs: () -> Unit = {}
+) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
 
@@ -1142,6 +1144,40 @@ fun SettingsScreen() {
                         }
                     }
                 }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        val labStates = com.example.crewmate.labs.rememberAllLabStates()
+        val activeLabCount = labStates.values.count { it }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenLabs() },
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("🧪 실험실 (CrewMate Labs)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (activeLabCount > 0) "실험적 기능 관리 (현재 ${activeLabCount}개 활성화)"
+                        else "정식 도입 전 새로운 실험 기능을 미리 켜고 끌 수 있습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 

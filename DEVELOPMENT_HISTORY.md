@@ -475,3 +475,13 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 7. `memos` - 날짜별 개인 메모 저장 테이블
 8. `leaves` - 개인 연차 및 휴가 저장 테이블
 9. `bot_command_histories` - SubwayNowBot 텔레그램 명령어 전송 이력 및 상태 관리 테이블 (v8 신설)
+
+
+### STEP 41: 실험실(CrewMate Labs) 프레임워크 기반 구축 및 키스토어 보안 정비 (2026-11-14)
+1. **보안 및 브랜치 정비**:
+   - `crewmate-release-key.jks`를 Git 인덱스에서 분리(`git rm --cached`)하고 `.gitignore`에 `*.jks`, `*.keystore`, `.env` 규칙을 추가하여 키스토어 유출 위험을 차단함.
+2. **실험실(Labs) 아키텍처 기반 구축 (`labs/` 패키지)**:
+   - `LabFeature.kt`: Android와 CrewMate-Alpha가 동일한 `id` 키를 공유하는 중앙 기능 레지스트리 신설 (`route_diagram`, `pay_statement`, `colleague_compare`, `handover_crew`, `dia_rating`).
+   - `LabsManager.kt`: `crewmate_prefs` 기반 실시간 관찰(`rememberLabEnabled`, `rememberAllLabStates`) 및 `runLabSafely` 안전 실행 래퍼 구현.
+   - `LabSafeContainer.kt`: 실험실 UI 예외/오류 시 앱 본체 영향을 차단하고 원클릭 비활성화를 제공하는 폴백 컨테이너 구현.
+   - `LabsSettingsScreen.kt`, `SettingsScreen.kt`, `AppNavigation.kt`: 설정 진입 카드, 전용 실험실 관리 화면(`Routes.Labs`), 독립 화면형 실험실의 햄버거 메뉴 동적 노출 구조 연동.

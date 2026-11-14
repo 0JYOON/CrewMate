@@ -67,6 +67,7 @@ object Routes {
     const val NonOpStatus = "non-op-status"
     const val PersonalSchedule = "personalSchedule"
     const val Settings = "settings"
+    const val Labs = "labs"
     const val WorkAlarmSettings = "work-alarm-settings"
 }
 
@@ -432,7 +433,18 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     com.example.crewmate.schedule.NonOpStatusScreen(viewModel)
                 }
                 composable(Routes.Settings) {
-                    SettingsScreen()
+                    SettingsScreen(
+                        onOpenLabs = {
+                            navController.navigate(Routes.Labs) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                }
+                composable(Routes.Labs) {
+                    com.example.crewmate.labs.LabsSettingsScreen(
+                        onBack = { navController.popBackStack() }
+                    )
                 }
                 composable(Routes.WorkAlarmSettings) {
                     com.example.crewmate.alarm.WorkAlarmSettingsScreen(
@@ -478,6 +490,15 @@ private fun CrewMateTopBar(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE) }
+    val labStates = com.example.crewmate.labs.rememberAllLabStates()
+    val enabledStandaloneLabs = remember(labStates) {
+        com.example.crewmate.labs.LabFeature.entries.filter { feature ->
+            feature.isImplemented &&
+                feature.entryType == com.example.crewmate.labs.LabEntryType.STANDALONE_SCREEN &&
+                feature.route != null &&
+                labStates[feature] == true
+        }
+    }
     var autoOfflineEnabled by remember { mutableStateOf(AutoOfflineManager.isEnabled(context)) }
     var isReturnSkipped by remember { mutableStateOf(AutoOfflineManager.isReturnSkipped(context)) }
 
@@ -572,6 +593,21 @@ private fun CrewMateTopBar(
                                     onSelectMenu(Routes.NonOpStatus)
                                 },
                             )
+                            if (enabledStandaloneLabs.isNotEmpty()) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+                                enabledStandaloneLabs.forEach { labFeature ->
+                                    val targetRoute = labFeature.route ?: return@forEach
+                                    MenuDropdownRow(
+                                        title = "🧪 ${labFeature.title}",
+                                        selected = currentRoute == targetRoute,
+                                        enabled = !labFeature.requiresOnline || !isOfflineMode,
+                                        onClick = {
+                                            menuExpanded = false
+                                            onSelectMenu(targetRoute)
+                                        },
+                                    )
+                                }
+                            }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                             MenuDropdownRow(
                                 title = "설정",
