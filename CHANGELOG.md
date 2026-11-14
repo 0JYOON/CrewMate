@@ -11,7 +11,7 @@
 
 ### 주요 변경 사항
 - **다이아 평가 엔진 및 설정/오버라이드 저장소**:
-  - `DiaRatingModels.kt`, `DiaRatingEvaluator.kt`, `DiaRatingStorage.kt`: 운전시간·총사업시간·야간 취침역(선호/비선호) 기준 및 다이아별 수동 등급 지정(`경사업`/`보통`/`중사업`/`★ 선호`) 판정 및 `SharedPreferences` + `StateFlow` 실시간 반영
+  - `DiaRatingModels.kt`, `DiaRatingEvaluator.kt`, `DiaRatingStorage.kt`: 운전시간·총사업시간·야간 취침역(선호/비선호) 기준 및 다이아별 수동 등급 지정(`경사업`/`보통`/`중사업`/`★ 선호`/`⚠️ 기피`) 판정 및 `SharedPreferences` + `StateFlow` 실시간 반영
   - `DiaRatingDialogs.kt`: 판정 근거 조회 및 수동 등급 지정 다이얼로그(`DiaRatingDetailDialog`), 평가 기준·취침역·셀 음영 설정 다이얼로그(`DiaRatingRulesDialog`)
 - **월별 근무표·다이아 상세·실험실 설정 연동**:
   - `ScheduleScreen.kt`: 달력 날짜 셀 우상단 등급 뱃지(`경`/`중`/`강`/`★`) 및 선택적 배경 음영 표출

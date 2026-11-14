@@ -96,6 +96,11 @@ class DiaRatingEvaluatorTest {
         assertEquals(DiaRatingGrade.CUSTOM, overridden?.grade)
         assertEquals(true, overridden?.isManualOverride)
 
+        val avoidRules = DiaRatingRules(customOverrides = mapOf("16315" to DiaRatingGrade.AVOID))
+        val avoided = DiaRatingEvaluator.evaluate("16315", detailWith(200, 400), null, avoidRules)
+        assertEquals(DiaRatingGrade.AVOID, avoided?.grade)
+        assertEquals("⚠️", avoided?.grade?.shortBadge)
+
         assertNull(DiaRatingEvaluator.evaluate("S", null, null, rules))
         assertNull(DiaRatingEvaluator.evaluate("연차", null, null, rules))
     }
