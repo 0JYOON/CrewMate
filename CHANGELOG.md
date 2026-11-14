@@ -4,6 +4,24 @@
 
 ---
 
+## [v1.0.45] - 2026-11-15
+
+### 개요
+- 실험실 4호 기능 **교대승무원 확인 (`handover_crew`)** 안드로이드 구현, 단위 테스트·빌드 검증 및 폰 설치 완료
+
+### 주요 변경 사항
+- **교대승무원 조회 UI 및 다이아 카드 통합**:
+  - `DiaDetailCard.kt`: `LabFeature.HANDOVER_CREW` 활성화 시(비캡처 모드) 열차번호 뱃지 옆에 `👥` 버튼 조건부 렌더링 및 `HandoverCrewDialog` 연결
+  - `HandoverCrewDialog.kt`: 직전 승무원(인계) · 내 구간 · 교대 승무원(후속) · 전체 열차 릴레이 요약 팝업 표출 (`LabSafeContainer` 격리 적용)
+- **조회 저장소 및 릴레이 판정 로직**:
+  - `HandoverCrewModels.kt`, `HandoverCrewResolver.kt`: 심야 자정 경과 구간 날짜 보정(`resolveSegmentDate`) 및 시간/역 기반 직전·후속 승무원 판정(`resolveHandover`)
+  - `HandoverCrewRepository.kt`: 온라인 시 `TrainCrewSearchRepository` 실시간 조회, 오프라인/실패 시 Room DB(`crew_assignments` + `dia_details` + `dia_census`) 캐시 폴백 조회
+- **실험실 레지스트리 및 단위 테스트**:
+  - `LabFeature.kt`: `HANDOVER_CREW.isImplemented = true` 활성화
+  - `HandoverCrewResolverTest.kt`: 3구간 릴레이, 심야 자정 경과, 구간 날짜 보정 단위 테스트 추가
+
+---
+
 ## [v1.0.44] - 2026-11-15
 
 ### 개요

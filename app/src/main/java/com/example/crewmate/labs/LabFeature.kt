@@ -73,7 +73,7 @@ enum class LabFeature(
         stage = LabStage.EXPERIMENTAL,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,
-        isImplemented = false
+        isImplemented = true
     ),
     DIA_RATING(
         id = "dia_rating",

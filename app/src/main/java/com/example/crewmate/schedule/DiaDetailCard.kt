@@ -77,9 +77,11 @@ fun DiaDetailCard(
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val routeDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
+    val handoverCrewLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.HANDOVER_CREW)
     var showRouteDiagram by remember(routeDiagramLabEnabled, isCaptureMode) {
         mutableStateOf(routeDiagramLabEnabled && !isCaptureMode)
     }
+    var selectedHandoverSegment by remember { mutableStateOf<DiaDetailSegment?>(null) }
 
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
@@ -201,19 +203,27 @@ fun DiaDetailCard(
 
                         val isSandwiched = item.isSandwichedGamsi && hideSandwichedGamsi
                         val isHiddenItem = isRank3 || isSandwiched
+                        val showHandoverBtn = handoverCrewLabEnabled && !isCaptureMode &&
+                            trn.isNotEmpty() && trn != "도보" && trn.any(Char::isDigit)
 
                         if (isHiddenItem) {
                             if (isCaptureMode) {
                                 if (showHiddenDetails) {
-                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                                        selectedHandoverSegment = seg
+                                    }
                                 }
                             } else {
                                 AnimatedVisibility(visible = showHiddenDetails) {
-                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                                        selectedHandoverSegment = seg
+                                    }
                                 }
                             }
                         } else {
-                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate)
+                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                                selectedHandoverSegment = seg
+                            }
                         }
                     }
                     
@@ -240,6 +250,17 @@ fun DiaDetailCard(
                 }
             }
         }
+    }
+
+    val targetSeg = selectedHandoverSegment
+    if (targetSeg != null && handoverCrewLabEnabled && !isCaptureMode) {
+        com.example.crewmate.labs.handovercrew.HandoverCrewDialog(
+            workDate = workDate ?: LocalDate.now(),
+            currentDiaNo = schedule.diaNo.orEmpty(),
+            allSegments = detail.segments,
+            targetSegment = targetSeg,
+            onDismiss = { selectedHandoverSegment = null }
+        )
     }
 }
 
@@ -389,6 +410,8 @@ private fun SegmentRow(
     trn: String,
     isLast: Boolean,
     workDate: LocalDate? = null,
+    showHandoverButton: Boolean = false,
+    onHandoverClick: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val seg = item.segment
@@ -458,29 +481,47 @@ private fun SegmentRow(
             contentAlignment = Alignment.CenterStart
         ) {
             if (trn.isNotEmpty()) {
-                Surface(
-                    color = if (isRank1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.clickable {
-                        val dateStr = (workDate ?: LocalDate.now()).format(DateTimeFormatter.BASIC_ISO_DATE)
-                        val cleanTrn = trn.trim()
-                        val url = "https://rail.blue/railroad/logis/Default.aspx?date=$dateStr&train=$cleanTrn#!"
-                        runCatching {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        color = if (isRank1) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.clickable {
+                            val dateStr = (workDate ?: LocalDate.now()).format(DateTimeFormatter.BASIC_ISO_DATE)
+                            val cleanTrn = trn.trim()
+                            val url = "https://rail.blue/railroad/logis/Default.aspx?date=$dateStr&train=$cleanTrn#!"
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
                             }
-                            context.startActivity(intent)
+                        }
+                    ) {
+                        Text(
+                            text = "$trn $cat",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRank1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            maxLines = 1
+                        )
+                    }
+                    if (showHandoverButton) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.clickable(onClick = onHandoverClick)
+                        ) {
+                            Text(
+                                text = "👥",
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
                         }
                     }
-                ) {
-                    Text(
-                        text = "$trn $cat",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isRank1) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        maxLines = 1
-                    )
                 }
             } else if (cat.isNotEmpty()) {
                 Text(
@@ -577,8 +618,6 @@ private fun SegmentRow(
         }
     }
 }
-
-
 
 private data class SegmentDateTime(
     val startDateTime: LocalDateTime?,

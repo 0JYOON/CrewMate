@@ -1142,3 +1142,14 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt`: 좌측 인물 열 고정·날짜 가로 스크롤 비교 표, 동료 검색 다이얼로그, 가상 인물 및 `.xlsx/.csv/.txt` 파일 선택 다이얼로그, 옵션/셀 편집 UI 구현.
   - `LabFeature.kt` 및 `AppNavigation.kt`: `COLLEAGUE_COMPARE` 활성화 및 `lab-colleague-compare` 라우트 연결.
   - `app/src/test/java/com/example/crewmate/labs/colleaguecompare/PatternFileParserTest.kt`: 파서 및 순환 다이아 계산 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
+
+
+### STEP 72: 실험실 4호 '교대승무원 확인 (`handover_crew`)' 구현 (`v1.0.45`)
+- **배경**: 오늘의 근무·다이아 조회 화면에서 열차번호 뱃지 옆 버튼(`👥`)으로 해당 열차의 직전(인계) 승무원과 교대(후속) 승무원을 즉시 확인하는 실험실 4호 기능 구현.
+- **주요 구현 내용**:
+  - `app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewModels.kt`: `HandoverRelayItem`, `HandoverCrewReport` 모델 정의.
+  - `app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewResolver.kt`: 심야 자정 경과 날짜 보정(`resolveSegmentDate`) 및 열차 릴레이 순서 정렬 기반 직전·후속 승무원 판정 로직(`resolveHandover`) 구현.
+  - `app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewRepository.kt`: 온라인 `TrainCrewSearchRepository` 실시간 조회 및 오프라인 Room DB(`CrewAssignmentDao`, `DiaDetailDao`, `DiaCensusDao`) 캐시 폴백 조회 구현.
+  - `app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewDialog.kt`: 직전 승무원·내 구간·교대 승무원·전체 열차 릴레이 팝업 다이얼로그 구현(`LabSafeContainer` 격리).
+  - `DiaDetailCard.kt` 및 `LabFeature.kt`: `HANDOVER_CREW` 활성화 시 열번 뱃지 옆 `👥` 버튼 조건부 노출(캡처 모드 제외) 및 다이얼로그 연결.
+  - `app/src/test/java/com/example/crewmate/labs/handovercrew/HandoverCrewResolverTest.kt`: 릴레이 판정 및 자정 경과 날짜 보정 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과 및 실기기 설치).
