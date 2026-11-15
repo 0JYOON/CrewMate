@@ -128,17 +128,22 @@ class ColleagueCompareStorage(context: Context) {
 
     fun loadDisplayOptions(): CompareDisplayOptions {
         return CompareDisplayOptions(
-            showCommuteTimes = prefs.getBoolean(KEY_SHOW_COMMUTE_TIMES, false)
+            showCommuteTimes = prefs.getBoolean(KEY_SHOW_COMMUTE_TIMES, false),
+            transposeMatrix = prefs.getBoolean(KEY_TRANSPOSE_MATRIX, false)
         )
     }
 
     fun saveDisplayOptions(options: CompareDisplayOptions) {
-        prefs.edit().putBoolean(KEY_SHOW_COMMUTE_TIMES, options.showCommuteTimes).apply()
+        prefs.edit()
+            .putBoolean(KEY_SHOW_COMMUTE_TIMES, options.showCommuteTimes)
+            .putBoolean(KEY_TRANSPOSE_MATRIX, options.transposeMatrix)
+            .apply()
     }
 
     companion object {
         private const val PREFS_NAME = "crewmate_colleague_compare"
         private const val KEY_PEOPLE_JSON = "compare_people_json"
         private const val KEY_SHOW_COMMUTE_TIMES = "show_commute_times"
+        private const val KEY_TRANSPOSE_MATRIX = "transpose_matrix"
     }
 }

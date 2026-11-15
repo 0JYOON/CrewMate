@@ -91,4 +91,38 @@ class PatternFileParserTest {
         val d4 = person.cellForDate("202611", "2026-11-04")
         assertEquals("16035", d4?.diaNo)
     }
+
+    @Test
+    fun realColleague_supportsManualOverrideAndHomonymBuckets() {
+        val colleague = ComparePerson(
+            id = "col_1",
+            name = "홍길동",
+            type = CompareEntryType.REAL_COLLEAGUE,
+            cellsByMonth = mapOf(
+                "202611" to mapOf(
+                    "2026-11-01" to CompareDayCell("2026-11-01", "16001", "07:40", "16:20", false),
+                    "2026-11-02" to CompareDayCell("2026-11-02", "16002", "08:00", "17:00", false)
+                )
+            ),
+            manualOverrides = mapOf(
+                "2026-11-02" to CompareDayCell("2026-11-02", "연차", "", "", true)
+            )
+        )
+
+        val day1 = colleague.cellForDate("202611", "2026-11-01")
+        assertEquals("16001", day1?.diaNo)
+        assertFalse(day1?.isOverridden == true)
+
+        val day2 = colleague.cellForDate("202611", "2026-11-02")
+        assertEquals("연차", day2?.diaNo)
+        assertTrue(day2?.isOverridden == true)
+
+        val buckets = ColleagueCompareViewModel.dtosToGroupedBuckets(
+            listOf(
+                com.example.crewmate.data.remote.xcrew.PersonalWorkScheduleDto("20261105", "16001", null, null, "07:00", "15:00", "N", null),
+                com.example.crewmate.data.remote.xcrew.PersonalWorkScheduleDto("20261105", "16301", null, null, "18:00", "08:00", "N", null)
+            )
+        )
+        assertEquals(2, buckets["2026-11-05"]?.size)
+    }
 }

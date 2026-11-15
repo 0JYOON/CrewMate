@@ -51,8 +51,8 @@ data class ComparePerson(
     val manualOverrides: Map<String, CompareDayCell> = emptyMap() // yyyy-MM-dd -> cell
 ) {
     fun cellForDate(yearMonthKey: String, dateIso: String): CompareDayCell? {
+        manualOverrides[dateIso]?.let { return it }
         if (type == CompareEntryType.VIRTUAL_PERSON) {
-            manualOverrides[dateIso]?.let { return it }
             if (patternSequence.isEmpty()) return null
             val dia = PatternFileParser.resolveCyclicDia(
                 targetDateIso = dateIso,
@@ -66,5 +66,6 @@ data class ComparePerson(
 }
 
 data class CompareDisplayOptions(
-    val showCommuteTimes: Boolean = false
+    val showCommuteTimes: Boolean = false,
+    val transposeMatrix: Boolean = false
 )

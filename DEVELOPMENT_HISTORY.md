@@ -1173,3 +1173,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `PayStatementViewModel.kt`: `updatedAt` 포맷을 `yy-MM-dd HH:mm`으로 변경.
   - `PayStatementScreen.kt`: `LazyColumn` `spacedBy(0.dp)` 및 행/헤더 패딩 축소, `시간`·`거리` 일반 굵기 전환, `휴일`·`연장`·`야간` > 0 볼드 강조, `PayStatementEligibilityCard` 내 `확정 + 예정` 내역 및 2단 진행률 바 표시.
   - `PayStatementParserTest.kt`: 개편된 `pdiaDvCd == "4"` 및 확정/예정 산정 규칙 단위 테스트 보강 (`./gradlew.bat test assembleDebug` 통과).
+
+
+### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
+- **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.
+- **주요 구현 내용**:
+  - `ColleagueCompareModels.kt` & `ColleagueCompareStorage.kt`: `ComparePerson.cellForDate()`의 `manualOverrides` 우선 적용을 실존 동료까지 확대하고, `CompareDisplayOptions.transposeMatrix` 저장/복원 추가.
+  - `ColleagueCompareViewModel.kt`: `clearSearchResults()`, `setTransposeMatrix()`, `updateVirtualPerson()`, `updateCellOverride()`(실존 동료 포함), 동명이인 감지 및 가상 인물 `K`명 자동 분할(`dtosToGroupedBuckets` + `collectCrewDaoBucketsForMonth`) 구현.
+  - `ColleagueCompareScreen.kt`: 상단 `출퇴근 표시 ON/OFF` + `⇄ 가로/세로 전환` 뱃지 바, `CompareCellBox` 우측 상단 빨간 점, 가상 인물 이름 클릭 수정(`VirtualPersonDialog`), 행/열 전환 테이블 레이아웃 구현.
+  - `PatternFileParserTest.kt`: 실존 동료 오버라이드 및 동명이인 버킷팅 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).

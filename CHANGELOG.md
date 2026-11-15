@@ -4,6 +4,26 @@
 
 ---
 
+## [v1.0.48] - 2026-11-15
+
+### 개요
+- **동료 근무 비교 (`colleague_compare`) 승무원 추가 · 셀 편집 · 행/열 전환 UX 전면 개선**
+
+### 주요 변경 사항
+- **검색 시에만 이름 목록 표출 & 동명이인 자동 가상 인물 분할**:
+  - `ColleagueCompareViewModel.kt`, `ColleagueCompareScreen.kt`: `+ 승무원 추가` 팝업 오픈 시 검색 결과를 초기화하여 검색 입력 전 미리 목록을 띄우지 않음
+  - Xcrew 개인근무표 응답(`dtosToGroupedBuckets`) 및 로컬 `CrewAssignmentDao` 당월 캐시에서 동일 날짜 중복 배정(`maxPerDay >= 2`)이 감지되면 동명이인 인원수만큼 `"{성명} (1)"` ~ `"{성명} (K)"` 가상 인물로 자동 분할 추가
+- **전체 승무원 일별 근무 수정 & 수정 셀 빨간 점 표시**:
+  - `ColleagueCompareModels.kt`, `ColleagueCompareViewModel.kt`, `ColleagueCompareScreen.kt`: 가상 인물뿐 아니라 승무원 추가로 등록한 실존 동료의 근무 칸도 터치하여 덮어쓰기/원래 근무로 복원 가능
+  - 수동 수정된 셀 우측 상단에 빨간 작은 점(`6.dp` 원형) 표시
+- **가상 인물 이름 클릭 수정 & 가로/세로 행·열 전환 뱃지**:
+  - 가상 인물 이름을 누르면 `VirtualPersonDialog`가 수정 모드로 열려 이름·패턴 시작일·순환 다이아를 즉시 수정 가능
+  - 상단 `출퇴근 표시 ON/OFF` 뱃지 우측에 `⇄ 가로/세로 전환` 뱃지 추가(`CompareDisplayOptions.transposeMatrix`, `ColleagueCompareStorage.kt` 영속 저장)
+- **테스트 검증**:
+  - `PatternFileParserTest.kt`: 실존 동료 수동 오버라이드 및 동명이인 날짜별 버킷팅 단위 테스트 통과 (`./gradlew.bat test assembleDebug` 0 오류)
+
+---
+
 ## [v1.0.47] - 2026-11-15
 
 ### 개요

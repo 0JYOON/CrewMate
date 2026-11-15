@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -39,10 +40,10 @@ fun ColleagueCompareScreen(
     val ymKey = viewModel.yearMonthKey()
     val horizontalScroll = rememberScrollState()
 
-    var showOptionsDialog by remember { mutableStateOf(false) }
     var showAddColleagueDialog by remember { mutableStateOf(false) }
     var showAddVirtualDialog by remember { mutableStateOf(false) }
-    var editingVirtualCell by remember { mutableStateOf<Triple<ComparePerson, String, CompareDayCell?>?>(null) }
+    var editingVirtualPerson by remember { mutableStateOf<ComparePerson?>(null) }
+    var editingCell by remember { mutableStateOf<Triple<ComparePerson, String, CompareDayCell?>?>(null) }
 
     val daysInMonth = state.selectedMonth.lengthOfMonth()
     val dateList = remember(state.selectedMonth) {
@@ -102,13 +103,16 @@ fun ColleagueCompareScreen(
 
         Spacer(Modifier.height(6.dp))
 
-        // 액션 버튼 바: 승무원 추가 / 가상 인물 / 표시 옵션
+        // 액션 버튼 바: 승무원 추가 / 가상 인물
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilledTonalButton(
-                onClick = { showAddColleagueDialog = true },
+                onClick = {
+                    viewModel.clearSearchResults()
+                    showAddColleagueDialog = true
+                },
                 modifier = Modifier.weight(1f).height(34.dp),
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
             ) {
@@ -121,12 +125,52 @@ fun ColleagueCompareScreen(
             ) {
                 Text("+ 가상 인물", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            OutlinedButton(
-                onClick = { showOptionsDialog = true },
-                modifier = Modifier.height(34.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        // 표시 옵션 뱃지 바: 출퇴근 표시 ON/OFF + 바로 우측 가로/세로 전환 뱃지
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val commuteOn = state.displayOptions.showCommuteTimes
+            Surface(
+                onClick = { viewModel.setShowCommuteTimes(!commuteOn) },
+                shape = RoundedCornerShape(8.dp),
+                color = if (commuteOn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                border = BorderStroke(
+                    1.dp,
+                    if (commuteOn) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                )
             ) {
-                Text("⚙️ 옵션", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    text = if (commuteOn) "⚙️ 출퇴근 표시 ON" else "⚙️ 출퇴근 표시 OFF",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (commuteOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            val transposed = state.displayOptions.transposeMatrix
+            Surface(
+                onClick = { viewModel.setTransposeMatrix(!transposed) },
+                shape = RoundedCornerShape(8.dp),
+                color = if (transposed) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                border = BorderStroke(
+                    1.dp,
+                    if (transposed) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                )
+            ) {
+                Text(
+                    text = if (transposed) "⇄ 세로(날짜) 기준" else "⇄ 가로/세로 전환",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (transposed) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
 
@@ -151,116 +195,254 @@ fun ColleagueCompareScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        val cellWidth = if (state.displayOptions.showCommuteTimes) 74.dp else 54.dp
+        val cellWidth = if (state.displayOptions.showCommuteTimes) 74.dp else 56.dp
         val rowHeight = if (state.displayOptions.showCommuteTimes) 50.dp else 38.dp
-        val nameColWidth = 88.dp
+        val nameColWidth = 92.dp
+        val dateColWidth = 70.dp
 
-        // 비교 그리드 카드 (좌측 이름 고정 + 우측 일자별 가로 스크롤)
+        // 비교 그리드 카드 (기본: 행=인원/열=날짜, 전환: 행=날짜/열=인원)
         Surface(
             modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // 헤더 행: 이름 | 1(월) 2(화) ...
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Box(
+            if (!state.displayOptions.transposeMatrix) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 헤더 행: 이름 | 1(월) 2(화) ...
+                    Row(
                         modifier = Modifier
-                            .width(nameColWidth)
-                            .height(34.dp)
-                            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.CenterStart
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Text("성명", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                    Row(modifier = Modifier.horizontalScroll(horizontalScroll)) {
-                        dateList.forEach { d ->
-                            val isToday = d == today
-                            val dowText = when (d.dayOfWeek) {
-                                DayOfWeek.MONDAY -> "월"
-                                DayOfWeek.TUESDAY -> "화"
-                                DayOfWeek.WEDNESDAY -> "수"
-                                DayOfWeek.THURSDAY -> "목"
-                                DayOfWeek.FRIDAY -> "금"
-                                DayOfWeek.SATURDAY -> "토"
-                                DayOfWeek.SUNDAY -> "일"
-                            }
-                            val dowColor = when (d.dayOfWeek) {
-                                DayOfWeek.SATURDAY -> Color(0xFF1E64D8)
-                                DayOfWeek.SUNDAY -> Color(0xFFD32F2F)
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .width(cellWidth)
-                                    .height(34.dp)
-                                    .background(
-                                        if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                                        else Color.Transparent
+                        Box(
+                            modifier = Modifier
+                                .width(nameColWidth)
+                                .height(34.dp)
+                                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Text("성명", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Row(modifier = Modifier.horizontalScroll(horizontalScroll)) {
+                            dateList.forEach { d ->
+                                val isToday = d == today
+                                val (dowText, dowColor) = dayHeaderStyle(d)
+                                Box(
+                                    modifier = Modifier
+                                        .width(cellWidth)
+                                        .height(34.dp)
+                                        .background(
+                                            if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                                            else Color.Transparent
+                                        )
+                                        .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${d.dayOfMonth}($dowText)",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold,
+                                        color = dowColor
                                     )
-                                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "${d.dayOfMonth}($dowText)",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold,
-                                    color = dowColor
-                                )
+                                }
                             }
                         }
                     }
-                }
 
-                // 본문 스크롤 (내 근무표 + 동료/가상인물 목록)
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    // 1. 내 근무표 (고정 최상단)
-                    item(key = "row_my_self") {
-                        CompareMatrixRow(
-                            name = "나 (본인)",
-                            badgeText = null,
-                            isMySelf = true,
-                            isVirtual = false,
-                            dateList = dateList,
-                            today = today,
-                            cellProvider = { d -> state.myCells[d.toString()] },
-                            showCommuteTimes = state.displayOptions.showCommuteTimes,
-                            nameColWidth = nameColWidth,
-                            cellWidth = cellWidth,
-                            rowHeight = rowHeight,
-                            horizontalScroll = horizontalScroll,
-                            onCellClick = null,
-                            onRemoveClick = null
-                        )
+                    // 본문 스크롤 (내 근무표 + 동료/가상인물 목록)
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        item(key = "row_my_self") {
+                            CompareMatrixRow(
+                                name = "나 (본인)",
+                                badgeText = null,
+                                isMySelf = true,
+                                isVirtual = false,
+                                dateList = dateList,
+                                today = today,
+                                cellProvider = { d -> state.myCells[d.toString()] },
+                                showCommuteTimes = state.displayOptions.showCommuteTimes,
+                                nameColWidth = nameColWidth,
+                                cellWidth = cellWidth,
+                                rowHeight = rowHeight,
+                                horizontalScroll = horizontalScroll,
+                                onNameClick = null,
+                                onCellClick = null,
+                                onRemoveClick = null
+                            )
+                        }
+
+                        items(items = state.people, key = { it.id }) { person ->
+                            val isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON
+                            CompareMatrixRow(
+                                name = person.name,
+                                badgeText = if (isVirtual) "가상" else null,
+                                isMySelf = false,
+                                isVirtual = isVirtual,
+                                dateList = dateList,
+                                today = today,
+                                cellProvider = { d -> person.cellForDate(ymKey, d.toString()) },
+                                showCommuteTimes = state.displayOptions.showCommuteTimes,
+                                nameColWidth = nameColWidth,
+                                cellWidth = cellWidth,
+                                rowHeight = rowHeight,
+                                horizontalScroll = horizontalScroll,
+                                onNameClick = if (isVirtual) {
+                                    { editingVirtualPerson = person }
+                                } else null,
+                                onCellClick = { d, cell -> editingCell = Triple(person, d.toString(), cell) },
+                                onRemoveClick = { viewModel.removePerson(person.id) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // 행/열 전환 모드: 좌측 날짜 고정 + 우측 인원(나 + 동료들) 가로 스크롤
+                val transposedColWidth = if (state.displayOptions.showCommuteTimes) 84.dp else 72.dp
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 헤더 행: 날짜 | 나(본인) | 동료1 | ...
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(dateColWidth)
+                                .height(42.dp)
+                                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Text("날짜", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Row(modifier = Modifier.horizontalScroll(horizontalScroll)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(transposedColWidth)
+                                    .height(42.dp)
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f))
+                                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "나 (본인)",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            state.people.forEach { person ->
+                                val isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON
+                                Row(
+                                    modifier = Modifier
+                                        .width(transposedColWidth)
+                                        .height(42.dp)
+                                        .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        .padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .then(
+                                                if (isVirtual) Modifier.clickable { editingVirtualPerson = person }
+                                                else Modifier
+                                            ),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = person.name,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isVirtual) Color(0xFF6D28D9) else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (isVirtual) {
+                                            Text(
+                                                text = "가상·편집",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF6D28D9)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "✕",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .clickable { viewModel.removePerson(person.id) }
+                                            .padding(horizontal = 2.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    // 2. 추가된 동료 및 가상 인물
-                    items(items = state.people, key = { it.id }) { person ->
-                        val isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON
-                        CompareMatrixRow(
-                            name = person.name,
-                            badgeText = if (isVirtual) "가상" else null,
-                            isMySelf = false,
-                            isVirtual = isVirtual,
-                            dateList = dateList,
-                            today = today,
-                            cellProvider = { d -> person.cellForDate(ymKey, d.toString()) },
-                            showCommuteTimes = state.displayOptions.showCommuteTimes,
-                            nameColWidth = nameColWidth,
-                            cellWidth = cellWidth,
-                            rowHeight = rowHeight,
-                            horizontalScroll = horizontalScroll,
-                            onCellClick = if (isVirtual) {
-                                { d, cell -> editingVirtualCell = Triple(person, d.toString(), cell) }
-                            } else null,
-                            onRemoveClick = { viewModel.removePerson(person.id) }
-                        )
+                    // 날짜별 행
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(items = dateList, key = { it.toString() }) { d ->
+                            val isToday = d == today
+                            val (dowText, dowColor) = dayHeaderStyle(d)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
+                                        else MaterialTheme.colorScheme.surface
+                                    )
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(dateColWidth)
+                                        .height(rowHeight)
+                                        .background(
+                                            if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                            else Color.Transparent
+                                        )
+                                        .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        .padding(horizontal = 6.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = "${d.dayOfMonth}($dowText)",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Bold,
+                                        color = dowColor
+                                    )
+                                }
+                                Row(modifier = Modifier.horizontalScroll(horizontalScroll)) {
+                                    CompareCellBox(
+                                        cell = state.myCells[d.toString()],
+                                        isToday = isToday,
+                                        isMySelfCell = true,
+                                        showCommuteTimes = state.displayOptions.showCommuteTimes,
+                                        cellWidth = transposedColWidth,
+                                        rowHeight = rowHeight,
+                                        onClick = null
+                                    )
+                                    state.people.forEach { person ->
+                                        val cell = person.cellForDate(ymKey, d.toString())
+                                        CompareCellBox(
+                                            cell = cell,
+                                            isToday = isToday,
+                                            isMySelfCell = false,
+                                            showCommuteTimes = state.displayOptions.showCommuteTimes,
+                                            cellWidth = transposedColWidth,
+                                            rowHeight = rowHeight,
+                                            onClick = { editingCell = Triple(person, d.toString(), cell) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -274,47 +456,14 @@ fun ColleagueCompareScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 16.sp
             )
-        } else if (state.people.any { it.type == CompareEntryType.VIRTUAL_PERSON }) {
+        } else {
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "💡 가상 인물 칸을 터치하면 해당 날짜의 다이아 내용을 직접 덮어씌울 수 있습니다.",
+                text = "💡 추가된 승무원의 근무 칸을 누르면 직접 수정(빨간 점 표시)할 수 있으며, 가상 인물 이름을 누르면 순환 다이아와 시작일을 수정할 수 있습니다.",
                 fontSize = 10.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-
-    // 옵션 팝업: 출퇴근시각 표출 여부
-    if (showOptionsDialog) {
-        AlertDialog(
-            onDismissRequest = { showOptionsDialog = false },
-            title = { Text("표시 옵션", fontWeight = FontWeight.ExtraBold) },
-            text = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("출퇴근시각 함께 표출", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text(
-                            "끄면 다이아번호만 간결하게 표시합니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = state.displayOptions.showCommuteTimes,
-                        onCheckedChange = { viewModel.setShowCommuteTimes(it) }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showOptionsDialog = false }) {
-                    Text("닫기", fontWeight = FontWeight.Bold)
-                }
-            }
-        )
     }
 
     // 승무원 추가 팝업
@@ -333,9 +482,14 @@ fun ColleagueCompareScreen(
 
     // 가상 인물(미배정 패턴) 추가 팝업
     if (showAddVirtualDialog) {
-        AddVirtualPersonDialog(
-            defaultAnchorDate = "${state.selectedMonth}-01",
-            onAdd = { name, seq, anchor ->
+        VirtualPersonDialog(
+            title = "가상 인물(미배정 패턴) 추가",
+            confirmLabel = "추가",
+            initialName = "",
+            initialAnchorDate = "${state.selectedMonth}-01",
+            initialPatternText = "",
+            allowEmptyPattern = false,
+            onConfirm = { name, seq, anchor ->
                 viewModel.addVirtualPerson(name, seq, anchor)
                 showAddVirtualDialog = false
             },
@@ -343,26 +497,63 @@ fun ColleagueCompareScreen(
         )
     }
 
-    // 가상 인물 셀 덮어쓰기 팝업
-    editingVirtualCell?.let { (person, dateIso, currentCell) ->
-        EditVirtualCellDialog(
+    // 가상 인물 이름 클릭 -> 순환 다이아 및 시작날짜 수정 팝업
+    editingVirtualPerson?.let { person ->
+        VirtualPersonDialog(
+            title = "가상 인물 설정 수정",
+            confirmLabel = "저장",
+            initialName = person.name,
+            initialAnchorDate = person.patternAnchorDate ?: "${state.selectedMonth}-01",
+            initialPatternText = person.patternSequence.joinToString(", "),
+            allowEmptyPattern = true,
+            onConfirm = { name, seq, anchor ->
+                viewModel.updateVirtualPerson(person.id, name, seq, anchor)
+                editingVirtualPerson = null
+            },
+            onDismiss = { editingVirtualPerson = null }
+        )
+    }
+
+    // 근무 셀 덮어쓰기 팝업 (실존 동료 + 가상 인물 공통)
+    editingCell?.let { (person, dateIso, currentCell) ->
+        EditCellDialog(
             personName = person.name,
             dateIso = dateIso,
+            isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON,
             initialDia = currentCell?.diaNo.orEmpty(),
             initialStart = currentCell?.startTime.orEmpty(),
             initialEnd = currentCell?.endTime.orEmpty(),
             isCurrentlyOverridden = currentCell?.isOverridden == true,
             onSave = { dia, st, en ->
-                viewModel.updateVirtualCellOverride(person.id, dateIso, dia, st, en)
-                editingVirtualCell = null
+                viewModel.updateCellOverride(person.id, dateIso, dia, st, en)
+                editingCell = null
             },
-            onResetToPattern = {
-                viewModel.updateVirtualCellOverride(person.id, dateIso, "", "", "")
-                editingVirtualCell = null
+            onReset = {
+                viewModel.updateCellOverride(person.id, dateIso, "", "", "")
+                editingCell = null
             },
-            onDismiss = { editingVirtualCell = null }
+            onDismiss = { editingCell = null }
         )
     }
+}
+
+@Composable
+private fun dayHeaderStyle(d: LocalDate): Pair<String, Color> {
+    val dowText = when (d.dayOfWeek) {
+        DayOfWeek.MONDAY -> "월"
+        DayOfWeek.TUESDAY -> "화"
+        DayOfWeek.WEDNESDAY -> "수"
+        DayOfWeek.THURSDAY -> "목"
+        DayOfWeek.FRIDAY -> "금"
+        DayOfWeek.SATURDAY -> "토"
+        DayOfWeek.SUNDAY -> "일"
+    }
+    val dowColor = when (d.dayOfWeek) {
+        DayOfWeek.SATURDAY -> Color(0xFF1E64D8)
+        DayOfWeek.SUNDAY -> Color(0xFFD32F2F)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    return dowText to dowColor
 }
 
 @Composable
@@ -379,6 +570,7 @@ private fun CompareMatrixRow(
     cellWidth: androidx.compose.ui.unit.Dp,
     rowHeight: androidx.compose.ui.unit.Dp,
     horizontalScroll: androidx.compose.foundation.ScrollState,
+    onNameClick: (() -> Unit)?,
     onCellClick: ((LocalDate, CompareDayCell?) -> Unit)?,
     onRemoveClick: (() -> Unit)?
 ) {
@@ -403,18 +595,29 @@ private fun CompareMatrixRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (onNameClick != null) Modifier.clickable { onNameClick() }
+                        else Modifier
+                    )
+            ) {
                 Text(
                     text = name,
                     fontSize = 11.sp,
                     fontWeight = if (isMySelf) FontWeight.ExtraBold else FontWeight.Bold,
-                    color = if (isMySelf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = when {
+                        isMySelf -> MaterialTheme.colorScheme.primary
+                        isVirtual -> Color(0xFF6D28D9)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (badgeText != null) {
                     Text(
-                        text = badgeText,
+                        text = "$badgeText·편집",
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF6D28D9),
@@ -441,55 +644,84 @@ private fun CompareMatrixRow(
         Row(modifier = Modifier.horizontalScroll(horizontalScroll)) {
             dateList.forEach { d ->
                 val cell = cellProvider(d)
-                val isToday = d == today
-                val dia = cell?.diaNo.orEmpty()
-                val isRest = dia == "S" || dia == "휴무" || dia == "비번" || dia == "연차"
-                val cellBg = when {
-                    cell?.isOverridden == true -> Color(0xFFFEF3C7).copy(alpha = 0.65f)
-                    isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                    else -> Color.Transparent
-                }
+                CompareCellBox(
+                    cell = cell,
+                    isToday = d == today,
+                    isMySelfCell = isMySelf,
+                    showCommuteTimes = showCommuteTimes,
+                    cellWidth = cellWidth,
+                    rowHeight = rowHeight,
+                    onClick = if (onCellClick != null) { { onCellClick(d, cell) } } else null
+                )
+            }
+        }
+    }
+}
 
-                Box(
-                    modifier = Modifier
-                        .width(cellWidth)
-                        .height(rowHeight)
-                        .background(cellBg)
-                        .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-                        .then(
-                            if (isVirtual && onCellClick != null) {
-                                Modifier.clickable { onCellClick(d, cell) }
-                            } else Modifier
-                        )
-                        .padding(horizontal = 2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = dia.ifBlank { "-" },
-                            fontSize = 11.sp,
-                            fontWeight = if (isRest || dia.isBlank()) FontWeight.Medium else FontWeight.Bold,
-                            color = when {
-                                dia.isBlank() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                                isRest -> MaterialTheme.colorScheme.onSurfaceVariant
-                                else -> MaterialTheme.colorScheme.onSurface
-                            },
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (showCommuteTimes && cell != null) {
-                            val timeText = cell.formattedCommuteTime()
-                            if (timeText.isNotEmpty()) {
-                                Text(
-                                    text = timeText,
-                                    fontSize = 8.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
+@Composable
+private fun CompareCellBox(
+    cell: CompareDayCell?,
+    isToday: Boolean,
+    isMySelfCell: Boolean,
+    showCommuteTimes: Boolean,
+    cellWidth: androidx.compose.ui.unit.Dp,
+    rowHeight: androidx.compose.ui.unit.Dp,
+    onClick: (() -> Unit)?
+) {
+    val dia = cell?.diaNo.orEmpty()
+    val isRest = dia == "S" || dia == "휴무" || dia == "비번" || dia == "연차"
+    val isOverridden = cell?.isOverridden == true
+    val cellBg = when {
+        isOverridden -> Color(0xFFFEF3C7).copy(alpha = 0.55f)
+        isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isMySelfCell) 0.45f else 0.3f)
+        else -> Color.Transparent
+    }
+
+    Box(
+        modifier = Modifier
+            .width(cellWidth)
+            .height(rowHeight)
+            .background(cellBg)
+            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 2.dp)
+    ) {
+        if (isOverridden) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 3.dp, end = 3.dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEF4444))
+            )
+        }
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = dia.ifBlank { "-" },
+                fontSize = 11.sp,
+                fontWeight = if (isRest || dia.isBlank()) FontWeight.Medium else FontWeight.Bold,
+                color = when {
+                    dia.isBlank() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                    isRest -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (showCommuteTimes && cell != null) {
+                val timeText = cell.formattedCommuteTime()
+                if (timeText.isNotEmpty()) {
+                    Text(
+                        text = timeText,
+                        fontSize = 8.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
         }
@@ -587,15 +819,20 @@ private fun AddColleagueDialog(
 }
 
 @Composable
-private fun AddVirtualPersonDialog(
-    defaultAnchorDate: String,
-    onAdd: (name: String, sequence: List<String>, anchorDate: String) -> Unit,
+private fun VirtualPersonDialog(
+    title: String,
+    confirmLabel: String,
+    initialName: String,
+    initialAnchorDate: String,
+    initialPatternText: String,
+    allowEmptyPattern: Boolean,
+    onConfirm: (name: String, sequence: List<String>, anchorDate: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf("") }
-    var anchorDate by remember { mutableStateOf(defaultAnchorDate) }
-    var patternText by remember { mutableStateOf("") }
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    var anchorDate by remember(initialAnchorDate) { mutableStateOf(initialAnchorDate) }
+    var patternText by remember(initialPatternText) { mutableStateOf(initialPatternText) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -614,7 +851,7 @@ private fun AddVirtualPersonDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("가상 인물(미배정 패턴) 추가", fontWeight = FontWeight.ExtraBold) },
+        title = { Text(title, fontWeight = FontWeight.ExtraBold) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -666,14 +903,14 @@ private fun AddVirtualPersonDialog(
             Button(
                 onClick = {
                     val seq = PatternFileParser.parseTextOrCsv(patternText)
-                    if (seq.isEmpty()) {
+                    if (!allowEmptyPattern && seq.isEmpty()) {
                         Toast.makeText(context, "다이아번호 패턴을 입력하거나 파일을 불러와 주세요.", Toast.LENGTH_SHORT).show()
                     } else {
-                        onAdd(name.ifBlank { "가상 인물" }, seq, anchorDate.trim())
+                        onConfirm(name.ifBlank { "가상 인물" }, seq, anchorDate.trim())
                     }
                 }
             ) {
-                Text("추가")
+                Text(confirmLabel)
             }
         },
         dismissButton = {
@@ -683,15 +920,16 @@ private fun AddVirtualPersonDialog(
 }
 
 @Composable
-private fun EditVirtualCellDialog(
+private fun EditCellDialog(
     personName: String,
     dateIso: String,
+    isVirtual: Boolean,
     initialDia: String,
     initialStart: String,
     initialEnd: String,
     isCurrentlyOverridden: Boolean,
     onSave: (diaNo: String, startTime: String, endTime: String) -> Unit,
-    onResetToPattern: () -> Unit,
+    onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var dia by remember { mutableStateOf(initialDia) }
@@ -730,8 +968,11 @@ private fun EditVirtualCellDialog(
                     )
                 }
                 if (isCurrentlyOverridden) {
-                    TextButton(onClick = onResetToPattern, modifier = Modifier.align(Alignment.End)) {
-                        Text("기본 순환 패턴으로 복원", fontSize = 11.5.sp)
+                    TextButton(onClick = onReset, modifier = Modifier.align(Alignment.End)) {
+                        Text(
+                            text = if (isVirtual) "기본 순환 패턴으로 복원" else "원래 조회 근무로 복원",
+                            fontSize = 11.5.sp
+                        )
                     }
                 }
             }

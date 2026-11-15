@@ -79,6 +79,16 @@ class ColleagueCompareViewModel(
         _uiState.update { it.copy(displayOptions = opts) }
     }
 
+    fun setTransposeMatrix(transpose: Boolean) {
+        val opts = _uiState.value.displayOptions.copy(transposeMatrix = transpose)
+        storage.saveDisplayOptions(opts)
+        _uiState.update { it.copy(displayOptions = opts) }
+    }
+
+    fun clearSearchResults() {
+        _uiState.update { it.copy(searchResults = emptyList(), isSearchingColleagues = false) }
+    }
+
     fun loadMyScheduleForMonth(month: YearMonth, forceRefresh: Boolean) {
         val ymDash = month.toString() // yyyy-MM
         viewModelScope.launch {
@@ -177,31 +187,85 @@ class ColleagueCompareViewModel(
         viewModelScope.launch {
             runCatching {
                 val dtos = dataSource.fetchPersonalWorkSchedule(queryDate, cleanName)
-                dtosToCellMap(dtos)
-            }.onSuccess { dayMap ->
+                val dtoBuckets = dtosToGroupedBuckets(dtos)
+                val crewBuckets = collectCrewDaoBucketsForMonth(month, cleanName)
+                Pair(dtoBuckets, crewBuckets)
+            }.onSuccess { (dtoBuckets, crewBuckets) ->
+                val maxPerDay = maxOf(
+                    dtoBuckets.values.maxOfOrNull { it.size } ?: 0,
+                    crewBuckets.values.maxOfOrNull { it.size } ?: 0
+                )
                 val current = _uiState.value.people.toMutableList()
-                val existingIdx = current.indexOfFirst { it.type == CompareEntryType.REAL_COLLEAGUE && it.name == cleanName }
-                if (existingIdx >= 0) {
-                    val existing = current[existingIdx]
-                    val mergedMonths = existing.cellsByMonth.toMutableMap().apply { put(ymKey, dayMap) }
-                    current[existingIdx] = existing.copy(cellsByMonth = mergedMonths)
-                } else {
-                    current.add(
-                        ComparePerson(
-                            id = "col_${UUID.randomUUID()}",
-                            name = cleanName,
-                            type = CompareEntryType.REAL_COLLEAGUE,
-                            cellsByMonth = mapOf(ymKey to dayMap)
+                if (maxPerDay >= 2) {
+                    // 동명이인 감지: 인원수(maxPerDay)만큼 가상 인물로 분할 추가
+                    val mergedByDate = linkedMapOf<String, List<CompareDayCell>>()
+                    val allDates = (dtoBuckets.keys + crewBuckets.keys).toSortedSet()
+                    allDates.forEach { iso ->
+                        val fromDto = dtoBuckets[iso].orEmpty()
+                        val fromCrew = crewBuckets[iso].orEmpty()
+                        mergedByDate[iso] = if (fromDto.size >= fromCrew.size) fromDto else fromCrew
+                    }
+                    val createdNames = mutableListOf<String>()
+                    for (idx in 0 until maxPerDay) {
+                        val virtualName = "$cleanName (${idx + 1})"
+                        createdNames.add(virtualName)
+                        val personCells = linkedMapOf<String, CompareDayCell>()
+                        mergedByDate.forEach { (iso, list) ->
+                            list.getOrNull(idx)?.let { cell ->
+                                personCells[iso] = cell
+                            }
+                        }
+                        val existingIdx = current.indexOfFirst {
+                            it.type == CompareEntryType.VIRTUAL_PERSON && it.name == virtualName
+                        }
+                        if (existingIdx >= 0) {
+                            val existing = current[existingIdx]
+                            val mergedMonths = existing.cellsByMonth.toMutableMap().apply { put(ymKey, personCells) }
+                            current[existingIdx] = existing.copy(cellsByMonth = mergedMonths)
+                        } else {
+                            current.add(
+                                ComparePerson(
+                                    id = "vir_${UUID.randomUUID()}",
+                                    name = virtualName,
+                                    type = CompareEntryType.VIRTUAL_PERSON,
+                                    cellsByMonth = mapOf(ymKey to personCells)
+                                )
+                            )
+                        }
+                    }
+                    storage.savePeople(current)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            people = current,
+                            statusMessage = "동명이인 ${maxPerDay}명이 확인되어 가상 인물(${createdNames.joinToString(", ")})로 추가했습니다."
                         )
-                    )
-                }
-                storage.savePeople(current)
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        people = current,
-                        statusMessage = "'${cleanName}' 님의 ${month.monthValue}월 근무표를 불러와 저장했습니다."
-                    )
+                    }
+                } else {
+                    val dayMap = dtoBuckets.mapValuesNotNull { (_, list) -> list.firstOrNull() }
+                    val existingIdx = current.indexOfFirst { it.type == CompareEntryType.REAL_COLLEAGUE && it.name == cleanName }
+                    if (existingIdx >= 0) {
+                        val existing = current[existingIdx]
+                        val mergedMonths = existing.cellsByMonth.toMutableMap().apply { put(ymKey, dayMap) }
+                        current[existingIdx] = existing.copy(cellsByMonth = mergedMonths)
+                    } else {
+                        current.add(
+                            ComparePerson(
+                                id = "col_${UUID.randomUUID()}",
+                                name = cleanName,
+                                type = CompareEntryType.REAL_COLLEAGUE,
+                                cellsByMonth = mapOf(ymKey to dayMap)
+                            )
+                        )
+                    }
+                    storage.savePeople(current)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            people = current,
+                            statusMessage = "'${cleanName}' 님의 ${month.monthValue}월 근무표를 불러와 저장했습니다."
+                        )
+                    }
                 }
             }.onFailure { err ->
                 _uiState.update {
@@ -239,7 +303,35 @@ class ColleagueCompareViewModel(
         }
     }
 
-    fun updateVirtualCellOverride(
+    fun updateVirtualPerson(
+        personId: String,
+        name: String,
+        sequence: List<String>,
+        anchorDateIso: String
+    ) {
+        val cleanName = name.trim().ifBlank { "가상 인물" }
+        val cleanSeq = sequence.map { it.trim() }.filter { it.isNotEmpty() }
+        val updated = _uiState.value.people.map { person ->
+            if (person.id != personId || person.type != CompareEntryType.VIRTUAL_PERSON) {
+                person
+            } else {
+                person.copy(
+                    name = cleanName,
+                    patternSequence = cleanSeq,
+                    patternAnchorDate = anchorDateIso.trim().ifBlank { null }
+                )
+            }
+        }
+        storage.savePeople(updated)
+        _uiState.update {
+            it.copy(
+                people = updated,
+                statusMessage = "가상 인물 '${cleanName}' 설정이 수정되었습니다."
+            )
+        }
+    }
+
+    fun updateCellOverride(
         personId: String,
         dateIso: String,
         diaNo: String,
@@ -248,7 +340,7 @@ class ColleagueCompareViewModel(
     ) {
         val cleanDia = diaNo.trim()
         val updated = _uiState.value.people.map { person ->
-            if (person.id != personId || person.type != CompareEntryType.VIRTUAL_PERSON) {
+            if (person.id != personId || person.type == CompareEntryType.MY_SELF) {
                 person
             } else {
                 val nextOverrides = person.manualOverrides.toMutableMap()
@@ -326,25 +418,68 @@ class ColleagueCompareViewModel(
         _uiState.update { it.copy(statusMessage = null, errorMessage = null) }
     }
 
-    private fun dtosToCellMap(dtos: List<PersonalWorkScheduleDto>): Map<String, CompareDayCell> {
-        val map = linkedMapOf<String, CompareDayCell>()
-        dtos.forEach { dto ->
-            val rawDate = dto.pjtDt?.filter { it.isDigit() }.orEmpty()
-            if (rawDate.length == 8) {
-                val iso = "${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}"
-                val dia = dto.pdiaNo?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: dto.nonAtulClsfCdNm?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: "-"
-                map[iso] = CompareDayCell(
-                    date = iso,
-                    diaNo = dia,
-                    startTime = dto.gwkTm?.trim().orEmpty(),
-                    endTime = dto.loiwTm?.trim().orEmpty()
-                )
+    private suspend fun collectCrewDaoBucketsForMonth(
+        month: YearMonth,
+        cleanName: String
+    ): Map<String, List<CompareDayCell>> {
+        val map = linkedMapOf<String, MutableList<CompareDayCell>>()
+        for (day in 1..month.lengthOfMonth()) {
+            val ymd = String.format("%04d%02d%02d", month.year, month.monthValue, day)
+            val iso = String.format("%04d-%02d-%02d", month.year, month.monthValue, day)
+            val entities = crewAssignmentDao.getAssignmentsForDate(ymd)
+            entities.forEach { entity ->
+                if (entity.crewMembers.any { it.trim() == cleanName }) {
+                    val dia = entity.pdiaNo.trim().ifEmpty { "-" }
+                    map.getOrPut(iso) { mutableListOf() }.add(
+                        CompareDayCell(
+                            date = iso,
+                            diaNo = dia,
+                            startTime = entity.gwkTm.orEmpty(),
+                            endTime = entity.loiwTm.orEmpty()
+                        )
+                    )
+                }
             }
         }
         return map
     }
+
+    private fun dtosToCellMap(dtos: List<PersonalWorkScheduleDto>): Map<String, CompareDayCell> {
+        return dtosToGroupedBuckets(dtos).mapValuesNotNull { (_, list) -> list.firstOrNull() }
+    }
+
+    companion object {
+        fun dtosToGroupedBuckets(dtos: List<PersonalWorkScheduleDto>): Map<String, List<CompareDayCell>> {
+            val map = linkedMapOf<String, MutableList<CompareDayCell>>()
+            dtos.forEach { dto ->
+                val rawDate = dto.pjtDt?.filter { it.isDigit() }.orEmpty()
+                if (rawDate.length == 8) {
+                    val iso = "${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}"
+                    val dia = dto.pdiaNo?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: dto.nonAtulClsfCdNm?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: "-"
+                    map.getOrPut(iso) { mutableListOf() }.add(
+                        CompareDayCell(
+                            date = iso,
+                            diaNo = dia,
+                            startTime = dto.gwkTm?.trim().orEmpty(),
+                            endTime = dto.loiwTm?.trim().orEmpty()
+                        )
+                    )
+                }
+            }
+            return map
+        }
+    }
+}
+
+private inline fun <K, V, R : Any> Map<K, V>.mapValuesNotNull(transform: (Map.Entry<K, V>) -> R?): Map<K, R> {
+    val result = linkedMapOf<K, R>()
+    for (entry in this) {
+        val v = transform(entry)
+        if (v != null) result[entry.key] = v
+    }
+    return result
 }
 
 class ColleagueCompareViewModelFactory(
