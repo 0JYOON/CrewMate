@@ -232,4 +232,27 @@ class PayStatementParserTest {
         assertEquals(4, el.operatingDaysExcludingHoliday)
         assertEquals(2, el.confirmedAllowanceDays)
     }
+
+    @Test
+    fun buildReport_holidayConfirmsByHolidayMinutesAndInheritsNightSecondDay() {
+        val rows = listOf(
+            // 1) 휴일 야간 1일차: 거리=0이지만 휴일시간 > 0 이므로 확정
+            PayStatementRow(1, "20261114", "16301", "Y", "11", "3", 480, 0.0, 480, 0, 120),
+            // 2) 휴일 야간 2일차: 휴일시간=0, 거리=0이지만 전날 휴일 1일차 확정을 상속해 확정
+            PayStatementRow(2, "20261115", "16301", "Y", "12", "3", 0, 0.0, 0, 0, 0),
+            // 3) 미실적 휴일 1일차: 거리가 있더라도 휴일시간=0 이므로 미확정
+            PayStatementRow(3, "20261121", "16302", "Y", "11", "3", 0, 50.0, 0, 0, 0),
+            // 4) 미실적 휴일 2일차: 전날이 미확정이므로 미확정 예정
+            PayStatementRow(4, "20261122", "16302", "Y", "12", "3", 0, 0.0, 0, 0, 0)
+        )
+
+        val report = PayStatementParser.buildReport(rows)
+        val el = report.eligibility
+
+        assertEquals(4, el.operatingDaysIncludingHoliday)
+        assertEquals(2, el.confirmedTravelDays)
+        assertEquals(2, el.plannedTravelDays)
+        assertEquals(0, el.operatingDaysExcludingHoliday)
+        assertEquals(0, el.confirmedAllowanceDays)
+    }
 }

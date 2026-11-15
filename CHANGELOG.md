@@ -4,6 +4,20 @@
 
 ---
 
+## [v1.0.53] - 2026-11-15
+### 개인근무명세서 휴일근무 확정 기준 변경 (`hldyTnum` 실적 기반)
+- **수정 이유**:
+  - 휴일근무(`offdDdFlg == "Y"` 또는 `hldyTnum > 0`) 시 실제 근무를 수행하더라도 거리(`totPjtDst`) 실적이 인정되지 않으므로, 거리가 아닌 **휴일 시간(`hldyTnum > 0`)** 존재 여부로 확정 판별하도록 개선함.
+  - 휴일이면서 야간 2일차(`alcSpecDvCd == "12"`)인 경우도 전날 휴일 야간 1일차의 확정 여부를 그대로 상속받도록 연동함.
+- **변경 파일**:
+  - [PayStatementModels.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementModels.kt) (`hasConfirmedPerformance` 속성 추가, `isTravelPayCounted` 연동)
+  - [PayStatementParser.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementParser.kt) (`buildReport` 내 확정/대기 판별을 `hasConfirmedPerformance` 기준으로 전환)
+  - [PayStatementScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementScreen.kt) (행 강조·대기 뱃지 판별을 `hasConfirmedPerformance` 기준으로 통일)
+  - [PayStatementParserTest.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/test/java/com/example/crewmate/labs/paystatement/PayStatementParserTest.kt) (휴일 `hldyTnum` 확정 및 휴일 야간 2일차 상속 테스트 추가)
+  - `CrewMate-Alpha/app-runtime.js` (`hasPayConfirmedPerformance` 추가 및 `evaluatePayStatement`·목록 렌더링 동기화)
+
+---
+
 ## [v1.0.52] - 2026-11-15
 ### 개인근무명세서 야간 2일차 확정 판별 및 웹(`CrewMate-Alpha`) 동기화
 - **수정 이유**:

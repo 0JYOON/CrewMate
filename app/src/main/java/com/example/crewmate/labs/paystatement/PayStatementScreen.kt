@@ -298,7 +298,7 @@ private fun PayStatementDataRow(row: PayStatementRow) {
         else -> MaterialTheme.colorScheme.onSurface
     }
 
-    val isZeroWork = row.totPjtTnum == 0 && !row.hasOperatingDistance
+    val isZeroWork = row.totPjtTnum == 0 && !row.hasConfirmedPerformance
 
     Row(
         modifier = Modifier
@@ -327,9 +327,9 @@ private fun PayStatementDataRow(row: PayStatementRow) {
                 Text(
                     text = row.pdiaNo.ifEmpty { "-" },
                     fontSize = 11.5.sp,
-                    fontWeight = if (row.hasOperatingDistance) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (row.hasConfirmedPerformance) FontWeight.Bold else FontWeight.Medium,
                     color = when {
-                        row.isStandbyDia && !row.hasOperatingDistance -> Color(0xFFB45309)
+                        row.isStandbyDia && !row.hasConfirmedPerformance -> Color(0xFFB45309)
                         row.isHolidayWork -> Color(0xFF1565C0)
                         isZeroWork -> MaterialTheme.colorScheme.onSurfaceVariant
                         else -> MaterialTheme.colorScheme.primary
@@ -337,7 +337,7 @@ private fun PayStatementDataRow(row: PayStatementRow) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (row.isStandbyDia && !row.hasOperatingDistance) {
+                if (row.isStandbyDia && !row.hasConfirmedPerformance) {
                     Spacer(Modifier.width(2.dp))
                     Text(
                         text = "대기",

@@ -65,7 +65,7 @@ object PayStatementParser {
             } else {
                 false
             }
-            confirmedByIndex[i] = row.hasOperatingDistance || prevConfirmed
+            confirmedByIndex[i] = row.hasConfirmedPerformance || prevConfirmed
         }
 
         val operatingIncludingHoliday = sortedRows.count { it.isTravelPayCounted }
@@ -83,9 +83,9 @@ object PayStatementParser {
         }
         val holidayOperatingDays = sortedRows.count { it.isTravelPayCounted && it.isHolidayWork }
 
-        val standbyZeroDays = sortedRows.count { it.isStandbyDia && !it.hasOperatingDistance }
-        val standbyZeroNonHolidayDays = sortedRows.count { it.isStandbyDia && !it.hasOperatingDistance && !it.isHolidayWork }
-        val standbyWithOperatingDays = sortedRows.count { it.isStandbyDia && it.hasOperatingDistance }
+        val standbyZeroDays = sortedRows.count { it.isStandbyDia && !it.hasConfirmedPerformance }
+        val standbyZeroNonHolidayDays = sortedRows.count { it.isStandbyDia && !it.hasConfirmedPerformance && !it.isHolidayWork }
+        val standbyWithOperatingDays = sortedRows.count { it.isStandbyDia && it.hasConfirmedPerformance }
 
         return PayStatementReport(
             rows = sortedRows,

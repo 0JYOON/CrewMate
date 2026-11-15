@@ -35,9 +35,17 @@ data class PayStatementRow(
     val isHolidayWork: Boolean
         get() = offdDdFlg.equals("Y", ignoreCase = true) || hldyTnum > 0
 
-    /** 승무여비 산정 포함 여부: 거리 실적 확정 OR (근무일 코드이면서 비대기 예정근무) */
+    /**
+     * 단일 행 기준 확정 실적 보유 여부.
+     * - 휴일근무는 거리 실적을 인정하지 않으므로 휴일시간(hldyTnum > 0)으로 확정 판단
+     * - 비휴일은 운행거리(totPjtDst > 0.0)로 확정 판단
+     */
+    val hasConfirmedPerformance: Boolean
+        get() = if (isHolidayWork) hldyTnum > 0 else totPjtDst > 0.0
+
+    /** 승무여비 산정 포함 여부: 확정 실적 OR (근무일 코드이면서 비대기 예정근무) */
     val isTravelPayCounted: Boolean
-        get() = hasOperatingDistance || (isDutyCode && !isStandbyDia)
+        get() = hasConfirmedPerformance || (isDutyCode && !isStandbyDia)
 
     /** 승무수당 산정 포함 여부: 휴일이 아니며 (거리 실적 확정 OR 비대기 근무일) */
     val isAllowanceCounted: Boolean

@@ -1196,6 +1196,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 - **웹-앱 계산 불일치 해결**:
   - 웹(`CrewMate-Alpha/app-runtime.js`) 브릿지 임포트 경로(`store.payStatementsByMonth[ym]`)에 기존에 저장된 월 데이터는 `alcSpecDvCd`·`pdiaDvCd` 필드가 없어 `isDutyPayRow`가 모두 `false`가 되던 문제를 확인하고, `PayStatementTabView`에서 `r.alcSpecDvCd`가 비어 있을 때 `store.schedules`의 동일 날짜(`pjtDt`) 근무 정보로 `alcSpecDvCd`·`offdDdFlg`를 폴백 보완하고 `evaluatePayStatement`에도 동일한 야간 2일차 확정 상속 로직을 반영.
 
+### STEP 80: 개인근무명세서 휴일근무 확정 기준 변경 (`hldyTnum` 기반) (`v1.0.53`)
+- **배경 및 변경 내용**:
+  - 휴일근무는 실제 운행 시 거리(`totPjtDst`) 실적이 인정되지 않으므로, `PayStatementRow.hasConfirmedPerformance`를 도입해 휴일근무(`isHolidayWork`)는 `hldyTnum > 0`, 비휴일은 `totPjtDst > 0.0`으로 확정 여부를 판단하도록 변경.
+  - `PayStatementParser.buildReport()`에서 야간 2일차(`alcSpecDvCd == "12"`)가 연속된 전날 확정을 상속할 때도 `hasConfirmedPerformance`를 기반으로 동작하므로, 휴일 야간 2일차 역시 전날 휴일 야간 1일차의 `hldyTnum > 0` 여부에 따라 확정/미확정이 결정됨.
+  - 웹(`CrewMate-Alpha/app-runtime.js`)에도 `hasPayConfirmedPerformance`를 추가해 앱과 동일하게 반영하고 `PayStatementParserTest`에 검증 테스트를 추가함 (`./gradlew.bat test assembleDebug` 통과).
+
 
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.
