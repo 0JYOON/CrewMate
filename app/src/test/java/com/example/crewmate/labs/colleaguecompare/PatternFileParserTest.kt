@@ -124,5 +124,18 @@ class PatternFileParserTest {
             )
         )
         assertEquals(2, buckets["2026-11-05"]?.size)
+
+        val splitHomonymVirtual = ComparePerson(
+            id = "vir_homonym",
+            name = "홍길동 (1)",
+            type = CompareEntryType.VIRTUAL_PERSON,
+            cellsByMonth = mapOf(
+                "202611" to mapOf(
+                    "2026-11-05" to CompareDayCell("2026-11-05", "16001", "07:00", "15:00", false)
+                )
+            ),
+            patternSequence = emptyList()
+        )
+        assertEquals("16001", splitHomonymVirtual.cellForDate("202611", "2026-11-05")?.diaNo)
     }
 }

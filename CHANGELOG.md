@@ -4,6 +4,21 @@
 
 ---
 
+## [v1.0.51] - 2026-11-15
+
+### 개요
+- **동료 근무 비교 (`colleague_compare`) 본인 근무표 · 동명이인 가상인물 다이아 번호 미표출 원인 수정**
+
+### 주요 변경 사항
+- **본인 근무표 조회 키 수정 (`ColleagueCompareViewModel.kt`)**:
+  - `loadMyScheduleForMonth()`가 `scheduleRepo.getSchedules()` 호출 시 `"yyyy-MM"` 대신 `WorkScheduleDao`가 사용하는 `"yyyyMM"`(`yearMonthKey`)을 전달하도록 수정해 본인(`나 (본인)`) 근무표가 정상 표출되도록 해결
+- **동명이인 가상인물 `cellsByMonth` 폴백 수정 (`ColleagueCompareModels.kt`)**:
+  - `ComparePerson.cellForDate()`에서 `VIRTUAL_PERSON`이 순환 패턴(`patternSequence`)이 비어 있는 경우 조기 `null` 반환하던 문제를 수정하여, 동명이인으로 자동 분할 생성된 가상 인물의 `cellsByMonth` 배정 다이아 번호가 정상 표출되도록 해결
+- **테스트 보강 (`PatternFileParserTest.kt`)**:
+  - 동명이인 분할 가상 인물(`patternSequence = emptyList()`)의 `cellForDate()` 반환 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과)
+
+---
+
 ## [v1.0.50] - 2026-11-15
 
 ### 개요

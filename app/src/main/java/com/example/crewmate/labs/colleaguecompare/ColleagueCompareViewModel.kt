@@ -93,10 +93,10 @@ class ColleagueCompareViewModel(
     }
 
     fun loadMyScheduleForMonth(month: YearMonth, forceRefresh: Boolean) {
-        val ymDash = month.toString() // yyyy-MM
+        val ymKey = yearMonthKey(month) // yyyyMM
         viewModelScope.launch {
             runCatching {
-                scheduleRepo.getSchedules(month = ymDash, forceRefresh = forceRefresh).schedules
+                scheduleRepo.getSchedules(month = ymKey, forceRefresh = forceRefresh).schedules
             }.onSuccess { list ->
                 val map = buildMap {
                     list.forEach { sched ->

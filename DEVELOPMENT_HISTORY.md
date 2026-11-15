@@ -1183,6 +1183,13 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `PayStatementScreen.kt`: 2단 겹침 게이지 바(트랙=최대 / 옅은 파랑=예정 / 짙은 파랑=확정), 우측 상단 `확정 X일 / 예정 Y일` 칩, 오프라인 새로고침 버튼 비활성화, 불필요 문구·변수명 전면 제거.
 
 
+### STEP 78: 동료 근무 비교 본인 근무표 `yyyyMM` 조회 키 오류 및 동명이인 가상인물 `cellsByMonth` 폴백 수정 (`v1.0.51`)
+- **원인 및 해결**:
+  - `ColleagueCompareViewModel.loadMyScheduleForMonth()`가 `scheduleRepo.getSchedules()`에 `"yyyy-MM"`을 넘겨 `WorkScheduleDao`(`"yyyyMM"` 저장)에서 0건이 반환되던 문제를 `yearMonthKey(month)`로 수정.
+  - `ComparePerson.cellForDate()`가 `VIRTUAL_PERSON && patternSequence.isEmpty()`일 때 `null`을 조기 반환해 동명이인 분할 가상인물의 `cellsByMonth` 다이아가 빈칸으로 나오던 문제를 `patternSequence.isNotEmpty()` 조건으로 수정.
+  - `PatternFileParserTest`에 동명이인 분할 가상인물 셀 조회 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
+
+
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.
 - **주요 구현 내용**:

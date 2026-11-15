@@ -52,8 +52,7 @@ data class ComparePerson(
 ) {
     fun cellForDate(yearMonthKey: String, dateIso: String): CompareDayCell? {
         manualOverrides[dateIso]?.let { return it }
-        if (type == CompareEntryType.VIRTUAL_PERSON) {
-            if (patternSequence.isEmpty()) return null
+        if (type == CompareEntryType.VIRTUAL_PERSON && patternSequence.isNotEmpty()) {
             val dia = PatternFileParser.resolveCyclicDia(
                 targetDateIso = dateIso,
                 anchorDateIso = patternAnchorDate ?: "${yearMonthKey.substring(0, 4)}-${yearMonthKey.substring(4, 6)}-01",
