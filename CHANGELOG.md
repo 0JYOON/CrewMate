@@ -4,6 +4,18 @@
 
 ---
 
+## [v1.0.52] - 2026-11-15
+### 개인근무명세서 야간 2일차 확정 판별 및 웹(`CrewMate-Alpha`) 동기화
+- **수정 이유**:
+  - 야간 2일차(`alcSpecDvCd == "12"`) 근무는 시간/거리/휴일/연장 값이 `0`이더라도 전날(야간 1일차) 근무의 연장이므로, 연속된 전날 근무가 확정이면 2일차도 확정 일수(승무여비 및 휴일이 아닌 경우 승무수당)로 포함해야 함.
+  - 웹(`CrewMate-Alpha`)에서 기존에 저장된 월별 명세서 캐시에 `alcSpecDvCd`·`pdiaDvCd`가 누락되어 앱과 계산 일수가 다르게 나오던 문제를 해결.
+- **변경 파일**:
+  - [PayStatementParser.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementParser.kt) (`buildReport` 날짜 정렬 및 연속 전날 확정 상태의 야간 2일차 `alcSpecDvCd == "12"` 확정 상속)
+  - [PayStatementParserTest.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/test/java/com/example/crewmate/labs/paystatement/PayStatementParserTest.kt) (야간 2일차 확정 상속 단위 테스트 추가 및 기존 테스트 날짜/구분 보정)
+  - `CrewMate-Alpha/app-runtime.js` (`evaluatePayStatement` 야간 2일차 확정 상속 및 `PayStatementTabView` 레거시 캐시 `store.schedules` 폴백 보완)
+
+---
+
 ## [v1.0.51] - 2026-11-15
 
 ### 개요

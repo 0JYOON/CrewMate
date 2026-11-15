@@ -2,6 +2,8 @@ package com.example.crewmate.labs.paystatement
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 /**
@@ -46,25 +48,47 @@ object PayStatementParser {
     }
 
     fun buildReport(rows: List<PayStatementRow>): PayStatementReport {
-        val totalMinutes = rows.sumOf { it.totPjtTnum }
-        val totalDistanceRaw = rows.sumOf { it.totPjtDst }
+        val sortedRows = rows.sortedBy { it.pjtDt }
+        val totalMinutes = sortedRows.sumOf { it.totPjtTnum }
+        val totalDistanceRaw = sortedRows.sumOf { it.totPjtDst }
         val totalDistance = (totalDistanceRaw * 10.0).roundToInt() / 10.0
-        val holidayMinutes = rows.sumOf { it.hldyTnum }
-        val overtimeMinutes = rows.sumOf { it.extnTnum }
-        val nightMinutes = rows.sumOf { it.nihtTnum }
+        val holidayMinutes = sortedRows.sumOf { it.hldyTnum }
+        val overtimeMinutes = sortedRows.sumOf { it.extnTnum }
+        val nightMinutes = sortedRows.sumOf { it.nihtTnum }
 
-        val operatingIncludingHoliday = rows.count { it.isTravelPayCounted }
-        val operatingExcludingHoliday = rows.count { it.isAllowanceCounted }
-        val confirmedTravelDays = rows.count { it.hasOperatingDistance }
-        val confirmedAllowanceDays = rows.count { it.hasOperatingDistance && !it.isHolidayWork }
-        val holidayOperatingDays = rows.count { it.isTravelPayCounted && it.isHolidayWork }
+        // 야간 2일차(alcSpecDvCd == "12")는 시간/거리 등이 0이더라도 전날 근무가 확정이면 확정으로 판별
+        val confirmedByIndex = BooleanArray(sortedRows.size)
+        for (i in sortedRows.indices) {
+            val row = sortedRows[i]
+            val prevConfirmed = if (i > 0 && row.alcSpecDvCd == "12") {
+                confirmedByIndex[i - 1] && isConsecutiveDate(sortedRows[i - 1].pjtDt, row.pjtDt)
+            } else {
+                false
+            }
+            confirmedByIndex[i] = row.hasOperatingDistance || prevConfirmed
+        }
 
-        val standbyZeroDays = rows.count { it.isStandbyDia && !it.hasOperatingDistance }
-        val standbyZeroNonHolidayDays = rows.count { it.isStandbyDia && !it.hasOperatingDistance && !it.isHolidayWork }
-        val standbyWithOperatingDays = rows.count { it.isStandbyDia && it.hasOperatingDistance }
+        val operatingIncludingHoliday = sortedRows.count { it.isTravelPayCounted }
+        val operatingExcludingHoliday = sortedRows.count { it.isAllowanceCounted }
+        var confirmedTravelDays = 0
+        var confirmedAllowanceDays = 0
+        for (i in sortedRows.indices) {
+            val row = sortedRows[i]
+            if (confirmedByIndex[i] && row.isTravelPayCounted) {
+                confirmedTravelDays++
+                if (!row.isHolidayWork) {
+                    confirmedAllowanceDays++
+                }
+            }
+        }
+        val holidayOperatingDays = sortedRows.count { it.isTravelPayCounted && it.isHolidayWork }
+
+        val standbyZeroDays = sortedRows.count { it.isStandbyDia && !it.hasOperatingDistance }
+        val standbyZeroNonHolidayDays = sortedRows.count { it.isStandbyDia && !it.hasOperatingDistance && !it.isHolidayWork }
+        val standbyWithOperatingDays = sortedRows.count { it.isStandbyDia && it.hasOperatingDistance }
 
         return PayStatementReport(
-            rows = rows,
+            rows = sortedRows,
             totals = PayStatementTotals(
                 totalMinutes = totalMinutes,
                 totalDistance = totalDistance,
@@ -84,5 +108,16 @@ object PayStatementParser {
                 standbyWithOperatingDays = standbyWithOperatingDays
             )
         )
+    }
+
+    private fun isConsecutiveDate(prevYmd: String, currYmd: String): Boolean {
+        val p = prevYmd.filter { it.isDigit() }
+        val c = currYmd.filter { it.isDigit() }
+        if (p.length != 8 || c.length != 8) return true
+        return runCatching {
+            val prevDate = LocalDate.parse(p, DateTimeFormatter.BASIC_ISO_DATE)
+            val currDate = LocalDate.parse(c, DateTimeFormatter.BASIC_ISO_DATE)
+            prevDate.plusDays(1) == currDate
+        }.getOrDefault(false)
     }
 }

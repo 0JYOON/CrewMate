@@ -144,14 +144,14 @@ class PayStatementParserTest {
                 nihtTnum = 0
             )
         )
-        // 1 planned normal duty (alcSpecDvCd="12", distance=0) -> planned in both travel pay & allowance
+        // 1 planned normal duty (alcSpecDvCd="11", distance=0) -> planned in both travel pay & allowance
         rows.add(
             PayStatementRow(
                 num = 22,
                 pjtDt = "20261122",
                 pdiaNo = "1607",
                 offdDdFlg = "N",
-                alcSpecDvCd = "12",
+                alcSpecDvCd = "11",
                 pdiaDvCd = "3",
                 totPjtTnum = 0,
                 totPjtDst = 0.0,
@@ -209,5 +209,27 @@ class PayStatementParserTest {
         assertTrue(standby.isStandbyDia)
         assertFalse(regular900.isStandbyDia)
         assertFalse(leave.isStandbyDia)
+    }
+
+    @Test
+    fun buildReport_nightSecondDayInheritsConfirmationFromPreviousDay() {
+        val rows = listOf(
+            // 1일차 야간 근무 (실적 거리 > 0 -> 확정)
+            PayStatementRow(1, "20261110", "16301", "N", "11", "3", 540, 120.0, 0, 0, 180),
+            // 2일차 야간 근무 (alcSpecDvCd="12", 시간/거리=0 -> 전날 확정이므로 확정 처리)
+            PayStatementRow(2, "20261111", "16301", "N", "12", "3", 0, 0.0, 0, 0, 0),
+            // 3일차 예정 야간 1일차 (거리=0 -> 미확정 예정)
+            PayStatementRow(3, "20261112", "16302", "N", "11", "3", 0, 0.0, 0, 0, 0),
+            // 4일차 예정 야간 2일차 (alcSpecDvCd="12", 전날이 미확정이므로 미확정 예정)
+            PayStatementRow(4, "20261113", "16302", "N", "12", "3", 0, 0.0, 0, 0, 0)
+        )
+
+        val report = PayStatementParser.buildReport(rows)
+        val el = report.eligibility
+
+        assertEquals(4, el.operatingDaysIncludingHoliday)
+        assertEquals(2, el.confirmedTravelDays)
+        assertEquals(4, el.operatingDaysExcludingHoliday)
+        assertEquals(2, el.confirmedAllowanceDays)
     }
 }

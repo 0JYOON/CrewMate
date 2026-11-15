@@ -1189,6 +1189,13 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `ComparePerson.cellForDate()`가 `VIRTUAL_PERSON && patternSequence.isEmpty()`일 때 `null`을 조기 반환해 동명이인 분할 가상인물의 `cellsByMonth` 다이아가 빈칸으로 나오던 문제를 `patternSequence.isNotEmpty()` 조건으로 수정.
   - `PatternFileParserTest`에 동명이인 분할 가상인물 셀 조회 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
 
+### STEP 79: 개인근무명세서 야간 2일차(`alcSpecDvCd == "12"`) 확정 상속 및 웹(`CrewMate-Alpha`) 계산 불일치 수정 (`v1.0.52`)
+- **야간 2일차 확정 판별**:
+  - `PayStatementParser.buildReport()`에서 명세서 행을 `pjtDt` 순으로 정렬한 뒤, `hasOperatingDistance`이거나 연속된 전날 근무가 확정이고 현재 행이 `alcSpecDvCd == "12"`인 경우 해당 행도 확정 일수(`confirmedTravelDays`, 휴일이 아니면 `confirmedAllowanceDays`)에 포함하도록 수정.
+  - `PayStatementParserTest`에 `buildReport_nightSecondDayInheritsConfirmationFromPreviousDay` 단위 테스트 추가 및 전체 119개 테스트·디버그 빌드 통과.
+- **웹-앱 계산 불일치 해결**:
+  - 웹(`CrewMate-Alpha/app-runtime.js`) 브릿지 임포트 경로(`store.payStatementsByMonth[ym]`)에 기존에 저장된 월 데이터는 `alcSpecDvCd`·`pdiaDvCd` 필드가 없어 `isDutyPayRow`가 모두 `false`가 되던 문제를 확인하고, `PayStatementTabView`에서 `r.alcSpecDvCd`가 비어 있을 때 `store.schedules`의 동일 날짜(`pjtDt`) 근무 정보로 `alcSpecDvCd`·`offdDdFlg`를 폴백 보완하고 `evaluatePayStatement`에도 동일한 야간 2일차 확정 상속 로직을 반영.
+
 
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.
