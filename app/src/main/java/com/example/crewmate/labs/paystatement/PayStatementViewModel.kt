@@ -17,16 +17,21 @@ import java.time.format.DateTimeFormatter
 data class PayStatementUiState(
     val selectedMonth: YearMonth = YearMonth.now(),
     val isLoading: Boolean = false,
+    val isOfflineMode: Boolean = false,
     val errorMessage: String? = null,
     val report: PayStatementReport? = null,
     val lastUpdatedText: String? = null
 )
 
 class PayStatementViewModel(
-    private val dataSource: XcrewWebViewXhrDataSource
+    private val dataSource: XcrewWebViewXhrDataSource,
+    private val storage: PayStatementStorage,
+    private val isOfflineModeProvider: () -> Boolean
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PayStatementUiState())
+    private val _uiState = MutableStateFlow(
+        PayStatementUiState(isOfflineMode = isOfflineModeProvider())
+    )
     val uiState: StateFlow<PayStatementUiState> = _uiState.asStateFlow()
 
     init {
@@ -42,11 +47,50 @@ class PayStatementViewModel(
     }
 
     fun refresh() {
+        if (isOfflineModeProvider()) {
+            _uiState.update {
+                it.copy(
+                    isOfflineMode = true,
+                    errorMessage = "오프라인 모드에서는 Xcrew 새로고침을 사용할 수 없습니다."
+                )
+            }
+            return
+        }
         loadMonth(_uiState.value.selectedMonth)
     }
 
     fun loadMonth(month: YearMonth) {
-        _uiState.update { it.copy(selectedMonth = month, isLoading = true, errorMessage = null) }
+        val ymKey = String.format("%04d%02d", month.year, month.monthValue)
+        val offline = isOfflineModeProvider()
+        val cached = storage.loadMonth(ymKey)
+        val cachedReport = cached?.let { PayStatementParser.buildReport(it.rows) }
+
+        if (offline) {
+            _uiState.update {
+                it.copy(
+                    selectedMonth = month,
+                    isLoading = false,
+                    isOfflineMode = true,
+                    report = cachedReport,
+                    lastUpdatedText = cached?.updatedAt,
+                    errorMessage = if (cachedReport == null) {
+                        "오프라인 모드에서는 저장된 개인근무명세서만 조회할 수 있습니다."
+                    } else null
+                )
+            }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                selectedMonth = month,
+                isLoading = true,
+                isOfflineMode = false,
+                report = cachedReport,
+                lastUpdatedText = cached?.updatedAt,
+                errorMessage = null
+            )
+        }
         viewModelScope.launch {
             runCatching {
                 val today = LocalDate.now()
@@ -56,9 +100,11 @@ class PayStatementViewModel(
                     month.atDay(1).format(DateTimeFormatter.BASIC_ISO_DATE)
                 }
                 val rows = dataSource.fetchPersonalWorkSpec(queryDate)
-                PayStatementParser.buildReport(rows)
-            }.onSuccess { report ->
+                val report = PayStatementParser.buildReport(rows)
+                Pair(rows, report)
+            }.onSuccess { (rows, report) ->
                 val updatedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yy-MM-dd HH:mm"))
+                storage.saveMonth(ymKey, rows, updatedAt)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -80,12 +126,14 @@ class PayStatementViewModel(
 }
 
 class PayStatementViewModelFactory(
-    private val dataSource: XcrewWebViewXhrDataSource
+    private val dataSource: XcrewWebViewXhrDataSource,
+    private val storage: PayStatementStorage,
+    private val isOfflineModeProvider: () -> Boolean
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PayStatementViewModel::class.java)) {
-            return PayStatementViewModel(dataSource) as T
+            return PayStatementViewModel(dataSource, storage, isOfflineModeProvider) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }

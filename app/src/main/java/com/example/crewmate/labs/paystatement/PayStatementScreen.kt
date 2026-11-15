@@ -42,6 +42,7 @@ fun PayStatementScreen(
         MonthSelectorBar(
             monthLabel = "${state.selectedMonth.year}년 ${state.selectedMonth.monthValue}월",
             isLoading = state.isLoading,
+            isOfflineMode = state.isOfflineMode,
             lastUpdatedText = state.lastUpdatedText,
             onPrevMonth = { viewModel.previousMonth() },
             onNextMonth = { viewModel.nextMonth() },
@@ -83,9 +84,11 @@ fun PayStatementScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
-                        Spacer(Modifier.height(10.dp))
-                        Button(onClick = { viewModel.refresh() }) {
-                            Text("다시 조회")
+                        if (!state.isOfflineMode) {
+                            Spacer(Modifier.height(10.dp))
+                            Button(onClick = { viewModel.refresh() }) {
+                                Text("다시 조회")
+                            }
                         }
                     }
                 }
@@ -176,6 +179,7 @@ fun PayStatementScreen(
 private fun MonthSelectorBar(
     monthLabel: String,
     isLoading: Boolean,
+    isOfflineMode: Boolean,
     lastUpdatedText: String?,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -221,14 +225,14 @@ private fun MonthSelectorBar(
                 }
                 FilledTonalButton(
                     onClick = onRefresh,
-                    enabled = !isLoading,
+                    enabled = !isLoading && !isOfflineMode,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(if (isOfflineMode) "오프라인" else "새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -462,34 +466,15 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "근무배정(alcSpecDvCd 11·12) 및 실승무 확정(거리 > 0) 기준으로 산정합니다.",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             Spacer(Modifier.height(12.dp))
 
             EligibilityProgressBlock(
                 title = "승무여비",
                 ruleDescription = "휴일근무 포함 근무일수 20일 이상 시 전액 지급",
-                currentDays = eligibility.operatingDaysIncludingHoliday,
-                targetDays = eligibility.travelPayTargetDays,
-                isEligible = eligibility.isTravelPayEligible,
-                remainingDays = eligibility.travelPayRemainingDays,
-                subNote = buildString {
-                    append("확정(거리>0) ${eligibility.confirmedTravelDays}일")
-                    if (eligibility.plannedTravelDays > 0) {
-                        append(" + 예정 ${eligibility.plannedTravelDays}일")
-                    }
-                    if (eligibility.holidayOperatingDays > 0) {
-                        append(" · 휴일 ${eligibility.holidayOperatingDays}일 포함")
-                    }
-                    if (eligibility.standbyWithOperatingDays > 0) {
-                        append(" · 대기 실승무 ${eligibility.standbyWithOperatingDays}일 포함")
-                    }
-                }
+                confirmedDays = eligibility.confirmedTravelDays,
+                expectedDays = eligibility.operatingDaysIncludingHoliday,
+                targetDays = eligibility.travelPayTargetDays
             )
 
             Spacer(Modifier.height(12.dp))
@@ -498,20 +483,10 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
 
             EligibilityProgressBlock(
                 title = "승무수당",
-                ruleDescription = "휴일근무(offdDdFlg=Y) 제외 근무일수 17일 이상 시 전액 지급",
-                currentDays = eligibility.operatingDaysExcludingHoliday,
-                targetDays = eligibility.allowanceTargetDays,
-                isEligible = eligibility.isAllowanceEligible,
-                remainingDays = eligibility.allowanceRemainingDays,
-                subNote = buildString {
-                    append("확정(거리>0) ${eligibility.confirmedAllowanceDays}일")
-                    if (eligibility.plannedAllowanceDays > 0) {
-                        append(" + 예정 ${eligibility.plannedAllowanceDays}일")
-                    }
-                    if (eligibility.holidayOperatingDays > 0) {
-                        append(" · 휴일 ${eligibility.holidayOperatingDays}일 제외")
-                    }
-                }
+                ruleDescription = "휴일근무 제외 근무일수 17일 이상 시 전액 지급",
+                confirmedDays = eligibility.confirmedAllowanceDays,
+                expectedDays = eligibility.operatingDaysExcludingHoliday,
+                targetDays = eligibility.allowanceTargetDays
             )
 
             if (eligibility.hasStandbyZeroDistance) {
@@ -525,7 +500,7 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                         .padding(10.dp)
                 ) {
                     Text(
-                        text = "⚠️ 대기근무(pdiaDvCd=4, 거리 0) ${eligibility.standbyZeroDistanceDays}일 별도 안내",
+                        text = "⚠️ 미승무 대기근무 ${eligibility.standbyZeroDistanceDays}일 별도 안내",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF92400E)
@@ -544,7 +519,7 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
-                        text = "대기근무(pdiaDvCd=4)는 실제 승무(거리 > 0) 실적이 발생해야 승무여비 및 승무수당 지급 일수에 최종 포함됩니다.",
+                        text = "대기근무는 실제 승무 실적이 발생해야 여비·수당 지급 일수에 포함됩니다.",
                         fontSize = 10.5.sp,
                         color = Color(0xFF92400E),
                         lineHeight = 14.sp
@@ -559,15 +534,25 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
 private fun EligibilityProgressBlock(
     title: String,
     ruleDescription: String,
-    currentDays: Int,
-    targetDays: Int,
-    isEligible: Boolean,
-    remainingDays: Int,
-    subNote: String?
+    confirmedDays: Int,
+    expectedDays: Int,
+    targetDays: Int
 ) {
-    val statusBg = if (isEligible) Color(0xFFDCFCE7) else Color(0xFFEFF6FF)
-    val statusFg = if (isEligible) Color(0xFF166534) else Color(0xFF1D4ED8)
-    val progressColor = if (isEligible) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary
+    val isConfirmedEligible = confirmedDays >= targetDays
+    val isExpectedEligible = expectedDays >= targetDays
+    val remainingExpected = (targetDays - expectedDays).coerceAtLeast(0)
+    val confirmedFraction = (confirmedDays.toFloat() / targetDays.toFloat()).coerceIn(0f, 1f)
+    val expectedFraction = (expectedDays.toFloat() / targetDays.toFloat()).coerceIn(0f, 1f)
+
+    val chipBg = when {
+        isConfirmedEligible -> Color(0xFFDCFCE7)
+        isExpectedEligible -> Color(0xFFDBEAFE)
+        else -> Color(0xFFEFF6FF)
+    }
+    val chipFg = when {
+        isConfirmedEligible -> Color(0xFF166534)
+        else -> Color(0xFF1D4ED8)
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -583,13 +568,13 @@ private fun EligibilityProgressBlock(
             )
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = statusBg
+                color = chipBg
             ) {
                 Text(
-                    text = if (isEligible) "✅ 전액 지급 충족 (${currentDays}/${targetDays}일)" else "⏳ ${remainingDays}일 부족 (${currentDays}/${targetDays}일)",
+                    text = "확정 ${confirmedDays}일 / 예정 ${expectedDays}일",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = statusFg,
+                    color = chipFg,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 )
             }
@@ -601,21 +586,51 @@ private fun EligibilityProgressBlock(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(6.dp))
-        LinearProgressIndicator(
-            progress = { (currentDays.toFloat() / targetDays.toFloat()).coerceIn(0f, 1f) },
+        // 3구간 겹침 게이지 바: 트랙(최대 목표일수) / 옅은 파란색(예정) / 짙은 파란색(확정)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(7.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = progressColor,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-        if (!subNote.isNullOrBlank()) {
-            Spacer(Modifier.height(4.dp))
+                .height(9.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (expectedFraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(expectedFraction)
+                        .background(Color(0xFF93C5FD))
+                )
+            }
+            if (confirmedFraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(confirmedFraction)
+                        .background(Color(0xFF1D4ED8))
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = subNote,
-                fontSize = 10.5.sp,
+                text = "최대 ${targetDays}일",
+                fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = when {
+                    isConfirmedEligible -> "✅ 전액 지급 확정"
+                    isExpectedEligible -> "예정 기준 충족"
+                    else -> "⏳ ${remainingExpected}일 부족"
+                },
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isConfirmedEligible) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

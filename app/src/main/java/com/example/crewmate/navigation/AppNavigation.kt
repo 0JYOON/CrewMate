@@ -777,9 +777,16 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     val dataSource = remember(xcrewSession) {
                         XcrewWebViewXhrDataSource(xcrewSession, XcrewWorkScheduleParser())
                     }
+                    val payStorage = remember(appContext) {
+                        com.example.crewmate.labs.paystatement.PayStatementStorage(appContext)
+                    }
                     val viewModel: com.example.crewmate.labs.paystatement.PayStatementViewModel =
                         androidx.lifecycle.viewmodel.compose.viewModel(
-                            factory = com.example.crewmate.labs.paystatement.PayStatementViewModelFactory(dataSource)
+                            factory = com.example.crewmate.labs.paystatement.PayStatementViewModelFactory(
+                                dataSource = dataSource,
+                                storage = payStorage,
+                                isOfflineModeProvider = { isOfflineMode }
+                            )
                         )
                     com.example.crewmate.labs.LabSafeContainer(
                         feature = com.example.crewmate.labs.LabFeature.PAY_STATEMENT,
