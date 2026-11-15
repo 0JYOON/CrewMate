@@ -143,12 +143,12 @@ fun RouteDiagramView(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // 상단 미니 툴바 (마스터 동기화/편집 진입)
+        // 상단 미니 툴바 (마스터 버전 표출)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -157,12 +157,6 @@ fun RouteDiagramView(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            TextButton(
-                onClick = { showMasterDialog = true },
-                modifier = Modifier.height(28.dp)
-            ) {
-                Text("노선·기지 마스터", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         // 가로 스크롤 행로도 캔버스 + 오버레이 텍스트

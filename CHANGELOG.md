@@ -4,6 +4,21 @@
 
 ---
 
+## [v1.0.57] - 2026-11-15
+### 실험실 단계·정렬 개편, 개발자 전용 노선·기지 마스터 페이지(5078) 신설 및 관리자 커맨드 연동
+- **실험실 단계 변경 및 상단 정렬 (앱·웹 공통)**:
+  - `개인근무명세서 조회`(`PAY_STATEMENT`)와 `동료 근무 비교`(`COLLEAGUE_COMPARE`)를 `실험 중` → **베타**(`LabStage.BETA`)로 승격하고, 실험실 메뉴 최상단에 배치함.
+  - `승무 행로도 시각화 뷰`(`ROUTE_DIAGRAM`)를 `베타` → **실험 중**(`LabStage.EXPERIMENTAL`)으로 변경함.
+  - 변경 파일: [LabFeature.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/LabFeature.kt), [LabsSettingsScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/LabsSettingsScreen.kt), `CrewMate-Alpha/app-runtime.js`
+- **일반 사용자 UI에서 마스터 편집 및 Beta 안내 제거**:
+  - Android [RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt) 상단 툴바의 `노선·기지 마스터` 버튼을 제거함.
+  - 웹 `CrewMate-Alpha/app-runtime.js` 설정 > 실험실 카드에서 `노선·화물역·기지 마스터 설정` 버튼 및 `독립 Beta 채널 안내` 블록을 제거함.
+- **개발자 전용 마스터 웹페이지 신설 & Android 관리자 커맨드 연동**:
+  - `CrewMate-Alpha/railway-master-data.js`로 마스터 SSOT 데이터를 분리하고, 4자리 비밀번호 **`5078`** 잠금이 적용된 개발자 전용 페이지 `CrewMate-Alpha/dev-master.html` (`https://crewmate-alpha.pages.dev/dev-master.html`)을 신설함 (`index.html`, `build.js`, `sw.js` 반영).
+  - Android [SettingsScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt)의 `5078` 관리자 허브 다이얼로그(`showAdminHubDialog`)에 `🗺️ 개발자 전용 노선·기지 마스터 페이지` 연결 버튼을 추가함.
+
+---
+
 ## [v1.0.56] - 2026-11-15
 ### 개인근무명세서·동료근무비교 상단 새로고침 UI 통일 및 동료비교 하단 팁 제거
 - **상단 새로고침 UI 통일**:

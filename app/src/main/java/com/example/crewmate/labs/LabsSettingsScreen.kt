@@ -90,7 +90,16 @@ fun LabsSettingsScreen(
             }
         }
 
-        LabFeature.entries.forEach { feature ->
+        val orderedFeatures = remember {
+            LabFeature.entries.sortedBy {
+                when (it.stage) {
+                    LabStage.BETA -> 0
+                    LabStage.GRADUATING -> 1
+                    LabStage.EXPERIMENTAL -> 2
+                }
+            }
+        }
+        orderedFeatures.forEach { feature ->
             val enabled = labStates[feature] == true
             LabFeatureCard(
                 feature = feature,

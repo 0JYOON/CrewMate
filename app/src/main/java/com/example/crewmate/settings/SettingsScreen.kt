@@ -1689,6 +1689,19 @@ fun SettingsScreen() {
                         ) {
                             Text("📡 Xcrew 네트워크 통신 이력 조회")
                         }
+                        Button(
+                            onClick = {
+                                showAdminHubDialog = false
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://crewmate-alpha.pages.dev/dev-master.html")
+                                )
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🗺️ 개발자 전용 노선·기지 마스터 페이지")
+                        }
                     }
                 },
                 confirmButton = {

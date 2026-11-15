@@ -1239,3 +1239,13 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `ColleagueCompareViewModel.kt`: `loadMyScheduleForMonth` 날짜 키 `yyyy-MM-dd` 정규화, `searchColleagues` 복수 기준일(최대 3일) 온라인 병행 조회, `addRealColleague` `crewBuckets` 보완 병합, `lastRefreshedAt` 저장.
   - `ColleagueCompareStorage.kt`: `KEY_LAST_REFRESHED_AT` 저장/복원 추가.
   - `ColleagueCompareScreen.kt`: 새로고침 버튼 좌측 최근 새로고침 시각 표기, `'이름으로 바로 조회·추가'` 제거, `가상·편집` 뱃지 및 최하단 안내 문구 삭제, `EditCellDialog` 복원 `OutlinedButton` 강화, `weight(1f)` 자연 스크롤 적용.
+
+### STEP 84: 실험실 단계·정렬 개편, 개발자 전용 노선·기지 마스터 페이지(5078) 신설 및 관리자 커맨드 연동 (`v1.0.57`)
+- **배경 및 목표**:
+  - 완성도가 확보된 `개인근무명세서 조회` 및 `동료 근무 비교`를 베타 서비스로 승격·상단 배치하고, `승무 행로도 시각화 뷰`는 `실험 중`으로 조정함.
+  - `노선·기지 마스터` 편집 권한과 `독립 Beta 채널 안내`를 일반 사용자 UI에서 제거하고, 비밀번호 `5078`로 보호되는 개발자 전용 웹페이지(`dev-master.html`) 및 앱 관리자 커맨드 연동을 구축함.
+- **주요 구현 내용**:
+  - `LabFeature.kt` & `LabsSettingsScreen.kt`: `PAY_STATEMENT`·`COLLEAGUE_COMPARE`를 `LabStage.BETA`로 변경 및 베타 기능 최상단 정렬, `ROUTE_DIAGRAM`을 `LabStage.EXPERIMENTAL`로 변경.
+  - `RouteDiagramView.kt`: 상단 툴바의 `노선·기지 마스터` 버튼 제거.
+  - `SettingsScreen.kt`: `showAdminHubDialog`(`5078` 잠금 해제)에 `🗺️ 개발자 전용 노선·기지 마스터 페이지`(`https://crewmate-alpha.pages.dev/dev-master.html`) 연결 버튼 추가.
+  - `CrewMate-Alpha`: `railway-master-data.js` 분리, `5078` 비밀번호 잠금이 적용된 `dev-master.html` 신설, `app-runtime.js` 실험실 단계 뱃지/정렬 반영 및 마스터 버튼·독립 Beta 채널 안내 제거 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
