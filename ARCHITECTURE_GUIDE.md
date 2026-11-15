@@ -31,6 +31,7 @@ com.example.crewmate
 | 폴더 위치 | 파일명 | 비유로 설명하는 역할 | 비고 / 상태 |
 | :--- | :--- | :--- | :--- |
 | `root` | [MainActivity.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/MainActivity.kt) | **앱의 메인 대문**: 앱이 시작할 때 가장 먼저 실행되어 테마와 화면 네비게이션을 띄워주는 파일 | **활성 (핵심)** |
+| `security/` | [SecurityGuard.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/security/SecurityGuard.kt) | **Release 서명 무결성·안티 디버깅 가드**: Release 빌드에서 공식 서명 키 SHA-256 일치 여부 및 디버거 부착을 검증하여 변조된 APK 실행을 차단 | **활성 (신규)** |
 | `util/` | [AppDateProvider.kt](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/app/src/main/java/com/example/crewmate/util/AppDateProvider.kt) | **가상 날짜 공급자**: 시스템 시각 변경 없이 앱 내부 날짜를 임의 변경해 테스트할 수 있게 해주는 싱글톤 | **활성 (신규)** |
 | `util/` | [ScreenshotHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/ScreenshotHelper.kt) | **스크린샷 촬영/저장기**: Compose 뷰를 캡처하여 MediaStore(Pictures/CrewMate)에 PNG 저장 | **활성 (신규)** |
 | `util/` | [DiaCaptureHelper.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/DiaCaptureHelper.kt) | **전 화면 다이아 캡처 통합기**: 요약/전체 캡처 옵션 다이얼로그, 전용 문서 헤더 및 갤러리 원스톱 저장 헬퍼 | **활성 (신규)** |

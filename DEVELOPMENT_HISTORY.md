@@ -1249,3 +1249,11 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `RouteDiagramView.kt`: 상단 툴바의 `노선·기지 마스터` 버튼 제거.
   - `SettingsScreen.kt`: `showAdminHubDialog`(`5078` 잠금 해제)에 `🗺️ 개발자 전용 노선·기지 마스터 페이지`(`https://crewmate-alpha.pages.dev/dev-master.html`) 연결 버튼 추가.
   - `CrewMate-Alpha`: `railway-master-data.js` 분리, `5078` 비밀번호 잠금이 적용된 `dev-master.html` 신설, `app-runtime.js` 실험실 단계 뱃지/정렬 반영 및 마스터 버튼·독립 Beta 채널 안내 제거 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
+### STEP 85: 웹·Android 리버스 엔지니어링(REA) 방지 및 난독화·무결성 검증 적용 (`v1.0.58`)
+- **배경 및 목표**:
+  - 브라우저 F12(Sources/Response) 및 Android APK 디컴파일 시 원본 소스코드·주석·식별자가 그대로 노출되는 문제를 방지하기 위해 배포 산출물 난독화 및 무결성 검증을 적용함.
+- **주요 구현 내용**:
+  - `CrewMate-Alpha` (`package.json`, `build.js`): `terser` + `javascript-obfuscator` 파이프라인을 구축하여 `dist/` 내 JS(`app-runtime.js`, `railway-master-data.js`, `xcrew_bridge_snippet.js`) 및 `dev-master.html` 인라인 스크립트를 압축·난독화(주석 제거, 식별자 치환, 문자열 배열 Base64 인코딩·분할) 처리함.
+  - Android (`app/build.gradle.kts`, `app/proguard-rules.pro`): `release` 빌드에 `isMinifyEnabled = true`, `isShrinkResources = true`, `-repackageclasses 'o'`, `SourceFile`/`LineNumberTable` 제거 및 `Log.v/d/i/w` 스트립을 활성화함.
+  - Android (`SecurityGuard.kt`, `MainActivity.kt`): Release 빌드 실행 시 공식 배포 키(`crewmate-release-key.jks`) SHA-256 서명 검증 및 디버거 부착 탐지 가드를 추가함 (`./gradlew.bat test assembleDebug assembleRelease` 및 `node build.js` 통과).

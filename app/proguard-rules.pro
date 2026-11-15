@@ -1,12 +1,11 @@
 # ==============================================================================
-# CrewMate Security & R8 Optimization Rules (Zero-Regression / Anti-False-Positive)
+# CrewMate Security & R8 Optimization Rules (Anti-REA / Release Hardening)
 # ==============================================================================
 
-# 1. Avoid heuristic false positives (Google Play Protect / Ikarus) while
-#    allowing R8 optimization passes to inline and strip XHR endpoint constants.
--dontobfuscate
--dontshrink
--keepattributes SourceFile,LineNumberTable,*Annotation*,Signature,InnerClasses,EnclosingMethod
+# 1. R8 full obfuscation & package flattening (strip SourceFile & LineNumberTable)
+-repackageclasses 'o'
+-allowaccessmodification
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # 2. Keep Xcrew Remote DTO Models & Parsers
 -keep class com.example.crewmate.data.remote.xcrew.** { *; }
@@ -37,9 +36,11 @@
     public boolean *(android.webkit.WebView, java.lang.String);
 }
 
-# 6. Strip verbose debug/test logs in Release builds (Preserve Info/Warn/Error)
+# 6. Strip verbose/debug/info/warn logs in Release builds (Preserve Error only)
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
     public static int v(...);
     public static int d(...);
+    public static int i(...);
+    public static int w(...);
 }

@@ -4,6 +4,18 @@
 
 ---
 
+## [v1.0.58] - 2026-11-15
+### 웹·Android 리버스 엔지니어링(REA) 방지 및 난독화·무결성 검증 적용
+- **웹 (`CrewMate-Alpha`) 난독화 빌드 파이프라인 구축**:
+  - [package.json](file:///C:/Users/joon1/Documents/CrewMate-Alpha/package.json)에 `terser`, `javascript-obfuscator`를 `devDependencies`로 추가함.
+  - [build.js](file:///C:/Users/joon1/Documents/CrewMate-Alpha/build.js)가 `app-runtime.js`, `railway-master-data.js`, `xcrew_bridge_snippet.js` 및 `dev-master.html` 인라인 스크립트를 `terser` 압축 + `javascript-obfuscator`(식별자 16진수 치환, 문자열 Base64 배열 인코딩·분할, 주석 제거) 처리하여 `dist/`에 출력하도록 개편함.
+- **Android Release R8 난독화 및 서명 무결성 검증**:
+  - [build.gradle.kts](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/build.gradle.kts)의 `release` 빌드 타입에 `isMinifyEnabled = true`, `isShrinkResources = true`를 활성화함.
+  - [proguard-rules.pro](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/proguard-rules.pro)에서 `-dontobfuscate`, `-dontshrink`, `SourceFile`/`LineNumberTable` 속성을 제거하고 `-repackageclasses 'o'` 패키지 평탄화 및 `Log.v/d/i/w` 스트립을 적용함.
+  - [SecurityGuard.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/security/SecurityGuard.kt)를 신설하고 [MainActivity.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/MainActivity.kt) 진입 시 Release 빌드에서 APK 서명 인증서 SHA-256 검증 및 디버거 탐지를 수행하도록 연동함.
+
+---
+
 ## [v1.0.57] - 2026-11-15
 ### 실험실 단계·정렬 개편, 개발자 전용 노선·기지 마스터 페이지(5078) 신설 및 관리자 커맨드 연동
 - **실험실 단계 변경 및 상단 정렬 (앱·웹 공통)**:

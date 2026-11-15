@@ -23,6 +23,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!com.example.crewmate.security.SecurityGuard.verifyAppIntegrity(this)) {
+            finishAffinity()
+            return
+        }
         com.example.crewmate.data.remote.xcrew.XcrewNetworkLogStore.init(this)
         com.example.crewmate.login.DailyBanCheckReceiver.scheduleNextDailyCheck(this)
         initialRouteState.value = intent?.getStringExtra("target_route")
