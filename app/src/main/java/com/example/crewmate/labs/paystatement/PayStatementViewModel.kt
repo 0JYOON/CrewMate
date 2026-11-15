@@ -18,6 +18,7 @@ data class PayStatementUiState(
     val selectedMonth: YearMonth = YearMonth.now(),
     val isLoading: Boolean = false,
     val isOfflineMode: Boolean = false,
+    val autoRefresh: Boolean = false,
     val errorMessage: String? = null,
     val report: PayStatementReport? = null,
     val lastUpdatedText: String? = null
@@ -30,20 +31,31 @@ class PayStatementViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        PayStatementUiState(isOfflineMode = isOfflineModeProvider())
+        PayStatementUiState(
+            isOfflineMode = isOfflineModeProvider(),
+            autoRefresh = storage.loadAutoRefresh()
+        )
     )
     val uiState: StateFlow<PayStatementUiState> = _uiState.asStateFlow()
 
     init {
-        loadMonth(YearMonth.now())
+        loadMonth(YearMonth.now(), forceRefresh = _uiState.value.autoRefresh)
     }
 
     fun previousMonth() {
-        loadMonth(_uiState.value.selectedMonth.minusMonths(1))
+        loadMonth(_uiState.value.selectedMonth.minusMonths(1), forceRefresh = _uiState.value.autoRefresh)
     }
 
     fun nextMonth() {
-        loadMonth(_uiState.value.selectedMonth.plusMonths(1))
+        loadMonth(_uiState.value.selectedMonth.plusMonths(1), forceRefresh = _uiState.value.autoRefresh)
+    }
+
+    fun setAutoRefresh(enabled: Boolean) {
+        storage.saveAutoRefresh(enabled)
+        _uiState.update { it.copy(autoRefresh = enabled) }
+        if (enabled && !isOfflineModeProvider()) {
+            loadMonth(_uiState.value.selectedMonth, forceRefresh = true)
+        }
     }
 
     fun refresh() {
@@ -56,24 +68,24 @@ class PayStatementViewModel(
             }
             return
         }
-        loadMonth(_uiState.value.selectedMonth)
+        loadMonth(_uiState.value.selectedMonth, forceRefresh = true)
     }
 
-    fun loadMonth(month: YearMonth) {
+    fun loadMonth(month: YearMonth, forceRefresh: Boolean = false) {
         val ymKey = String.format("%04d%02d", month.year, month.monthValue)
         val offline = isOfflineModeProvider()
         val cached = storage.loadMonth(ymKey)
         val cachedReport = cached?.let { PayStatementParser.buildReport(it.rows) }
 
-        if (offline) {
+        if (offline || !forceRefresh) {
             _uiState.update {
                 it.copy(
                     selectedMonth = month,
                     isLoading = false,
-                    isOfflineMode = true,
+                    isOfflineMode = offline,
                     report = cachedReport,
                     lastUpdatedText = cached?.updatedAt,
-                    errorMessage = if (cachedReport == null) {
+                    errorMessage = if (offline && cachedReport == null) {
                         "오프라인 모드에서는 저장된 개인근무명세서만 조회할 수 있습니다."
                     } else null
                 )

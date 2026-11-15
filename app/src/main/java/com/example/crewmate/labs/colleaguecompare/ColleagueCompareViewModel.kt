@@ -7,6 +7,8 @@ import com.example.crewmate.data.remote.xcrew.PersonalWorkScheduleDto
 import com.example.crewmate.data.remote.xcrew.XcrewWebViewXhrDataSource
 import com.example.crewmate.database.CrewAssignmentDao
 import com.example.crewmate.database.WorkScheduleDao
+import com.example.crewmate.database.WorkScheduleEntity
+import com.example.crewmate.schedule.CrewWorkStatusRepository
 import com.example.crewmate.schedule.WorkScheduleParser
 import com.example.crewmate.schedule.WorkScheduleRepositoryImpl
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +50,12 @@ class ColleagueCompareViewModel(
         isOfflineModeProvider = isOfflineModeProvider
     )
 
+    private val crewWorkStatusRepo = CrewWorkStatusRepository(
+        dataSource = dataSource,
+        crewAssignmentDao = crewAssignmentDao,
+        isOfflineModeProvider = isOfflineModeProvider
+    )
+
     private val _uiState = MutableStateFlow(
         ColleagueCompareUiState(
             people = storage.loadPeople(),
@@ -58,7 +66,10 @@ class ColleagueCompareViewModel(
     val uiState: StateFlow<ColleagueCompareUiState> = _uiState.asStateFlow()
 
     init {
-        loadMyScheduleForMonth(_uiState.value.selectedMonth, forceRefresh = false)
+        loadMyScheduleFromCache(_uiState.value.selectedMonth)
+        if (_uiState.value.displayOptions.autoRefresh && !isOfflineModeProvider()) {
+            refreshAllOnline()
+        }
     }
 
     fun yearMonthKey(ym: YearMonth = _uiState.value.selectedMonth): String =
@@ -67,13 +78,21 @@ class ColleagueCompareViewModel(
     fun previousMonth() {
         val prev = _uiState.value.selectedMonth.minusMonths(1)
         _uiState.update { it.copy(selectedMonth = prev, errorMessage = null, statusMessage = null) }
-        loadMyScheduleForMonth(prev, forceRefresh = false)
+        if (_uiState.value.displayOptions.autoRefresh && !isOfflineModeProvider()) {
+            loadMyScheduleForMonth(prev, forceRefresh = true)
+        } else {
+            loadMyScheduleFromCache(prev)
+        }
     }
 
     fun nextMonth() {
         val next = _uiState.value.selectedMonth.plusMonths(1)
         _uiState.update { it.copy(selectedMonth = next, errorMessage = null, statusMessage = null) }
-        loadMyScheduleForMonth(next, forceRefresh = false)
+        if (_uiState.value.displayOptions.autoRefresh && !isOfflineModeProvider()) {
+            loadMyScheduleForMonth(next, forceRefresh = true)
+        } else {
+            loadMyScheduleFromCache(next)
+        }
     }
 
     fun setShowCommuteTimes(show: Boolean) {
@@ -88,8 +107,56 @@ class ColleagueCompareViewModel(
         _uiState.update { it.copy(displayOptions = opts) }
     }
 
+    fun setAutoRefresh(enabled: Boolean) {
+        val opts = _uiState.value.displayOptions.copy(autoRefresh = enabled)
+        storage.saveDisplayOptions(opts)
+        _uiState.update { it.copy(displayOptions = opts) }
+        if (enabled && !isOfflineModeProvider()) {
+            refreshAllOnline()
+        }
+    }
+
     fun clearSearchResults() {
         _uiState.update { it.copy(searchResults = emptyList(), isSearchingColleagues = false) }
+    }
+
+    private fun entitiesToMyCellsMap(entities: List<WorkScheduleEntity>): Map<String, CompareDayCell> {
+        return buildMap {
+            entities.forEach { sched ->
+                val rawDigits = sched.date.filter { it.isDigit() }
+                val dateKey = if (rawDigits.length == 8) {
+                    "${rawDigits.substring(0, 4)}-${rawDigits.substring(4, 6)}-${rawDigits.substring(6, 8)}"
+                } else {
+                    sched.date.trim()
+                }
+                if (dateKey.isNotEmpty()) {
+                    val dia = buildString {
+                        if (sched.isContinuation) append("~")
+                        append(sched.diaNo?.trim().orEmpty().ifEmpty { sched.nonActiveType?.trim().orEmpty() })
+                    }.ifBlank { "-" }
+                    put(
+                        dateKey,
+                        CompareDayCell(
+                            date = dateKey,
+                            diaNo = dia,
+                            startTime = sched.startTime.orEmpty(),
+                            endTime = sched.endTime.orEmpty()
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadMyScheduleFromCache(month: YearMonth) {
+        val ymKey = yearMonthKey(month)
+        viewModelScope.launch {
+            runCatching {
+                workScheduleDao.getSchedulesForMonth(ymKey)
+            }.onSuccess { entities ->
+                _uiState.update { it.copy(myCells = entitiesToMyCellsMap(entities)) }
+            }
+        }
     }
 
     fun loadMyScheduleForMonth(month: YearMonth, forceRefresh: Boolean) {
@@ -188,43 +255,45 @@ class ColleagueCompareViewModel(
         }
     }
 
+    /**
+     * 선택한 월(1일~말일)의 소속 승무원 현황(/extrCrewMg/searchExtrCrewWrkPstt.do)을
+     * 로컬 캐시(CrewAssignmentDao)에 빠짐없이 채웁니다.
+     */
+    private suspend fun ensureMonthCrewCache(month: YearMonth, forceAllDays: Boolean) {
+        if (isOfflineModeProvider()) return
+        val totalDays = month.lengthOfMonth()
+        for (day in 1..totalDays) {
+            val ymd = String.format("%04d%02d%02d", month.year, month.monthValue, day)
+            val hasCache = !forceAllDays && crewAssignmentDao.countForDate(ymd) > 0
+            if (!hasCache) {
+                _uiState.update { it.copy(statusMessage = "${month.monthValue}월 소속현황 수집 중 ($day/${totalDays}일)...") }
+                runCatching { crewWorkStatusRepo.refreshAndStore(ymd) }
+            }
+        }
+    }
+
     fun addRealColleague(empNm: String) {
         val cleanName = empNm.trim()
         if (cleanName.isEmpty()) return
         val month = _uiState.value.selectedMonth
         val ymKey = yearMonthKey(month)
-        val queryDate = "${ymKey}01"
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null, statusMessage = null) }
         viewModelScope.launch {
             runCatching {
-                val dtos = if (!isOfflineModeProvider()) {
-                    runCatching { dataSource.fetchPersonalWorkSchedule(queryDate, cleanName) }.getOrDefault(emptyList())
-                } else emptyList()
-                val dtoBuckets = dtosToGroupedBuckets(dtos)
-                val crewBuckets = collectCrewDaoBucketsForMonth(month, cleanName)
-                Pair(dtoBuckets, crewBuckets)
-            }.onSuccess { (dtoBuckets, crewBuckets) ->
-                val maxPerDay = maxOf(
-                    dtoBuckets.values.maxOfOrNull { it.size } ?: 0,
-                    crewBuckets.values.maxOfOrNull { it.size } ?: 0
-                )
+                ensureMonthCrewCache(month, forceAllDays = false)
+                collectCrewDaoBucketsForMonth(month, cleanName)
+            }.onSuccess { crewBuckets ->
+                val maxPerDay = crewBuckets.values.maxOfOrNull { it.size } ?: 0
                 val current = _uiState.value.people.toMutableList()
                 if (maxPerDay >= 2) {
-                    // 동명이인 감지: 인원수(maxPerDay)만큼 가상 인물로 분할 추가
-                    val mergedByDate = linkedMapOf<String, List<CompareDayCell>>()
-                    val allDates = (dtoBuckets.keys + crewBuckets.keys).toSortedSet()
-                    allDates.forEach { iso ->
-                        val fromDto = dtoBuckets[iso].orEmpty()
-                        val fromCrew = crewBuckets[iso].orEmpty()
-                        mergedByDate[iso] = if (fromDto.size >= fromCrew.size) fromDto else fromCrew
-                    }
+                    // 동명이인 감지: 인원수(maxPerDay)만큼 수동 추가 인물로 분할 추가
                     val createdNames = mutableListOf<String>()
                     for (idx in 0 until maxPerDay) {
                         val virtualName = "$cleanName (${idx + 1})"
                         createdNames.add(virtualName)
                         val personCells = linkedMapOf<String, CompareDayCell>()
-                        mergedByDate.forEach { (iso, list) ->
+                        crewBuckets.forEach { (iso, list) ->
                             list.getOrNull(idx)?.let { cell ->
                                 personCells[iso] = cell
                             }
@@ -252,13 +321,12 @@ class ColleagueCompareViewModel(
                         it.copy(
                             isLoading = false,
                             people = current,
-                            statusMessage = "동명이인 ${maxPerDay}명이 확인되어 가상 인물(${createdNames.joinToString(", ")})로 추가했습니다."
+                            statusMessage = "동명이인 ${maxPerDay}명이 확인되어 수동 추가(${createdNames.joinToString(", ")})로 분리했습니다. 휴무일 순번 차이로 배정이 섞일 수 있으니 칸을 눌러 확인해 주세요."
                         )
                     }
                 } else {
                     val dayMap = linkedMapOf<String, CompareDayCell>()
                     crewBuckets.forEach { (iso, list) -> list.firstOrNull()?.let { dayMap[iso] = it } }
-                    dtoBuckets.forEach { (iso, list) -> list.firstOrNull()?.let { dayMap[iso] = it } }
                     val existingIdx = current.indexOfFirst { it.type == CompareEntryType.REAL_COLLEAGUE && it.name == cleanName }
                     if (existingIdx >= 0) {
                         val existing = current[existingIdx]
@@ -279,7 +347,11 @@ class ColleagueCompareViewModel(
                         it.copy(
                             isLoading = false,
                             people = current,
-                            statusMessage = "'${cleanName}' 님의 ${month.monthValue}월 근무표를 불러와 저장했습니다."
+                            statusMessage = if (dayMap.isEmpty()) {
+                                "'${cleanName}' 님의 ${month.monthValue}월 소속현황 배정 내역이 없습니다."
+                            } else {
+                                "'${cleanName}' 님의 ${month.monthValue}월 근무표(${dayMap.size}일)를 불러와 저장했습니다."
+                            }
                         )
                     }
                 }
@@ -295,7 +367,7 @@ class ColleagueCompareViewModel(
     }
 
     fun addVirtualPerson(name: String, sequence: List<String>, anchorDateIso: String) {
-        val cleanName = name.trim().ifBlank { "가상 인물" }
+        val cleanName = name.trim().ifBlank { "수동 추가" }
         val cleanSeq = sequence.map { it.trim() }.filter { it.isNotEmpty() }
         if (cleanSeq.isEmpty()) return
 
@@ -314,7 +386,45 @@ class ColleagueCompareViewModel(
         _uiState.update {
             it.copy(
                 people = updated,
-                statusMessage = "가상 인물 '${cleanName}' (${cleanSeq.size}일 패턴) 추가 완료"
+                statusMessage = "수동 추가 '${cleanName}' (${cleanSeq.size}일 패턴) 등록 완료"
+            )
+        }
+    }
+
+    fun addManualCellsPerson(name: String, month: YearMonth, cells: Map<String, CompareDayCell>) {
+        if (cells.isEmpty()) return
+        val ymKey = yearMonthKey(month)
+        addManualBatch(listOf(ParsedColleagueImport(name = name.trim().ifBlank { "수동 추가" }, ymKey = ymKey, cells = cells)))
+    }
+
+    fun addManualBatch(imports: List<ParsedColleagueImport>) {
+        if (imports.isEmpty()) return
+        val current = _uiState.value.people.toMutableList()
+        imports.forEach { imp ->
+            val cleanName = imp.name.trim().ifBlank { "수동 추가" }
+            val existingIdx = current.indexOfFirst {
+                it.type == CompareEntryType.VIRTUAL_PERSON && it.name == cleanName && it.patternSequence.isEmpty()
+            }
+            if (existingIdx >= 0) {
+                val existing = current[existingIdx]
+                val mergedMonths = existing.cellsByMonth.toMutableMap().apply { put(imp.ymKey, imp.cells) }
+                current[existingIdx] = existing.copy(cellsByMonth = mergedMonths)
+            } else {
+                current.add(
+                    ComparePerson(
+                        id = "vir_${UUID.randomUUID()}",
+                        name = cleanName,
+                        type = CompareEntryType.VIRTUAL_PERSON,
+                        cellsByMonth = mapOf(imp.ymKey to imp.cells)
+                    )
+                )
+            }
+        }
+        storage.savePeople(current)
+        _uiState.update {
+            it.copy(
+                people = current,
+                statusMessage = "수동 추가 ${imports.size}명 등록 완료 (${imports.joinToString(", ") { p -> p.name }})"
             )
         }
     }
@@ -325,7 +435,7 @@ class ColleagueCompareViewModel(
         sequence: List<String>,
         anchorDateIso: String
     ) {
-        val cleanName = name.trim().ifBlank { "가상 인물" }
+        val cleanName = name.trim().ifBlank { "수동 추가" }
         val cleanSeq = sequence.map { it.trim() }.filter { it.isNotEmpty() }
         val updated = _uiState.value.people.map { person ->
             if (person.id != personId || person.type != CompareEntryType.VIRTUAL_PERSON) {
@@ -342,7 +452,7 @@ class ColleagueCompareViewModel(
         _uiState.update {
             it.copy(
                 people = updated,
-                statusMessage = "가상 인물 '${cleanName}' 설정이 수정되었습니다."
+                statusMessage = "수동 추가 '${cleanName}' 설정이 수정되었습니다."
             )
         }
     }
@@ -391,12 +501,15 @@ class ColleagueCompareViewModel(
         }
         val month = _uiState.value.selectedMonth
         val ymKey = yearMonthKey(month)
-        val queryDate = "${ymKey}01"
 
         _uiState.update { it.copy(isLoading = true, errorMessage = null, statusMessage = null) }
         loadMyScheduleForMonth(month, forceRefresh = true)
 
         viewModelScope.launch {
+            val hasRealColleagues = _uiState.value.people.any { it.type == CompareEntryType.REAL_COLLEAGUE }
+            if (hasRealColleagues) {
+                runCatching { ensureMonthCrewCache(month, forceAllDays = true) }
+            }
             var successCount = 0
             var failCount = 0
             val updated = _uiState.value.people.map { person ->
@@ -404,14 +517,12 @@ class ColleagueCompareViewModel(
                     person
                 } else {
                     val res = runCatching {
-                        val dtos = dataSource.fetchPersonalWorkSchedule(queryDate, person.name)
-                        dtosToCellMap(dtos)
+                        val buckets = collectCrewDaoBucketsForMonth(month, person.name)
+                        buildMap {
+                            buckets.forEach { (iso, list) -> list.firstOrNull()?.let { put(iso, it) } }
+                        }
                     }
-                    res.onSuccess { dayMap ->
-                        successCount++
-                    }.onFailure {
-                        failCount++
-                    }
+                    res.onSuccess { successCount++ }.onFailure { failCount++ }
                     val map = res.getOrNull()
                     if (map != null) {
                         val merged = person.cellsByMonth.toMutableMap().apply { put(ymKey, map) }

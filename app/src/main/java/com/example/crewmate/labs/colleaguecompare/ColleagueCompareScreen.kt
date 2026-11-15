@@ -2,6 +2,7 @@ package com.example.crewmate.labs.colleaguecompare
 
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -21,12 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -116,7 +120,7 @@ fun ColleagueCompareScreen(
 
         Spacer(Modifier.height(6.dp))
 
-        // 액션 버튼 바: 승무원 추가 / 가상 인물
+        // 액션 버튼 바: 승무원 추가 / 수동 추가
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -136,15 +140,17 @@ fun ColleagueCompareScreen(
                 modifier = Modifier.weight(1f).height(34.dp),
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
             ) {
-                Text("+ 가상 인물", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("+ 수동 추가", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
 
         Spacer(Modifier.height(6.dp))
 
-        // 표시 옵션 뱃지 바: 출퇴근 표시 ON/OFF + 바로 우측 가로/세로 전환 뱃지
+        // 표시 옵션 뱃지 바: 출퇴근 표시 + 가로/세로 전환 + 자동 새로고침
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -159,7 +165,7 @@ fun ColleagueCompareScreen(
                 )
             ) {
                 Text(
-                    text = if (commuteOn) "⚙️ 출퇴근 표시 ON" else "⚙️ 출퇴근 표시 OFF",
+                    text = if (commuteOn) "⚙️ 출퇴근 ON" else "⚙️ 출퇴근 OFF",
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (commuteOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -182,6 +188,25 @@ fun ColleagueCompareScreen(
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (transposed) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            val autoRef = state.displayOptions.autoRefresh
+            Surface(
+                onClick = { viewModel.setAutoRefresh(!autoRef) },
+                shape = RoundedCornerShape(8.dp),
+                color = if (autoRef) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                border = BorderStroke(
+                    1.dp,
+                    if (autoRef) Color(0xFF16A34A).copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                )
+            ) {
+                Text(
+                    text = if (autoRef) "🔄 자동새로고침 ON" else "🔄 수동새로고침",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (autoRef) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
@@ -456,7 +481,7 @@ fun ColleagueCompareScreen(
         if (state.people.isEmpty()) {
             Spacer(Modifier.height(10.dp))
             Text(
-                text = "💡 상단의 [+ 승무원 추가]로 동료 이름을 검색하거나 [+ 가상 인물]로 미배정 패턴(엑셀·메모장 파일 포함)을 추가해 한눈에 비교해 보세요.",
+                text = "💡 상단의 [+ 승무원 추가]로 동료 이름을 검색하거나 [+ 수동 추가]로 순환 패턴·스크린샷·AI 일괄 붙여넣기로 등록해 한눈에 비교해 보세요.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 16.sp
@@ -478,27 +503,30 @@ fun ColleagueCompareScreen(
         )
     }
 
-    // 가상 인물(미배정 패턴) 추가 팝업
+    // 수동 추가 팝업 (순환 패턴 / 스크린샷 OCR / AI 일괄 붙여넣기)
     if (showAddVirtualDialog) {
-        VirtualPersonDialog(
-            title = "가상 인물(미배정 패턴) 추가",
-            confirmLabel = "추가",
-            initialName = "",
-            initialAnchorDate = "${state.selectedMonth}-01",
-            initialPatternText = "",
-            allowEmptyPattern = false,
-            onConfirm = { name, seq, anchor ->
+        ManualPersonAddDialog(
+            defaultMonth = state.selectedMonth,
+            onConfirmPattern = { name, seq, anchor ->
                 viewModel.addVirtualPerson(name, seq, anchor)
+                showAddVirtualDialog = false
+            },
+            onConfirmCells = { name, ym, cells ->
+                viewModel.addManualCellsPerson(name, ym, cells)
+                showAddVirtualDialog = false
+            },
+            onConfirmBatch = { imports ->
+                viewModel.addManualBatch(imports)
                 showAddVirtualDialog = false
             },
             onDismiss = { showAddVirtualDialog = false }
         )
     }
 
-    // 가상 인물 이름 클릭 -> 순환 다이아 및 시작날짜 수정 팝업
+    // 수동 추가 이름 클릭 -> 순환 다이아 및 시작날짜 수정 팝업
     editingVirtualPerson?.let { person ->
         VirtualPersonDialog(
-            title = "가상 인물 설정 수정",
+            title = "수동 추가 설정 수정",
             confirmLabel = "저장",
             initialName = person.name,
             initialAnchorDate = person.patternAnchorDate ?: "${state.selectedMonth}-01",
@@ -512,7 +540,7 @@ fun ColleagueCompareScreen(
         )
     }
 
-    // 근무 셀 덮어쓰기 팝업 (실존 동료 + 가상 인물 공통)
+    // 근무 셀 덮어쓰기 팝업 (실존 동료 + 수동 추가 공통)
     editingCell?.let { (person, dateIso, currentCell) ->
         EditCellDialog(
             personName = person.name,
@@ -799,10 +827,329 @@ private fun AddColleagueDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                ) {
+                    Text(
+                        text = "💡 동명이인이나 Xcrew 자료구조 상 오류 발생 가능성이 있으므로, 지인의 근무표를 받아 [수동 추가]로 직접 추가하는 것을 권장합니다.",
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = Color(0xFF92400E),
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("닫기") }
+        }
+    )
+}
+
+@Composable
+private fun ManualPersonAddDialog(
+    defaultMonth: YearMonth,
+    onConfirmPattern: (name: String, sequence: List<String>, anchorDate: String) -> Unit,
+    onConfirmCells: (name: String, month: YearMonth, cells: Map<String, CompareDayCell>) -> Unit,
+    onConfirmBatch: (List<ParsedColleagueImport>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+
+    var selectedTab by remember { mutableStateOf(0) } // 0=순환패턴, 1=스크린샷OCR, 2=AI일괄
+
+    // Tab 0: 순환 패턴
+    var name by remember { mutableStateOf("") }
+    var anchorDate by remember { mutableStateOf("${defaultMonth}-01") }
+    var patternText by remember { mutableStateOf("") }
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            PatternFileParser.parseFromUri(context, uri)
+                .onSuccess { tokens ->
+                    patternText = tokens.joinToString(", ")
+                    Toast.makeText(context, "${tokens.size}개 다이아 순서를 불러왔습니다.", Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { err ->
+                    Toast.makeText(context, err.message ?: "파일 파싱 실패", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
+    // Tab 1: 스크린샷 OCR
+    var isOcrRunning by remember { mutableStateOf(false) }
+    var ocrName by remember { mutableStateOf("") }
+    var ocrMonth by remember { mutableStateOf(defaultMonth) }
+    var ocrEntries by remember { mutableStateOf<List<OcrDayEntry>>(emptyList()) }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            isOcrRunning = true
+            scope.launch {
+                runCatching {
+                    ScreenshotScheduleOcr.recognizeFromUri(context, uri, defaultMonth)
+                }.onSuccess { result ->
+                    isOcrRunning = false
+                    ocrName = result.name
+                    ocrMonth = result.yearMonth
+                    ocrEntries = result.entries
+                    if (result.entries.isEmpty()) {
+                        Toast.makeText(context, "근무표 날짜/다이아를 인식하지 못했습니다. AI 일괄 탭을 이용해 보세요.", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "${result.entries.size}일치 인식 완료! 내용을 확인 후 등록하세요.", Toast.LENGTH_SHORT).show()
+                    }
+                }.onFailure { err ->
+                    isOcrRunning = false
+                    Toast.makeText(context, "OCR 실패: ${err.message ?: "알 수 없는 오류"}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // Tab 2: AI 일괄 붙여넣기
+    var aiPasteText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("수동 추가", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("순환 패턴", "📷 스크린샷", "🤖 AI 일괄").forEachIndexed { idx, label ->
+                        FilterChip(
+                            selected = selectedTab == idx,
+                            onClick = { selectedTab = idx },
+                            label = { Text(label, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, maxLines = 1) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                when (selectedTab) {
+                    0 -> {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("표시 이름", fontSize = 12.sp) },
+                                placeholder = { Text("예: 홍길동 또는 미배정 A조", fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = anchorDate,
+                                onValueChange = { anchorDate = it },
+                                label = { Text("패턴 1번 시작일 (yyyy-MM-dd)", fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    filePickerLauncher.launch(
+                                        arrayOf(
+                                            "text/plain",
+                                            "text/csv",
+                                            "text/comma-separated-values",
+                                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            "*/*"
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("📂 엑셀(.xlsx/.csv) 또는 메모장(.txt) 불러오기", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedTextField(
+                                value = patternText,
+                                onValueChange = { patternText = it },
+                                label = { Text("다이아번호 순서 (쉼표·줄바꿈 구분)", fontSize = 12.sp) },
+                                placeholder = { Text("예: 16035, 16315, ~, S, 16038", fontSize = 12.sp) },
+                                minLines = 3,
+                                maxLines = 5,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    1 -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Xcrew 당월승무근무표 스크린샷을 선택하면 기기 내 OCR로 날짜·다이아·출퇴근시각을 추출합니다. (오프라인 지원)",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 15.sp
+                            )
+                            FilledTonalButton(
+                                onClick = {
+                                    imagePickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                enabled = !isOcrRunning,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (isOcrRunning) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("이미지 분석 중...", fontSize = 11.5.sp)
+                                } else {
+                                    Text("📷 근무표 스크린샷 선택", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            if (ocrEntries.isNotEmpty()) {
+                                OutlinedTextField(
+                                    value = ocrName,
+                                    onValueChange = { ocrName = it },
+                                    label = { Text("인식된 이름 (${ocrMonth.year}.${String.format("%02d", ocrMonth.monthValue)})", fontSize = 11.5.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                ocrEntries.forEachIndexed { idx, entry ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "${entry.day}일",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.width(30.dp)
+                                        )
+                                        OutlinedTextField(
+                                            value = entry.diaNo,
+                                            onValueChange = { v ->
+                                                ocrEntries = ocrEntries.toMutableList().also { it[idx] = entry.copy(diaNo = v) }
+                                            },
+                                            label = { Text("다이아", fontSize = 9.sp) },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1.2f)
+                                        )
+                                        OutlinedTextField(
+                                            value = entry.startTime,
+                                            onValueChange = { v ->
+                                                ocrEntries = ocrEntries.toMutableList().also { it[idx] = entry.copy(startTime = v) }
+                                            },
+                                            label = { Text("출근", fontSize = 9.sp) },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = entry.endTime,
+                                            onValueChange = { v ->
+                                                ocrEntries = ocrEntries.toMutableList().also { it[idx] = entry.copy(endTime = v) }
+                                            },
+                                            label = { Text("퇴근", fontSize = 9.sp) },
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    2 -> {
+                        Column(
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "1) [AI 프롬프트 복사]를 눌러 Gemini/ChatGPT에 스크린샷과 함께 전송한 뒤, 2) 출력 결과를 붙여넣으면 여러 명도 한 번에 등록됩니다.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 15.sp
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    clipboard.setText(AnnotatedString(ColleagueScheduleImportParser.AI_EXTRACTION_PROMPT))
+                                    Toast.makeText(context, "AI 추출 프롬프트가 복사되었습니다.", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("📋 AI 추출 프롬프트 복사", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedTextField(
+                                value = aiPasteText,
+                                onValueChange = { aiPasteText = it },
+                                label = { Text("AI 출력 결과 붙여넣기 (다중 인원 지원)", fontSize = 11.5.sp) },
+                                placeholder = {
+                                    Text("[이름: 윤영준 | 월: 2026-11]\n01: 연차\n02: 16035 | 09:53 | 21:05", fontSize = 11.sp)
+                                },
+                                minLines = 5,
+                                maxLines = 8,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    when (selectedTab) {
+                        0 -> {
+                            val seq = PatternFileParser.parseTextOrCsv(patternText)
+                            if (seq.isEmpty()) {
+                                Toast.makeText(context, "다이아번호 패턴을 입력하거나 파일을 불러와 주세요.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onConfirmPattern(name.ifBlank { "수동 추가" }, seq, anchorDate.trim())
+                            }
+                        }
+                        1 -> {
+                            if (ocrEntries.isEmpty()) {
+                                Toast.makeText(context, "먼저 근무표 스크린샷을 선택해 주세요.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val ymDash = String.format("%04d-%02d", ocrMonth.year, ocrMonth.monthValue)
+                                val cellMap = ocrEntries.associate { e ->
+                                    val iso = "$ymDash-${String.format("%02d", e.day)}"
+                                    iso to CompareDayCell(
+                                        date = iso,
+                                        diaNo = e.diaNo.trim().ifEmpty { "-" },
+                                        startTime = e.startTime.trim(),
+                                        endTime = e.endTime.trim()
+                                    )
+                                }
+                                onConfirmCells(ocrName.ifBlank { "수동 추가" }, ocrMonth, cellMap)
+                            }
+                        }
+                        2 -> {
+                            val parsed = ColleagueScheduleImportParser.parseBatchScheduleText(aiPasteText, defaultMonth)
+                            if (parsed.isEmpty()) {
+                                Toast.makeText(context, "인식된 근무표 블록이 없습니다. 형식을 확인해 주세요.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onConfirmBatch(parsed)
+                            }
+                        }
+                    }
+                }
+            ) {
+                Text(if (selectedTab == 2) "일괄 등록" else "추가")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
         }
     )
 }
@@ -895,7 +1242,7 @@ private fun VirtualPersonDialog(
                     if (!allowEmptyPattern && seq.isEmpty()) {
                         Toast.makeText(context, "다이아번호 패턴을 입력하거나 파일을 불러와 주세요.", Toast.LENGTH_SHORT).show()
                     } else {
-                        onConfirm(name.ifBlank { "가상 인물" }, seq, anchorDate.trim())
+                        onConfirm(name.ifBlank { "수동 추가" }, seq, anchorDate.trim())
                     }
                 }
             ) {

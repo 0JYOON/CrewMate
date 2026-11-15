@@ -66,5 +66,6 @@ data class ComparePerson(
 
 data class CompareDisplayOptions(
     val showCommuteTimes: Boolean = false,
-    val transposeMatrix: Boolean = false
+    val transposeMatrix: Boolean = false,
+    val autoRefresh: Boolean = false
 )

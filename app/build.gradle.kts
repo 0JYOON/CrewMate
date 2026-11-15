@@ -77,6 +77,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
     
     val roomVersion = "2.8.5"
     implementation("androidx.room:room-runtime:$roomVersion")

@@ -1202,6 +1202,17 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `PayStatementParser.buildReport()`에서 야간 2일차(`alcSpecDvCd == "12"`)가 연속된 전날 확정을 상속할 때도 `hasConfirmedPerformance`를 기반으로 동작하므로, 휴일 야간 2일차 역시 전날 휴일 야간 1일차의 `hldyTnum > 0` 여부에 따라 확정/미확정이 결정됨.
   - 웹(`CrewMate-Alpha/app-runtime.js`)에도 `hasPayConfirmedPerformance`를 추가해 앱과 동일하게 반영하고 `PayStatementParserTest`에 검증 테스트를 추가함 (`./gradlew.bat test assembleDebug` 통과).
 
+### STEP 81: 수동/자동 새로고침 전환, 동료비교 본인 다이아 복제 수정, 스크린샷 OCR·AI 일괄 추가 및 웹 백업 보완 (`v1.0.54`)
+- **어플 수동/자동 새로고침**:
+  - `PayStatementStorage`·`PayStatementViewModel`과 `ColleagueCompareStorage`·`ColleagueCompareViewModel`의 진입·월 이동 기본 동작을 로컬 캐시 조회(`autoRefresh = false`)로 변경하고, 상단 토글 칩으로 `자동 새로고침` ON/OFF를 영속 설정할 수 있게 함.
+- **동료비교 본인 다이아 복제 근본 원인 해결**:
+  - Xcrew `/extrCrewMg/searchExtrIndCrewWrk.do`는 `empNm` 파라미터와 무관하게 로그인한 본인 근무표만 반환하므로, `ColleagueCompareViewModel`이 타인 조회/갱신 시 `fetchPersonalWorkSchedule`을 호출해 소속현황(`crewBuckets`)을 본인 다이아로 덮어쓰던 문제를 제거함.
+  - 선택 월의 1일~말일 중 로컬 캐시(`CrewAssignmentDao`)에 없는 날짜를 `CrewWorkStatusRepository.refreshAndStore`로 순차 수집·저장한 뒤 해당 승무원 데이터만 추출하도록 전면 수정함.
+- **스크린샷 OCR & AI 프롬프트 다중 인원 등록 & 문구 변경**:
+  - `com.google.mlkit:text-recognition-korean:16.0.1` 기반 `ScreenshotScheduleOcr.kt`와 다중 인원 AI 출력 파서 `ColleagueScheduleImportParser.kt`를 추가하고, 앱·웹 전체에서 `가상 인물`을 `수동 추가`로 통일함.
+- **웹(`CrewMate-Alpha`) 백업 누락 수정**:
+  - `encryptLockerStore`와 `mergeRestoredLockerData`에 `payStatementsByMonth`, `payStatementSyncMetaByYm`, `colleagueCompare` 백업/병합 로직을 추가하고 `handleBridgeImport`·`handleImportBackupJson` 정합성을 보완함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
 
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.

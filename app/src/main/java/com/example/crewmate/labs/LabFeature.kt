@@ -59,7 +59,7 @@ enum class LabFeature(
     COLLEAGUE_COMPARE(
         id = "colleague_compare",
         title = "동료 근무 비교",
-        description = "내 월별 근무표 아래에 동료 및 가상 인물(미배정 패턴) 근무표를 나란히 비교합니다.",
+        description = "내 월별 근무표 아래에 동료 및 수동 추가(미배정 패턴) 근무표를 나란히 비교합니다.",
         stage = LabStage.EXPERIMENTAL,
         entryType = LabEntryType.STANDALONE_SCREEN,
         requiresOnline = false,

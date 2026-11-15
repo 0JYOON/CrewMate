@@ -4,6 +4,20 @@
 
 ---
 
+## [v1.0.54] - 2026-11-15
+### 수동/자동 새로고침 전환, 동료비교 본인 다이아 복제 수정, 스크린샷 OCR & AI 일괄 추가, 웹 백업 보완
+- **어플 수동/자동 새로고침 기본값 변경**:
+  - 개인근무명세서([PayStatementViewModel.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementViewModel.kt)) 및 동료 근무비교([ColleagueCompareViewModel.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareViewModel.kt)) 진입·월 이동 시 **수동 새로고침**을 기본값(`autoRefresh = false`)으로 변경해 로컬 캐시만 표시하고, 상단 토글(`자동 ON/수동`)로 사용자가 직접 전환 가능하도록 개선함.
+- **동료비교 본인 다이아 복제 버그 수정 & 동명이인 점검**:
+  - `addRealColleague()` 및 `refreshAllOnline()`에서 본인 세션 근무표만 반환하는 `fetchPersonalWorkSchedule`(`/extrCrewMg/searchExtrIndCrewWrk.do`) 호출을 제거하고, 월별 소속 승무원 현황(`CrewWorkStatusRepository.refreshAndStore` → `/extrCrewMg/searchExtrCrewWrkPstt.do`) 순차 수집 데이터만 사용하도록 수정함.
+  - `가상 인물` 명칭을 앱·웹 전체에서 **`수동 추가`** 로 변경하고, `승무원 추가` 검색 팝업 하단에 `[수동 추가]` 권장 안내 문구를 삽입함.
+- **스크린샷 OCR & AI 프롬프트 복사/다중 인원 일괄 등록**:
+  - [ScreenshotScheduleOcr.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ScreenshotScheduleOcr.kt) (ML Kit 한국어 온디바이스 OCR) 및 [ColleagueScheduleImportParser.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueScheduleImportParser.kt) (AI 프롬프트 복사 + 다중 인원 결과 파서)를 신설하고 [ColleagueCompareScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt)에 3탭(`순환 패턴` / `📷 스크린샷` / `🤖 AI 일괄`) 등록 모달을 구현함.
+- **웹(`CrewMate-Alpha`) 백업 및 수집기 보완**:
+  - `app-runtime.js` 클라우드 사물함 E2EE 백업(`encryptLockerStore`) 및 복원 병합(`mergeRestoredLockerData`)에 누락되어 있던 `payStatementsByMonth`, `payStatementSyncMetaByYm`, `colleagueCompare`를 포함하고 JSON 복원 시 정규화 및 AI 일괄 붙여넣기 UI를 추가함.
+
+---
+
 ## [v1.0.53] - 2026-11-15
 ### 개인근무명세서 휴일근무 확정 기준 변경 (`hldyTnum` 실적 기반)
 - **수정 이유**:

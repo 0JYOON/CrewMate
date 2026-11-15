@@ -71,8 +71,16 @@ class PayStatementStorage(context: Context) {
         prefs.edit().putString("${KEY_MONTH_PREFIX}$ymKey", payload.toString()).apply()
     }
 
+    fun loadAutoRefresh(): Boolean =
+        prefs.getBoolean(KEY_AUTO_REFRESH, false)
+
+    fun saveAutoRefresh(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_REFRESH, enabled).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "crewmate_pay_statement_cache"
         private const val KEY_MONTH_PREFIX = "month_"
+        private const val KEY_AUTO_REFRESH = "auto_refresh"
     }
 }

@@ -43,9 +43,11 @@ fun PayStatementScreen(
             monthLabel = "${state.selectedMonth.year}년 ${state.selectedMonth.monthValue}월",
             isLoading = state.isLoading,
             isOfflineMode = state.isOfflineMode,
+            autoRefresh = state.autoRefresh,
             lastUpdatedText = state.lastUpdatedText,
             onPrevMonth = { viewModel.previousMonth() },
             onNextMonth = { viewModel.nextMonth() },
+            onToggleAutoRefresh = { viewModel.setAutoRefresh(!state.autoRefresh) },
             onRefresh = { viewModel.refresh() }
         )
 
@@ -98,11 +100,19 @@ fun PayStatementScreen(
                 val report = state.report
                 if (report == null || report.rows.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            "해당 월의 개인근무명세서 데이터가 없습니다.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "저장된 개인근무명세서 데이터가 없습니다.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (!state.isOfflineMode) {
+                                Spacer(Modifier.height(10.dp))
+                                FilledTonalButton(onClick = { viewModel.refresh() }) {
+                                    Text("Xcrew 새로고침")
+                                }
+                            }
+                        }
                     }
                 } else {
                     if (state.errorMessage != null) {
@@ -180,9 +190,11 @@ private fun MonthSelectorBar(
     monthLabel: String,
     isLoading: Boolean,
     isOfflineMode: Boolean,
+    autoRefresh: Boolean,
     lastUpdatedText: String?,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
+    onToggleAutoRefresh: () -> Unit,
     onRefresh: () -> Unit
 ) {
     Surface(
@@ -207,27 +219,41 @@ private fun MonthSelectorBar(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 6.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 IconButton(onClick = onNextMonth, modifier = Modifier.size(34.dp)) {
                     Text("▶", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 if (lastUpdatedText != null) {
                     Text(
                         text = lastUpdatedText,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 6.dp)
+                        fontSize = 9.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                FilterChip(
+                    selected = autoRefresh,
+                    onClick = onToggleAutoRefresh,
+                    label = {
+                        Text(
+                            text = if (autoRefresh) "자동 ON" else "수동",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    modifier = Modifier.height(30.dp)
+                )
                 FilledTonalButton(
                     onClick = onRefresh,
                     enabled = !isLoading && !isOfflineMode,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
+                    modifier = Modifier.height(30.dp)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
