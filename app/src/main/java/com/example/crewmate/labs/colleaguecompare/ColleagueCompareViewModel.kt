@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -27,6 +28,7 @@ data class ColleagueCompareUiState(
     val isLoading: Boolean = false,
     val isSearchingColleagues: Boolean = false,
     val searchResults: List<String> = emptyList(),
+    val lastRefreshedAt: String? = null,
     val statusMessage: String? = null,
     val errorMessage: String? = null
 )
@@ -49,7 +51,8 @@ class ColleagueCompareViewModel(
     private val _uiState = MutableStateFlow(
         ColleagueCompareUiState(
             people = storage.loadPeople(),
-            displayOptions = storage.loadDisplayOptions()
+            displayOptions = storage.loadDisplayOptions(),
+            lastRefreshedAt = storage.loadLastRefreshedAt()
         )
     )
     val uiState: StateFlow<ColleagueCompareUiState> = _uiState.asStateFlow()
@@ -97,7 +100,12 @@ class ColleagueCompareViewModel(
             }.onSuccess { list ->
                 val map = buildMap {
                     list.forEach { sched ->
-                        val dateKey = sched.workDate?.trim().orEmpty()
+                        val rawDigits = sched.workDate?.filter { it.isDigit() }.orEmpty()
+                        val dateKey = if (rawDigits.length == 8) {
+                            "${rawDigits.substring(0, 4)}-${rawDigits.substring(4, 6)}-${rawDigits.substring(6, 8)}"
+                        } else {
+                            sched.workDate?.trim().orEmpty()
+                        }
                         if (dateKey.isNotEmpty()) {
                             val dia = buildString {
                                 if (sched.isContinuation) append("~")
@@ -144,20 +152,24 @@ class ColleagueCompareViewModel(
                         }
                     }
                 }
-                // 2. 로컬 캐시에 없고 온라인이면 Xcrew 당월/1일 소속현황 즉시 조회
-                if (names.isEmpty() && !isOfflineModeProvider()) {
+                // 2. 온라인이면 당월 복수 기준일(오늘/1일/10일/20일)의 소속현황을 병행 조회해 휴무자 누락 방지
+                if (!isOfflineModeProvider()) {
                     val today = LocalDate.now()
-                    val probeDate = if (YearMonth.from(today) == month) {
-                        today.format(DateTimeFormatter.BASIC_ISO_DATE)
-                    } else {
-                        month.atDay(1).format(DateTimeFormatter.BASIC_ISO_DATE)
-                    }
-                    val remoteCrew = dataSource.fetchCrewWorkStatus(probeDate)
-                    remoteCrew.forEach { assignment ->
-                        assignment.crewMembers.forEach { member ->
-                            val clean = member.trim()
-                            if (clean.contains(trimmed, ignoreCase = true)) {
-                                names.add(clean)
+                    val probeDates = linkedSetOf<String>().apply {
+                        if (YearMonth.from(today) == month) {
+                            add(today.format(DateTimeFormatter.BASIC_ISO_DATE))
+                        }
+                        add(month.atDay(1).format(DateTimeFormatter.BASIC_ISO_DATE))
+                        add(month.atDay(10).format(DateTimeFormatter.BASIC_ISO_DATE))
+                        add(month.atDay(20.coerceAtMost(month.lengthOfMonth())).format(DateTimeFormatter.BASIC_ISO_DATE))
+                    }.take(3)
+                    probeDates.forEach { probeDate ->
+                        runCatching { dataSource.fetchCrewWorkStatus(probeDate) }.getOrNull()?.forEach { assignment ->
+                            assignment.crewMembers.forEach { member ->
+                                val clean = member.trim()
+                                if (clean.contains(trimmed, ignoreCase = true)) {
+                                    names.add(clean)
+                                }
                             }
                         }
                     }
@@ -186,7 +198,9 @@ class ColleagueCompareViewModel(
         _uiState.update { it.copy(isLoading = true, errorMessage = null, statusMessage = null) }
         viewModelScope.launch {
             runCatching {
-                val dtos = dataSource.fetchPersonalWorkSchedule(queryDate, cleanName)
+                val dtos = if (!isOfflineModeProvider()) {
+                    runCatching { dataSource.fetchPersonalWorkSchedule(queryDate, cleanName) }.getOrDefault(emptyList())
+                } else emptyList()
                 val dtoBuckets = dtosToGroupedBuckets(dtos)
                 val crewBuckets = collectCrewDaoBucketsForMonth(month, cleanName)
                 Pair(dtoBuckets, crewBuckets)
@@ -242,7 +256,9 @@ class ColleagueCompareViewModel(
                         )
                     }
                 } else {
-                    val dayMap = dtoBuckets.mapValuesNotNull { (_, list) -> list.firstOrNull() }
+                    val dayMap = linkedMapOf<String, CompareDayCell>()
+                    crewBuckets.forEach { (iso, list) -> list.firstOrNull()?.let { dayMap[iso] = it } }
+                    dtoBuckets.forEach { (iso, list) -> list.firstOrNull()?.let { dayMap[iso] = it } }
                     val existingIdx = current.indexOfFirst { it.type == CompareEntryType.REAL_COLLEAGUE && it.name == cleanName }
                     if (existingIdx >= 0) {
                         val existing = current[existingIdx]
@@ -403,11 +419,14 @@ class ColleagueCompareViewModel(
                     } else person
                 }
             }
+            val refreshedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yy-MM-dd HH:mm"))
             storage.savePeople(updated)
+            storage.saveLastRefreshedAt(refreshedAt)
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     people = updated,
+                    lastRefreshedAt = refreshedAt,
                     statusMessage = "새로고침 완료 (동료 ${successCount}명 갱신${if (failCount > 0) ", ${failCount}명 실패" else ""})"
                 )
             }

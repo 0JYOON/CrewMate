@@ -1182,3 +1182,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `ColleagueCompareViewModel.kt`: `clearSearchResults()`, `setTransposeMatrix()`, `updateVirtualPerson()`, `updateCellOverride()`(실존 동료 포함), 동명이인 감지 및 가상 인물 `K`명 자동 분할(`dtosToGroupedBuckets` + `collectCrewDaoBucketsForMonth`) 구현.
   - `ColleagueCompareScreen.kt`: 상단 `출퇴근 표시 ON/OFF` + `⇄ 가로/세로 전환` 뱃지 바, `CompareCellBox` 우측 상단 빨간 점, 가상 인물 이름 클릭 수정(`VirtualPersonDialog`), 행/열 전환 테이블 레이아웃 구현.
   - `PatternFileParserTest.kt`: 실존 동료 오버라이드 및 동명이인 버킷팅 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
+
+
+### STEP 76: 동료 근무 비교 본인 근무표·검색 누락 버그 수정 및 복원 버튼·수집/새로고침 시각 표기 (`v1.0.49`)
+- **배경 및 원인 파악**:
+  - 앱에서 `WorkSchedule.workDate`가 `yyyyMMdd` 포맷인데 `ColleagueCompareScreen`이 `yyyy-MM-dd` 키로 조회해 본인 근무표가 빈칸으로 나오던 문제, 로컬 캐시 일부 존재 시 온라인 검색이 스킵되어 당일 휴무 승무원이 검색되지 않던 문제를 해결.
+- **주요 구현 내용**:
+  - `ColleagueCompareViewModel.kt`: `loadMyScheduleForMonth` 날짜 키 `yyyy-MM-dd` 정규화, `searchColleagues` 복수 기준일(최대 3일) 온라인 병행 조회, `addRealColleague` `crewBuckets` 보완 병합, `lastRefreshedAt` 저장.
+  - `ColleagueCompareStorage.kt`: `KEY_LAST_REFRESHED_AT` 저장/복원 추가.
+  - `ColleagueCompareScreen.kt`: 새로고침 버튼 좌측 최근 새로고침 시각 표기, `'이름으로 바로 조회·추가'` 제거, `가상·편집` 뱃지 및 최하단 안내 문구 삭제, `EditCellDialog` 복원 `OutlinedButton` 강화, `weight(1f)` 자연 스크롤 적용.

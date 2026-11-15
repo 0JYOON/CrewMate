@@ -86,16 +86,29 @@ fun ColleagueCompareScreen(
                         Text("▶", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                FilledTonalButton(
-                    onClick = { viewModel.refreshAllOnline() },
-                    enabled = !state.isLoading,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                    modifier = Modifier.height(30.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text("새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (state.lastRefreshedAt != null) {
+                        Text(
+                            text = state.lastRefreshedAt!!,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { viewModel.refreshAllOnline() },
+                        enabled = !state.isLoading,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        if (state.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -202,7 +215,7 @@ fun ColleagueCompareScreen(
 
         // 비교 그리드 카드 (기본: 행=인원/열=날짜, 전환: 행=날짜/열=인원)
         Surface(
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -364,14 +377,6 @@ fun ColleagueCompareScreen(
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
-                                        if (isVirtual) {
-                                            Text(
-                                                text = "가상·편집",
-                                                fontSize = 8.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF6D28D9)
-                                            )
-                                        }
                                     }
                                     Text(
                                         text = "✕",
@@ -455,13 +460,6 @@ fun ColleagueCompareScreen(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 16.sp
-            )
-        } else {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "💡 추가된 승무원의 근무 칸을 누르면 직접 수정(빨간 점 표시)할 수 있으며, 가상 인물 이름을 누르면 순환 다이아와 시작일을 수정할 수 있습니다.",
-                fontSize = 10.5.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -615,18 +613,6 @@ private fun CompareMatrixRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (badgeText != null) {
-                    Text(
-                        text = "$badgeText·편집",
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF6D28D9),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFEDE9FE))
-                            .padding(horizontal = 3.dp, vertical = 0.5.dp)
-                    )
-                }
             }
             if (onRemoveClick != null) {
                 Text(
@@ -737,6 +723,7 @@ private fun AddColleagueDialog(
     onDismiss: () -> Unit
 ) {
     var keyword by remember { mutableStateOf("") }
+    var hasSearched by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -744,7 +731,7 @@ private fun AddColleagueDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "동료 성명 또는 일부 단어를 입력해 검색하세요.",
+                    "동료 성명 또는 일부 단어를 입력해 검색 후 선택하세요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -761,7 +748,10 @@ private fun AddColleagueDialog(
                         modifier = Modifier.weight(1f)
                     )
                     Button(
-                        onClick = { onSearch(keyword) },
+                        onClick = {
+                            hasSearched = true
+                            onSearch(keyword)
+                        },
                         enabled = keyword.isNotBlank() && !isSearching
                     ) {
                         Text("검색", fontSize = 12.sp)
@@ -802,13 +792,12 @@ private fun AddColleagueDialog(
                             }
                         }
                     }
-                } else if (keyword.isNotBlank() && !isSearching) {
-                    OutlinedButton(
-                        onClick = { onAddName(keyword.trim()) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("'${keyword.trim()}' 이름으로 바로 조회·추가", fontSize = 12.sp)
-                    }
+                } else if (hasSearched && !isSearching) {
+                    Text(
+                        text = "검색된 승무원이 없습니다. 성명을 다시 확인해 주세요.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         },
@@ -968,10 +957,14 @@ private fun EditCellDialog(
                     )
                 }
                 if (isCurrentlyOverridden) {
-                    TextButton(onClick = onReset, modifier = Modifier.align(Alignment.End)) {
+                    OutlinedButton(
+                        onClick = onReset,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(
-                            text = if (isVirtual) "기본 순환 패턴으로 복원" else "원래 조회 근무로 복원",
-                            fontSize = 11.5.sp
+                            text = if (isVirtual) "↩ 기본 순환 패턴으로 복원" else "↩ 원래 데이터로 복원",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

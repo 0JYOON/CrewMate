@@ -4,6 +4,24 @@
 
 ---
 
+## [v1.0.49] - 2026-11-15
+
+### 개요
+- **동료 근무 비교 (`colleague_compare`) 내 근무표·검색 누락 버그 수정 및 복원/수집시각 UI 보강**
+
+### 주요 변경 사항
+- **내 근무표 표출 누락 및 검색/추가 빈칸 버그 수정**:
+  - `ColleagueCompareViewModel.kt`: `WorkSchedule.workDate`(`yyyyMMdd`)를 `yyyy-MM-dd` ISO 키로 정규화하여 본인(`나 (본인)`) 근무표가 정상 매핑되도록 수정
+  - `searchColleagues()`: 로컬 캐시에 일부만 있는 경우에도 온라인 기준일(오늘/1일/10일/20일 최대 3일) `fetchCrewWorkStatus`를 병행 조회해 당일 휴무자 검색 누락 방지
+  - `addRealColleague()`: Xcrew 개인근무표 응답과 로컬 `CrewAssignmentDao` 배정 캐시를 병합해 빈칸 발생 최소화
+- **복원 버튼·최근 새로고침 시각·UI 정리**:
+  - `ColleagueCompareStorage.kt`, `ColleagueCompareViewModel.kt`, `ColleagueCompareScreen.kt`: 새로고침 버튼 좌측에 최근 새로고침 시각(`yy-MM-dd HH:mm`) 표기
+  - `AddColleagueDialog`: `'이름으로 바로 조회·추가'` 제거(검색 후 선택 강제)
+  - `EditCellDialog`: 수동 수정 셀 편집 시 `↩ 원래 데이터로 복원` / `↩ 기본 순환 패턴으로 복원` 버튼 시인성 강화
+  - `ColleagueCompareScreen.kt`: 가상 인물 성명 칸 `가상·편집` 뱃지 및 하단 안내 문구 제거, 비교 표 영역 `weight(1f)` 확장으로 자연스러운 세로 스크롤 지원
+
+---
+
 ## [v1.0.48] - 2026-11-15
 
 ### 개요

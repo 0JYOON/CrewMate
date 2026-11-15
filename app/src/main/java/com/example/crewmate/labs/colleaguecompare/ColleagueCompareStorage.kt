@@ -140,10 +140,17 @@ class ColleagueCompareStorage(context: Context) {
             .apply()
     }
 
+    fun loadLastRefreshedAt(): String? = prefs.getString(KEY_LAST_REFRESHED_AT, null)
+
+    fun saveLastRefreshedAt(timestamp: String) {
+        prefs.edit().putString(KEY_LAST_REFRESHED_AT, timestamp).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "crewmate_colleague_compare"
         private const val KEY_PEOPLE_JSON = "compare_people_json"
         private const val KEY_SHOW_COMMUTE_TIMES = "show_commute_times"
         private const val KEY_TRANSPOSE_MATRIX = "transpose_matrix"
+        private const val KEY_LAST_REFRESHED_AT = "last_refreshed_at"
     }
 }
