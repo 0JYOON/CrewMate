@@ -1213,6 +1213,11 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 - **웹(`CrewMate-Alpha`) 백업 누락 수정**:
   - `encryptLockerStore`와 `mergeRestoredLockerData`에 `payStatementsByMonth`, `payStatementSyncMetaByYm`, `colleagueCompare` 백업/병합 로직을 추가하고 `handleBridgeImport`·`handleImportBackupJson` 정합성을 보완함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
 
+### STEP 82: AI 추출 프롬프트 및 다중 인원 파서 보강 (`v1.0.55`)
+- **원인 및 해결**:
+  - `월: 미상` 등 숫자가 아닌 월 표기나 마크다운 기호가 포함된 헤더에서 기존 단일 정규식이 실패해 모든 인원이 하나의 기본 이름으로 덮어써지던 문제를 `이름:`·`월:` 독립 추출 및 `resolveYmKey` 폴백으로 해결함.
+  - 엑셀 가로형 순환표(왼쪽 열 이름 + 1일~말일 다이아) 및 출퇴근 시각 미포함 표를 지원하는 프롬프트로 보강함 (`./gradlew.bat test assembleDebug` 통과).
+
 
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.

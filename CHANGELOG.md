@@ -4,6 +4,18 @@
 
 ---
 
+## [v1.0.55] - 2026-11-15
+### AI 추출 프롬프트·다중 인원 파서 보강 (엑셀 가로표 / 월 미상 / 출퇴근 생략 대응)
+- **수정 이유**:
+  - 월 표기가 없는 엑셀 가로표 등에서 AI가 `월: 미상` 등으로 출력할 때 헤더 정규식이 매칭되지 않아 첫 블록부터 모두 `"수동 추가"` 1명으로 합쳐져 마지막 인원만 남던 버그를 수정함.
+  - 엑셀 가로표·출퇴근 시각 생략·`월: 미상` 시 앱/웹 선택 월 자동 적용을 프롬프트와 파서에 모두 반영함.
+- **변경 파일**:
+  - [ColleagueScheduleImportParser.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueScheduleImportParser.kt) (유연한 `이름:` / `월:` 분리 매칭, 마크다운/기호 정리, `월: 미상` 시 선택 월 폴백)
+  - [ColleagueScheduleImportParserTest.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/test/java/com/example/crewmate/labs/colleaguecompare/ColleagueScheduleImportParserTest.kt) (`월: 미상`/`없음`/생략 다중 인원 파싱 단위 테스트 추가)
+  - `CrewMate-Alpha/app-runtime.js` (프롬프트 및 다중 인원 파서 동일 보완)
+
+---
+
 ## [v1.0.54] - 2026-11-15
 ### 수동/자동 새로고침 전환, 동료비교 본인 다이아 복제 수정, 스크린샷 OCR & AI 일괄 추가, 웹 백업 보완
 - **어플 수동/자동 새로고침 기본값 변경**:
