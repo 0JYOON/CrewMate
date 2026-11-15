@@ -1218,6 +1218,10 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `월: 미상` 등 숫자가 아닌 월 표기나 마크다운 기호가 포함된 헤더에서 기존 단일 정규식이 실패해 모든 인원이 하나의 기본 이름으로 덮어써지던 문제를 `이름:`·`월:` 독립 추출 및 `resolveYmKey` 폴백으로 해결함.
   - 엑셀 가로형 순환표(왼쪽 열 이름 + 1일~말일 다이아) 및 출퇴근 시각 미포함 표를 지원하는 프롬프트로 보강함 (`./gradlew.bat test assembleDebug` 통과).
 
+### STEP 83: 개인근무명세서·동료근무비교 상단 새로고침 UI 통일 및 동료비교 하단 팁 제거 (`v1.0.56`)
+- **UI 통일 및 여백 확보**:
+  - `PayStatementScreen`과 `ColleagueCompareScreen`의 월 선택 바 우측 영역을 `업데이트 시각(8.5sp, maxLines=1)` + `자동/수동` 터치 뱃지 + `🔄` 소형 아이콘 버튼으로 통일하고, `ColleagueCompareScreen` 표시 옵션 바의 중복 `자동새로고침` 뱃지와 최하단 팁 문구를 제거함 (`./gradlew.bat test assembleDebug` 통과).
+
 
 ### STEP 75: 동료 근무 비교 승무원 추가 개선(검색 시에만 표출, 동명이인 가상인물 분할, 전체 셀 수정·빨간 점, 가상인물 이름 편집, 행·열 전환) (`v1.0.48`)
 - **배경**: 승무원 추가 시 불필요한 전체 목록 사전 노출을 없애고, 동명이인 혼선을 가상 인물 분할로 해결하며, 모든 동료의 셀 수정·수정 표시·가상인물 패턴 수정·가로/세로 축 전환을 지원.

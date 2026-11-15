@@ -77,41 +77,65 @@ fun ColleagueCompareScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { viewModel.previousMonth() }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { viewModel.previousMonth() }, modifier = Modifier.size(30.dp)) {
                         Text("◀", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         text = "${state.selectedMonth.year}년 ${state.selectedMonth.monthValue}월",
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 2.dp)
                     )
-                    IconButton(onClick = { viewModel.nextMonth() }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { viewModel.nextMonth() }, modifier = Modifier.size(30.dp)) {
                         Text("▶", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (state.lastRefreshedAt != null) {
                         Text(
                             text = state.lastRefreshedAt!!,
-                            fontSize = 10.sp,
+                            fontSize = 8.5.sp,
+                            maxLines = 1,
+                            softWrap = false,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    FilledTonalButton(
-                        onClick = { viewModel.refreshAllOnline() },
-                        enabled = !state.isLoading,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        modifier = Modifier.height(30.dp)
+                    val autoRef = state.displayOptions.autoRefresh
+                    Surface(
+                        onClick = { viewModel.setAutoRefresh(!autoRef) },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (autoRef) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (autoRef) Color(0xFF16A34A).copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                        )
                     ) {
-                        if (state.isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text("새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (autoRef) "자동" else "수동",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (autoRef) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                    Surface(
+                        onClick = { if (!state.isLoading) viewModel.refreshAllOnline() },
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (state.isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(text = "🔄", fontSize = 13.sp)
+                            }
                         }
                     }
                 }
@@ -188,25 +212,6 @@ fun ColleagueCompareScreen(
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (transposed) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-
-            val autoRef = state.displayOptions.autoRefresh
-            Surface(
-                onClick = { viewModel.setAutoRefresh(!autoRef) },
-                shape = RoundedCornerShape(8.dp),
-                color = if (autoRef) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                border = BorderStroke(
-                    1.dp,
-                    if (autoRef) Color(0xFF16A34A).copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
-                )
-            ) {
-                Text(
-                    text = if (autoRef) "🔄 자동새로고침 ON" else "🔄 수동새로고침",
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (autoRef) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
@@ -476,16 +481,6 @@ fun ColleagueCompareScreen(
                     }
                 }
             }
-        }
-
-        if (state.people.isEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "💡 상단의 [+ 승무원 추가]로 동료 이름을 검색하거나 [+ 수동 추가]로 순환 패턴·스크린샷·AI 일괄 붙여넣기로 등록해 한눈에 비교해 보세요.",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 16.sp
-            )
         }
     }
 

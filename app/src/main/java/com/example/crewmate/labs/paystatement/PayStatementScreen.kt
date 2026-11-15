@@ -206,23 +206,24 @@ private fun MonthSelectorBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onPrevMonth, modifier = Modifier.size(34.dp)) {
-                    Text("◀", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onPrevMonth, modifier = Modifier.size(30.dp)) {
+                    Text("◀", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(
                     text = monthLabel,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 2.dp)
                 )
-                IconButton(onClick = onNextMonth, modifier = Modifier.size(34.dp)) {
-                    Text("▶", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onNextMonth, modifier = Modifier.size(30.dp)) {
+                    Text("▶", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -233,32 +234,45 @@ private fun MonthSelectorBar(
                 if (lastUpdatedText != null) {
                     Text(
                         text = lastUpdatedText,
-                        fontSize = 9.5.sp,
+                        fontSize = 8.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                FilterChip(
-                    selected = autoRefresh,
+                Surface(
                     onClick = onToggleAutoRefresh,
-                    label = {
-                        Text(
-                            text = if (autoRefresh) "자동 ON" else "수동",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    modifier = Modifier.height(30.dp)
-                )
-                FilledTonalButton(
-                    onClick = onRefresh,
-                    enabled = !isLoading && !isOfflineMode,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.height(30.dp)
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (autoRefresh) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (autoRefresh) Color(0xFF16A34A).copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                    )
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(if (isOfflineMode) "오프라인" else "새로고침", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (autoRefresh) "자동" else "수동",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (autoRefresh) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+                Surface(
+                    onClick = { if (!isLoading && !isOfflineMode) onRefresh() },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (isOfflineMode) 0.4f else 0.9f),
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(
+                                text = "🔄",
+                                fontSize = 13.sp,
+                                color = if (isOfflineMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
                     }
                 }
             }

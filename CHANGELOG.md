@@ -4,6 +4,15 @@
 
 ---
 
+## [v1.0.56] - 2026-11-15
+### 개인근무명세서·동료근무비교 상단 새로고침 UI 통일 및 동료비교 하단 팁 제거
+- **상단 새로고침 UI 통일**:
+  - [PayStatementScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementScreen.kt) 및 [ColleagueCompareScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt) 우측 상단 UI를 `업데이트 시각(8.5sp 한 줄)` + `자동/수동 전환 뱃지` + `🔄 작은 아이콘 버튼` 순서로 통일함.
+- **동료비교 하단 팁 제거**:
+  - `ColleagueCompareScreen.kt` 최하단의 안내 팁 문구를 완전히 삭제해 전체 세로 영역을 비교 표 스크롤에 사용하도록 정리함.
+
+---
+
 ## [v1.0.55] - 2026-11-15
 ### AI 추출 프롬프트·다중 인원 파서 보강 (엑셀 가로표 / 월 미상 / 출퇴근 생략 대응)
 - **수정 이유**:
