@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
@@ -58,7 +58,7 @@ class PayStatementViewModel(
                 val rows = dataSource.fetchPersonalWorkSpec(queryDate)
                 PayStatementParser.buildReport(rows)
             }.onSuccess { report ->
-                val updatedAt = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                val updatedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yy-MM-dd HH:mm"))
                 _uiState.update {
                     it.copy(
                         isLoading = false,

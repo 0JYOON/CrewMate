@@ -4,6 +4,25 @@
 
 ---
 
+## [v1.0.47] - 2026-11-15
+
+### 개요
+- **개인근무명세서 (`pay_statement`) UI 밀도 및 승무여비·승무수당 예상 산정 로직 개선**
+
+### 주요 변경 사항
+- **표 시인성 및 여백 개선**:
+  - `PayStatementScreen.kt`: 목록 상하 여백 최소화(`Arrangement.spacedBy(0.dp)`, 행/헤더 패딩 축소), `시간`·`거리` 굵은 글씨 해제, `휴일`·`연장`·`야간` 시간이 0보다 큰 경우 굵은 글씨 강조
+  - `PayStatementViewModel.kt`: 새로고침 시각 좌측에 날짜(`yy-MM-dd HH:mm`) 함께 표기
+- **예상 승무여비·승무수당 산정 로직 개편**:
+  - `PayStatementModels.kt`, `PayStatementParser.kt`: 거리 실적(`totPjtDst`) 유무와 관계없이 근무일(`alcSpecDvCd` `"11"`, `"12"`) 기반 예상 일수 산정
+  - `alcSpecDvCd` `"11"`, `"12"` 중 `offdDdFlg == "Y"`(또는 `hldyTnum > 0`)인 휴일근무는 승무수당 지급일수에서 제외
+  - 대기근무 판별 기준을 900번대 다이아 번호에서 `pdiaDvCd == "4"`로 변경하고, 대기근무는 실제 승무실적(거리 > 0) 발생 시에만 여비·수당에 포함
+  - 거리 실적이 생성된 근무는 **확정**, 예정 근무일은 **예정**으로 구분하여 합산/진행률 바에 표시
+- **테스트 검증**:
+  - `PayStatementParserTest.kt`: `pdiaDvCd="4"` 대기근무, `alcSpecDvCd="11"/"12"` 예정일, `offdDdFlg="Y"` 휴일 제외, 확정/예정 일수 검증 테스트 통과 (`./gradlew.bat test assembleDebug` 0 오류)
+
+---
+
 ## [v1.0.46] - 2026-11-15
 
 ### 개요

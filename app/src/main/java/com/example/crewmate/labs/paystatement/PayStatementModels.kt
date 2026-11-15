@@ -19,22 +19,29 @@ data class PayStatementRow(
     val extnTnum: Int,
     val nihtTnum: Int
 ) {
-    /** 900번대 대기근무 여부 (예: 901, 912 등) */
-    val isStandbyDia: Boolean
-        get() {
-            val trimmed = pdiaNo.trim()
-            val numVal = trimmed.toIntOrNull()
-            if (numVal != null) return numVal in 900..999
-            return Regex("^9\\d{2}(?:[^\\d].*)?$").matches(trimmed)
-        }
+    /** 근무일 코드 여부 (alcSpecDvCd == "11" 또는 "12") */
+    val isDutyCode: Boolean
+        get() = alcSpecDvCd == "11" || alcSpecDvCd == "12"
 
-    /** 실제 승무실적 보유 여부 (거리 > 0) */
+    /** 대기근무 여부 (pdiaDvCd == "4") */
+    val isStandbyDia: Boolean
+        get() = pdiaDvCd == "4"
+
+    /** 실제 승무실적 보유 여부 (거리 > 0, 확정) */
     val hasOperatingDistance: Boolean
         get() = totPjtDst > 0.0
 
-    /** 휴일근무 여부 (휴일시간 > 0) */
+    /** 휴일근무 여부 (offdDdFlg == "Y" 또는 휴일시간 > 0) */
     val isHolidayWork: Boolean
-        get() = hldyTnum > 0
+        get() = offdDdFlg.equals("Y", ignoreCase = true) || hldyTnum > 0
+
+    /** 승무여비 산정 포함 여부: 거리 실적 확정 OR (근무일 코드이면서 비대기 예정근무) */
+    val isTravelPayCounted: Boolean
+        get() = hasOperatingDistance || (isDutyCode && !isStandbyDia)
+
+    /** 승무수당 산정 포함 여부: 휴일이 아니며 (거리 실적 확정 OR 비대기 근무일) */
+    val isAllowanceCounted: Boolean
+        get() = !isHolidayWork && isTravelPayCounted
 }
 
 /**
@@ -53,21 +60,30 @@ data class PayStatementTotals(
  */
 data class PayStatementEligibilitySummary(
     val totalRowCount: Int,
-    /** 휴일 포함 승무실적(거리 > 0) 근무일수 -> 승무여비 실제 산정 일수 */
+    /** 휴일 포함 예상 승무여비 산정 일수 (확정 + 비대기 예정) */
     val operatingDaysIncludingHoliday: Int,
-    /** 휴일 제외 승무실적(거리 > 0) 근무일수 -> 승무수당 실제 산정 일수 */
+    /** 휴일 제외 예상 승무수당 산정 일수 (확정 + 비대기 예정) */
     val operatingDaysExcludingHoliday: Int,
-    /** 휴일 승무실적(거리 > 0) 근무일수 */
+    /** 확정(거리 > 0) 승무여비 일수 */
+    val confirmedTravelDays: Int = 0,
+    /** 확정(거리 > 0, 비휴일) 승무수당 일수 */
+    val confirmedAllowanceDays: Int = 0,
+    /** 휴일 근무로 승무수당에서 제외된 일수 */
     val holidayOperatingDays: Int,
-    /** 900번대 대기근무 중 거리 0인 날 수 (전체) */
+    /** 대기근무(pdiaDvCd == "4") 중 거리 0인 날 수 (전체) */
     val standbyZeroDistanceDays: Int,
-    /** 900번대 대기근무 중 거리 0이며 휴일이 아닌 날 수 */
+    /** 대기근무(pdiaDvCd == "4") 중 거리 0이며 휴일이 아닌 날 수 */
     val standbyZeroDistanceNonHolidayDays: Int,
-    /** 900번대 대기근무 중 실제 승무(거리 > 0)가 있었던 날 수 */
+    /** 대기근무(pdiaDvCd == "4") 중 실제 승무(거리 > 0)가 있었던 날 수 */
     val standbyWithOperatingDays: Int,
     val travelPayTargetDays: Int = 20,
     val allowanceTargetDays: Int = 17
 ) {
+    val plannedTravelDays: Int
+        get() = (operatingDaysIncludingHoliday - confirmedTravelDays).coerceAtLeast(0)
+
+    val plannedAllowanceDays: Int
+        get() = (operatingDaysExcludingHoliday - confirmedAllowanceDays).coerceAtLeast(0)
     val isTravelPayEligible: Boolean
         get() = operatingDaysIncludingHoliday >= travelPayTargetDays
 

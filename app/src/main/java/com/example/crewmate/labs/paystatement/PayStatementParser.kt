@@ -53,9 +53,11 @@ object PayStatementParser {
         val overtimeMinutes = rows.sumOf { it.extnTnum }
         val nightMinutes = rows.sumOf { it.nihtTnum }
 
-        val operatingIncludingHoliday = rows.count { it.hasOperatingDistance }
-        val operatingExcludingHoliday = rows.count { it.hasOperatingDistance && !it.isHolidayWork }
-        val holidayOperatingDays = rows.count { it.hasOperatingDistance && it.isHolidayWork }
+        val operatingIncludingHoliday = rows.count { it.isTravelPayCounted }
+        val operatingExcludingHoliday = rows.count { it.isAllowanceCounted }
+        val confirmedTravelDays = rows.count { it.hasOperatingDistance }
+        val confirmedAllowanceDays = rows.count { it.hasOperatingDistance && !it.isHolidayWork }
+        val holidayOperatingDays = rows.count { it.isTravelPayCounted && it.isHolidayWork }
 
         val standbyZeroDays = rows.count { it.isStandbyDia && !it.hasOperatingDistance }
         val standbyZeroNonHolidayDays = rows.count { it.isStandbyDia && !it.hasOperatingDistance && !it.isHolidayWork }
@@ -74,6 +76,8 @@ object PayStatementParser {
                 totalRowCount = rows.size,
                 operatingDaysIncludingHoliday = operatingIncludingHoliday,
                 operatingDaysExcludingHoliday = operatingExcludingHoliday,
+                confirmedTravelDays = confirmedTravelDays,
+                confirmedAllowanceDays = confirmedAllowanceDays,
                 holidayOperatingDays = holidayOperatingDays,
                 standbyZeroDistanceDays = standbyZeroDays,
                 standbyZeroDistanceNonHolidayDays = standbyZeroNonHolidayDays,

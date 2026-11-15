@@ -113,8 +113,8 @@ fun PayStatementScreen(
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp)
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
+                        contentPadding = PaddingValues(bottom = 20.dp)
                     ) {
                         item(key = "table_header") {
                             Surface(
@@ -162,6 +162,7 @@ fun PayStatementScreen(
                         }
 
                         item(key = "eligibility_card") {
+                            Spacer(Modifier.height(10.dp))
                             PayStatementEligibilityCard(eligibility = report.eligibility)
                         }
                     }
@@ -240,7 +241,7 @@ private fun PayStatementHeaderRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         HeaderCell("일자", Modifier.weight(1.35f), TextAlign.Start)
@@ -298,7 +299,7 @@ private fun PayStatementDataRow(row: PayStatementRow) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -351,26 +352,29 @@ private fun PayStatementDataRow(row: PayStatementRow) {
         ValueCell(
             text = PayStatementFormatter.formatMinutes(row.totPjtTnum, blankIfZero = true),
             modifier = Modifier.weight(1.0f),
-            isBold = row.totPjtTnum > 0
+            isBold = false
         )
         ValueCell(
             text = PayStatementFormatter.formatDistance(row.totPjtDst, blankIfZero = false),
             modifier = Modifier.weight(1.0f),
-            isBold = row.hasOperatingDistance,
+            isBold = false,
             color = if (row.hasOperatingDistance) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
         ValueCell(
             text = PayStatementFormatter.formatMinutes(row.hldyTnum, blankIfZero = true),
             modifier = Modifier.weight(0.9f),
+            isBold = row.hldyTnum > 0,
             color = if (row.hldyTnum > 0) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant
         )
         ValueCell(
             text = PayStatementFormatter.formatMinutes(row.extnTnum, blankIfZero = true),
-            modifier = Modifier.weight(0.9f)
+            modifier = Modifier.weight(0.9f),
+            isBold = row.extnTnum > 0
         )
         ValueCell(
             text = PayStatementFormatter.formatMinutes(row.nihtTnum, blankIfZero = true),
-            modifier = Modifier.weight(0.9f)
+            modifier = Modifier.weight(0.9f),
+            isBold = row.nihtTnum > 0
         )
     }
 }
@@ -386,7 +390,7 @@ private fun ValueCell(
         text = text,
         modifier = modifier,
         fontSize = 11.sp,
-        fontWeight = if (isBold) FontWeight.SemiBold else FontWeight.Normal,
+        fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
         color = color,
         textAlign = TextAlign.End,
         style = TabularStyle,
@@ -460,7 +464,7 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "실제 승무실적(거리 > 0) 기준으로 산정합니다.",
+                text = "근무배정(alcSpecDvCd 11·12) 및 실승무 확정(거리 > 0) 기준으로 산정합니다.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -475,14 +479,17 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                 isEligible = eligibility.isTravelPayEligible,
                 remainingDays = eligibility.travelPayRemainingDays,
                 subNote = buildString {
+                    append("확정(거리>0) ${eligibility.confirmedTravelDays}일")
+                    if (eligibility.plannedTravelDays > 0) {
+                        append(" + 예정 ${eligibility.plannedTravelDays}일")
+                    }
                     if (eligibility.holidayOperatingDays > 0) {
-                        append("휴일 승무 ${eligibility.holidayOperatingDays}일 포함")
+                        append(" · 휴일 ${eligibility.holidayOperatingDays}일 포함")
                     }
                     if (eligibility.standbyWithOperatingDays > 0) {
-                        if (isNotEmpty()) append(" · ")
-                        append("900번대 중 실승무 ${eligibility.standbyWithOperatingDays}일 포함")
+                        append(" · 대기 실승무 ${eligibility.standbyWithOperatingDays}일 포함")
                     }
-                }.takeIf { it.isNotEmpty() }
+                }
             )
 
             Spacer(Modifier.height(12.dp))
@@ -491,14 +498,20 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
 
             EligibilityProgressBlock(
                 title = "승무수당",
-                ruleDescription = "휴일근무 제외 근무일수 17일 이상 + 승무실적(거리 > 0) 시 전액 지급",
+                ruleDescription = "휴일근무(offdDdFlg=Y) 제외 근무일수 17일 이상 시 전액 지급",
                 currentDays = eligibility.operatingDaysExcludingHoliday,
                 targetDays = eligibility.allowanceTargetDays,
                 isEligible = eligibility.isAllowanceEligible,
                 remainingDays = eligibility.allowanceRemainingDays,
-                subNote = if (eligibility.holidayOperatingDays > 0) {
-                    "휴일 승무 ${eligibility.holidayOperatingDays}일은 승무수당 일수에서 제외됨"
-                } else null
+                subNote = buildString {
+                    append("확정(거리>0) ${eligibility.confirmedAllowanceDays}일")
+                    if (eligibility.plannedAllowanceDays > 0) {
+                        append(" + 예정 ${eligibility.plannedAllowanceDays}일")
+                    }
+                    if (eligibility.holidayOperatingDays > 0) {
+                        append(" · 휴일 ${eligibility.holidayOperatingDays}일 제외")
+                    }
+                }
             )
 
             if (eligibility.hasStandbyZeroDistance) {
@@ -512,14 +525,14 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                         .padding(10.dp)
                 ) {
                     Text(
-                        text = "⚠️ 900번대 대기근무(거리 0) ${eligibility.standbyZeroDistanceDays}일 별도 안내",
+                        text = "⚠️ 대기근무(pdiaDvCd=4, 거리 0) ${eligibility.standbyZeroDistanceDays}일 별도 안내",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF92400E)
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "• 미승무 대기 제외(실제 지급 기준): 여비 ${eligibility.operatingDaysIncludingHoliday}일/20일 · 수당 ${eligibility.operatingDaysExcludingHoliday}일/17일",
+                        text = "• 미승무 대기 제외(예상 기준): 여비 ${eligibility.operatingDaysIncludingHoliday}일/20일 · 수당 ${eligibility.operatingDaysExcludingHoliday}일/17일",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF78350F)
@@ -531,7 +544,7 @@ private fun PayStatementEligibilityCard(eligibility: PayStatementEligibilitySumm
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
-                        text = "900번대 대기근무는 실제 승무(거리 > 0)를 하지 않으면 승무여비 및 승무수당 지급 일수에서 제외되므로 위 두 수치를 비교해 판단하세요.",
+                        text = "대기근무(pdiaDvCd=4)는 실제 승무(거리 > 0) 실적이 발생해야 승무여비 및 승무수당 지급 일수에 최종 포함됩니다.",
                         fontSize = 10.5.sp,
                         color = Color(0xFF92400E),
                         lineHeight = 14.sp

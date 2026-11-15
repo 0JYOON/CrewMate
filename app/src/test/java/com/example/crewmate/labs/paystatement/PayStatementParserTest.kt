@@ -112,7 +112,7 @@ class PayStatementParserTest {
                 )
             )
         }
-        // 1 standby 901 with zero distance -> excluded from actual operating days, tracked separately
+        // 1 standby (pdiaDvCd="4") with zero distance -> excluded from travel pay & allowance, tracked separately
         rows.add(
             PayStatementRow(
                 num = 20,
@@ -120,7 +120,7 @@ class PayStatementParserTest {
                 pdiaNo = "901",
                 offdDdFlg = "N",
                 alcSpecDvCd = "11",
-                pdiaDvCd = "3",
+                pdiaDvCd = "4",
                 totPjtTnum = 480,
                 totPjtDst = 0.0,
                 hldyTnum = 0,
@@ -128,7 +128,7 @@ class PayStatementParserTest {
                 nihtTnum = 0
             )
         )
-        // 1 standby 902 with actual operating distance -> counted in both
+        // 1 standby (pdiaDvCd="4") with actual operating distance -> confirmed in both
         rows.add(
             PayStatementRow(
                 num = 21,
@@ -136,9 +136,41 @@ class PayStatementParserTest {
                 pdiaNo = "902",
                 offdDdFlg = "N",
                 alcSpecDvCd = "11",
-                pdiaDvCd = "3",
+                pdiaDvCd = "4",
                 totPjtTnum = 510,
                 totPjtDst = 45.2,
+                hldyTnum = 0,
+                extnTnum = 0,
+                nihtTnum = 0
+            )
+        )
+        // 1 planned normal duty (alcSpecDvCd="12", distance=0) -> planned in both travel pay & allowance
+        rows.add(
+            PayStatementRow(
+                num = 22,
+                pjtDt = "20261122",
+                pdiaNo = "1607",
+                offdDdFlg = "N",
+                alcSpecDvCd = "12",
+                pdiaDvCd = "3",
+                totPjtTnum = 0,
+                totPjtDst = 0.0,
+                hldyTnum = 0,
+                extnTnum = 0,
+                nihtTnum = 0
+            )
+        )
+        // 1 planned holiday duty (alcSpecDvCd="11", offdDdFlg="Y", distance=0) -> planned in travel pay, excluded from allowance
+        rows.add(
+            PayStatementRow(
+                num = 23,
+                pjtDt = "20261123",
+                pdiaNo = "1639",
+                offdDdFlg = "Y",
+                alcSpecDvCd = "11",
+                pdiaDvCd = "3",
+                totPjtTnum = 0,
+                totPjtDst = 0.0,
                 hldyTnum = 0,
                 extnTnum = 0,
                 nihtTnum = 0
@@ -148,30 +180,34 @@ class PayStatementParserTest {
         val report = PayStatementParser.buildReport(rows)
         val el = report.eligibility
 
-        // 16 normal + 3 holiday + 1 standby(operating) = 20
-        assertEquals(20, el.operatingDaysIncludingHoliday)
+        // Confirmed(16 normal + 3 holiday + 1 standby) + Planned(1 normal + 1 holiday) = 22
+        assertEquals(22, el.operatingDaysIncludingHoliday)
+        assertEquals(20, el.confirmedTravelDays)
+        assertEquals(2, el.plannedTravelDays)
         assertTrue(el.isTravelPayEligible)
 
-        // 16 normal + 1 standby(operating) = 17 (holidays excluded)
-        assertEquals(17, el.operatingDaysExcludingHoliday)
+        // Confirmed(16 normal + 1 standby) + Planned(1 normal) = 18 (holidays excluded)
+        assertEquals(18, el.operatingDaysExcludingHoliday)
+        assertEquals(17, el.confirmedAllowanceDays)
+        assertEquals(1, el.plannedAllowanceDays)
         assertTrue(el.isAllowanceEligible)
 
-        assertEquals(3, el.holidayOperatingDays)
+        assertEquals(4, el.holidayOperatingDays)
         assertEquals(1, el.standbyZeroDistanceDays)
         assertEquals(1, el.standbyWithOperatingDays)
         assertTrue(el.hasStandbyZeroDistance)
-        assertEquals(21, el.travelDaysIfStandbyIncluded)
-        assertEquals(18, el.allowanceDaysIfStandbyIncluded)
+        assertEquals(23, el.travelDaysIfStandbyIncluded)
+        assertEquals(19, el.allowanceDaysIfStandbyIncluded)
     }
 
     @Test
-    fun isStandbyDia_matchesThreeDigit900sOnly() {
-        val standby = PayStatementRow(1, "20261101", "905", "N", "11", "3", 480, 0.0, 0, 0, 0)
-        val regular = PayStatementRow(2, "20261102", "1905", "N", "11", "3", 480, 50.0, 0, 0, 0)
+    fun isStandbyDia_matchesPdiaDvCd4Only() {
+        val standby = PayStatementRow(1, "20261101", "905", "N", "11", "4", 480, 0.0, 0, 0, 0)
+        val regular900 = PayStatementRow(2, "20261102", "905", "N", "11", "3", 480, 50.0, 0, 0, 0)
         val leave = PayStatementRow(3, "20261103", "연차", "N", "21", "", 0, 0.0, 0, 0, 0)
 
         assertTrue(standby.isStandbyDia)
-        assertFalse(regular.isStandbyDia)
+        assertFalse(regular900.isStandbyDia)
         assertFalse(leave.isStandbyDia)
     }
 }

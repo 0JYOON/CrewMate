@@ -1164,3 +1164,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingDialogs.kt`: 판정 근거·수동 등급 지정(`DiaRatingDetailDialog`) 및 기준 편집(`DiaRatingRulesDialog`) UI 구현.
   - `ScheduleScreen.kt`, `DiaDetailCard.kt`, `LabsSettingsScreen.kt`, `LabFeature.kt`: 달력 셀 뱃지·배경 음영, 다이아 카드 헤더 뱃지, 실험실 설정 기준 버튼 연동.
   - `app/src/test/java/com/example/crewmate/labs/diarating/DiaRatingEvaluatorTest.kt`: 평가 규칙 및 수동 지정 단위 테스트 추가 (`./gradlew.bat test assembleDebug` 통과).
+
+
+### STEP 74: 개인근무명세서 UI 밀도 개선 및 승무여비·승무수당 예상치(`alcSpecDvCd`/`offdDdFlg`/`pdiaDvCd`)·확정 구분 로직 개편 (`v1.0.47`)
+- **배경**: 개인근무명세서 목록의 불필요한 상하 여백을 줄이고, 새로고침 날짜(`yy-MM-dd`)·강조 컬럼(`휴일`/`연장`/`야간`)을 개선하며, 거리 실적 이전에도 예정 근무일 기준으로 승무여비·승무수당 예상 충족 여부를 확인할 수 있도록 개편.
+- **주요 구현 내용**:
+  - `PayStatementModels.kt` & `PayStatementParser.kt`: `alcSpecDvCd in ("11", "12")` 근무일 예정 산정, `offdDdFlg == "Y"` 휴일근무의 승무수당 제외, `pdiaDvCd == "4"` 기준 대기근무 판별(거리 > 0일 때만 포함), `confirmedTravelDays`/`plannedTravelDays` 및 `confirmedAllowanceDays`/`plannedAllowanceDays` 확정/예정 분리 집계.
+  - `PayStatementViewModel.kt`: `updatedAt` 포맷을 `yy-MM-dd HH:mm`으로 변경.
+  - `PayStatementScreen.kt`: `LazyColumn` `spacedBy(0.dp)` 및 행/헤더 패딩 축소, `시간`·`거리` 일반 굵기 전환, `휴일`·`연장`·`야간` > 0 볼드 강조, `PayStatementEligibilityCard` 내 `확정 + 예정` 내역 및 2단 진행률 바 표시.
+  - `PayStatementParserTest.kt`: 개편된 `pdiaDvCd == "4"` 및 확정/예정 산정 규칙 단위 테스트 보강 (`./gradlew.bat test assembleDebug` 통과).
