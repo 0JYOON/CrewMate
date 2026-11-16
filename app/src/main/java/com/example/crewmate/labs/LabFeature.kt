@@ -37,15 +37,6 @@ enum class LabFeature(
     val defaultEnabled: Boolean = false,
     val isImplemented: Boolean = false
 ) {
-    ROUTE_DIAGRAM(
-        id = "route_diagram",
-        title = "승무 행로도 시각화 뷰",
-        description = "다이아 상세 구간을 노선 행로도 타임라인 형태로 시각화하여 보여줍니다.",
-        stage = LabStage.EXPERIMENTAL,
-        entryType = LabEntryType.INLINE_ENHANCEMENT,
-        requiresOnline = false,
-        isImplemented = true
-    ),
     PAY_STATEMENT(
         id = "pay_statement",
         title = "개인근무명세서 조회",
@@ -66,11 +57,20 @@ enum class LabFeature(
         route = "lab-colleague-compare",
         isImplemented = true
     ),
+    ROUTE_DIAGRAM(
+        id = "route_diagram",
+        title = "승무 행로도 시각화 뷰",
+        description = "다이아 상세 구간을 노선 행로도 타임라인 형태로 시각화하여 보여줍니다.",
+        stage = LabStage.BETA,
+        entryType = LabEntryType.INLINE_ENHANCEMENT,
+        requiresOnline = false,
+        isImplemented = true
+    ),
     HANDOVER_CREW(
         id = "handover_crew",
         title = "교대승무원 확인",
         description = "오늘의 근무 열차 행을 터치해 직전 승무원 및 교대 승무원 정보를 팝업으로 조회합니다. ※ 정확한 릴레이 조회를 위해 [열차 승무원 조회] 메뉴에서 기초자료 조사를 먼저 실행해 주세요.",
-        stage = LabStage.EXPERIMENTAL,
+        stage = LabStage.BETA,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,
         isImplemented = true

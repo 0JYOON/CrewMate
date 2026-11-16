@@ -13,8 +13,8 @@ android {
         applicationId = "kr.crewmate.app"
         minSdk = 23
         targetSdk = 34
-        versionCode = 43
-        versionName = "1.0.43"
+        versionCode = 44
+        versionName = "1.0.44"
     }
 
     signingConfigs {

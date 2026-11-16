@@ -1300,3 +1300,8 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `RouteDiagramBuilder.kt`의 `flushDwell`이 `flushDwell(dptStn, dptTime = seg.dptTm)`로 호출될 때 다음 `Run`의 출발 시각(`dptTime`)을 `dwellGroup.first().dptTm`보다 우선 적용해 시작 시각 위치(`y1`)에 종료 시각이 찍히던 결함을 수정하고, 실제 구간 시작/종료 시각(`dwellGroup.first().dptTm` / `dwellGroup.last().arvTm`)을 사용하도록 교정함.
   - 인접한 출근·퇴근·운행·직전 노드의 시각과 동일한 시작/종료 시각은 자동 생략(`""`)하도록 중복 제거 조건을 확장함.
   - `TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`, `DiaCaptureHelper.kt`의 스크린샷 아이콘(`✂️`)을 카메라(`📷`)로 변경함 (`.\gradlew.bat test assembleDebug` 통과 및 실기기 `R5CY54M5CDK` 설치 완료).
+
+### STEP 92: 승무 행로도·교대승무원 베타 승격(기존 베타 하단 정렬) 및 GitHub Release APK(`v1.0.44`) 배포 (`v1.0.44`)
+- **주요 구현 내용**:
+  - `LabFeature.kt` & `CrewMate-Alpha/app-runtime.js`: `승무 행로도 시각화 뷰`(`ROUTE_DIAGRAM`)와 `교대승무원 확인`(`HANDOVER_CREW`)을 `LabStage.BETA`로 승격하고, 기존 베타 기능(`PAY_STATEMENT`, `COLLEAGUE_COMPARE`) 아래·`실험 중` 기능 위에 배치되도록 앱/웹 정렬을 일치시킴.
+  - `app/build.gradle.kts`: GitHub Releases 버전 체계에 맞춰 `versionCode = 44`, `versionName = "1.0.44"`로 상향하고 `.\gradlew.bat test assembleDebug assembleRelease` 통과 후 `CrewMate_v1.0.44.apk`를 GitHub Releases에 배포함.

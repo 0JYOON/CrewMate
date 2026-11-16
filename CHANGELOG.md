@@ -4,6 +4,16 @@
 
 ---
 
+## [v1.0.44] - 2026-11-16
+### 🚀 승무 행로도·교대승무원 베타 승격 및 정렬, GitHub Release APK(`v1.0.44`) 배포
+- **실험실 베타 승격 및 정렬 반영 (`LabFeature.kt`, `CrewMate-Alpha/app-runtime.js`)**:
+  - `승무 행로도 시각화 뷰`(`ROUTE_DIAGRAM`)와 `교대승무원 확인`(`HANDOVER_CREW`)을 `실험 중`에서 **`베타`(`LabStage.BETA`)** 단계로 승격했습니다.
+  - 기존 베타 기능(`개인근무명세서 조회`, `동료 근무 비교`) 바로 아래에 배치되도록 앱(`LabFeature` enum 순서)과 웹(`app-runtime.js`) 모두 동일하게 정렬했습니다.
+- **앱 버전 상향 및 Release APK 배포 (`app/build.gradle.kts`)**:
+  - `versionCode` `44`, `versionName` `"1.0.44"`로 상향하고 R8 난독화·서명된 `CrewMate_v1.0.44.apk`를 GitHub Releases에 업로드했습니다.
+
+---
+
 ## [v1.0.64] - 2026-11-16
 ### 🐛 행로표 감시·출고준비·입환 시작/종료 시각 역전 수정 & 중복 시각 생략, 스크린샷 아이콘 카메라(`📷`) 변경
 - **행로표 감시·출고준비·입환 시작/종료 시각 정확도 및 중복 생략 개선 (`RouteDiagramBuilder.kt`)**:
