@@ -184,7 +184,7 @@ fun DiaCaptureOptionDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
-                text = "✂️ 스크린샷 저장 범위 선택",
+                text = "📷 스크린샷 저장 범위 선택",
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = 16.sp

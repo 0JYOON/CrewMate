@@ -158,10 +158,13 @@ object RouteDiagramBuilder {
             val hasPrep = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("출고") }
             val hasShunt = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("입환") }
             val isWatchOrPrepNode = hasWatch || hasPrep || hasShunt
-            val rawDpt = dptTime ?: dwellGroup.first().dptTm.orEmpty()
-            val rawArv = arvTime ?: dwellGroup.last().arvTm ?: rawDpt
-            val dispStart = if (isWatchOrPrepNode) formatTimeDisplay(rawDpt) else ""
-            val dispEnd = if (isWatchOrPrepNode) formatTimeDisplay(rawArv) else ""
+            val actualStartRaw = dwellGroup.firstOrNull { !it.dptTm.isNullOrBlank() }?.dptTm
+                ?: arvTime.orEmpty()
+            val actualEndRaw = dwellGroup.lastOrNull { !it.arvTm.isNullOrBlank() }?.arvTm
+                ?: dptTime
+                ?: actualStartRaw
+            val dispStart = if (isWatchOrPrepNode) formatTimeDisplay(actualStartRaw) else ""
+            val dispEnd = if (isWatchOrPrepNode) formatTimeDisplay(actualEndRaw) else ""
             if (label.isNotEmpty() || totalMins > 0) {
                 steps.add(
                     RouteStep.Dwell(
@@ -170,8 +173,8 @@ object RouteDiagramBuilder {
                         label = label,
                         durationMinutes = totalMins,
                         isBlueCore = isBlueCore,
-                        arvTm = rawArv,
-                        dptTm = rawDpt,
+                        arvTm = actualEndRaw,
+                        dptTm = actualStartRaw,
                         isWatchOrPrepNode = isWatchOrPrepNode,
                         displayStartTime = dispStart,
                         displayEndTime = dispEnd
@@ -257,22 +260,44 @@ object RouteDiagramBuilder {
             )
         )
 
-        // 감시·출고준비·입환 시작/끝 시각 중 인접 운행 시각과 겹치는 항목 생략
-        val finalSteps = steps.mapIndexed { idx, step ->
+        val formattedModelStart = formatTimeDisplay(initialStartTime)
+        val formattedModelEnd = formatTimeDisplay(lastEndTime)
+        // 감시·출고준비·입환 시작/끝 시각 중 인접 항목(출근/퇴근/운행/직전 노드) 시각과 같아 중복 표출되는 경우 생략
+        val finalSteps = mutableListOf<RouteStep>()
+        for (idx in steps.indices) {
+            val step = steps[idx]
             if (step is RouteStep.Dwell && step.isWatchOrPrepNode) {
                 val prevRun = steps.subList(0, idx).lastOrNull { it is RouteStep.Run } as? RouteStep.Run
                 val nextRun = steps.subList(idx + 1, steps.size).firstOrNull { it is RouteStep.Run } as? RouteStep.Run
-                val prevArvFmt = formatTimeDisplay(prevRun?.arvTm)
-                val nextDptFmt = formatTimeDisplay(nextRun?.dptTm)
-                val isPureWatch = step.label.contains("감") && !step.label.contains("출고") && !step.label.contains("입환")
-                val nextStart = if (isPureWatch && step.displayStartTime == prevArvFmt) ""
-                    else if (!isPureWatch && step.displayStartTime == prevArvFmt) ""
+                val prevStep = finalSteps.lastOrNull()
+                val nextStep = steps.getOrNull(idx + 1)
+
+                val prevShownTimes = buildSet {
+                    formatTimeDisplay(prevRun?.arvTm).takeIf { it.isNotEmpty() }?.let(::add)
+                    if (prevStep is RouteStep.Start) {
+                        formattedModelStart.ifEmpty { formatTimeDisplay(prevStep.dptTm) }
+                            .takeIf { it.isNotEmpty() }?.let(::add)
+                    }
+                    if (prevStep is RouteStep.Dwell && prevStep.isWatchOrPrepNode) {
+                        prevStep.displayEndTime.takeIf { it.isNotEmpty() }?.let(::add)
+                        prevStep.displayStartTime.takeIf { it.isNotEmpty() }?.let(::add)
+                    }
+                }
+                val nextShownTimes = buildSet {
+                    formatTimeDisplay(nextRun?.dptTm).takeIf { it.isNotEmpty() }?.let(::add)
+                    if (nextStep is RouteStep.End) {
+                        formattedModelEnd.ifEmpty { formatTimeDisplay(nextStep.arvTm) }
+                            .takeIf { it.isNotEmpty() }?.let(::add)
+                    }
+                }
+
+                val nextStart = if (step.displayStartTime in prevShownTimes || step.displayStartTime in nextShownTimes) ""
                     else step.displayStartTime
-                val nextEnd = if (step.displayEndTime == nextDptFmt || step.displayEndTime == nextStart) ""
+                val nextEnd = if (step.displayEndTime in nextShownTimes || step.displayEndTime in prevShownTimes || step.displayEndTime == nextStart) ""
                     else step.displayEndTime
-                step.copy(displayStartTime = nextStart, displayEndTime = nextEnd)
+                finalSteps.add(step.copy(displayStartTime = nextStart, displayEndTime = nextEnd))
             } else {
-                step
+                finalSteps.add(step)
             }
         }
 

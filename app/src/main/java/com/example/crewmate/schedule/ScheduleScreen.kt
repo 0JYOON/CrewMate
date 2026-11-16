@@ -784,7 +784,7 @@ fun ScheduleDetailSheet(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("✂️", fontSize = 13.sp)
+                        Text("📷", fontSize = 13.sp)
                     }
                 }
             }

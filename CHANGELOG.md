@@ -4,6 +4,16 @@
 
 ---
 
+## [v1.0.64] - 2026-11-16
+### 🐛 행로표 감시·출고준비·입환 시작/종료 시각 역전 수정 & 중복 시각 생략, 스크린샷 아이콘 카메라(`📷`) 변경
+- **행로표 감시·출고준비·입환 시작/종료 시각 정확도 및 중복 생략 개선 (`RouteDiagramBuilder.kt`)**:
+  - `flushDwell`에서 다음 운행 구간의 출발 시각(`dptTime`)이 시작 시각(`displayStartTime`)으로 잘못 덮어써지던 버그를 수정하여, 구간 자체의 실제 시작 시각(`dwellGroup.first().dptTm`)과 실제 종료 시각(`dwellGroup.last().arvTm`)이 정확히 매핑되도록 교정했습니다.
+  - 시작 시각 또는 종료 시각이 인접한 출근/퇴근/운행/직전 노드 시각과 동일하여 중복 표출되는 경우 자동으로 생략하도록 보강했습니다.
+- **스크린샷 아이콘 변경 (`TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`, `DiaCaptureHelper.kt`)**:
+  - 기존 가위(`✂️`) 이모티콘을 카메라(`📷`) 이모티콘으로 일괄 변경했습니다.
+
+---
+
 ## [v1.0.63] - 2026-11-16
 ### ✨ WebView 기반 승무 행로도(`diagram.html`) 전면 전환 및 행로도 이미지 저장 추가
 - **로컬 HTML/JS/SVG WebView 기반 행로도 렌더링 (`app/src/main/assets/diagram.html`, `RouteDiagramView.kt`)**:

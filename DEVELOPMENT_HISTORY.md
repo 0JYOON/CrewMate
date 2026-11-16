@@ -1294,3 +1294,9 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `app/src/main/assets/diagram.html`: 라이트/다크 모드 CSS 변수(`body.is-dark`), 투명 배경, 플랫 텍스트(테두리·칩 제거), 2D 충돌 회피, `renderDiagram(data, isDarkMode)` 및 `AndroidDiagramBridge.onHeightMeasured(h)` 동적 높이 측정을 구현한 로컬 SVG 렌더러 신설.
   - `RouteDiagramView.kt`: 기존 Compose Canvas 코드를 전면 폐기하고 `AndroidView(WebView)` + `FORCE_DARK_OFF` + `Color.TRANSPARENT` + `isSystemInDarkTheme()` 연동 + `measuredHeightDp` 동적 높이 조절로 재작성.
   - `DiaCaptureHelper.kt`, `DiaCaptureRenderer.kt`: 실험실 `LabFeature.ROUTE_DIAGRAM` 활성화 시에만 `DiaCaptureOption.ROUTE_DIAGRAM` (`🧪 승무 행로도 이미지 저장`) 옵션을 노출하고 1440px 고해상도 행로도 비트맵 렌더링(`renderRouteDiagramToBitmap`) 추가 (`.\gradlew.bat test assembleDebug` 통과 및 실기기 `R5CY54M5CDK` 설치 완료).
+
+### STEP 91: 행로표 감시·출고준비·입환 시작/종료 시각 수정 및 중복 생략, 스크린샷 카메라(`📷`) 아이콘 변경 (`v1.0.64`)
+- **원인 및 해결**:
+  - `RouteDiagramBuilder.kt`의 `flushDwell`이 `flushDwell(dptStn, dptTime = seg.dptTm)`로 호출될 때 다음 `Run`의 출발 시각(`dptTime`)을 `dwellGroup.first().dptTm`보다 우선 적용해 시작 시각 위치(`y1`)에 종료 시각이 찍히던 결함을 수정하고, 실제 구간 시작/종료 시각(`dwellGroup.first().dptTm` / `dwellGroup.last().arvTm`)을 사용하도록 교정함.
+  - 인접한 출근·퇴근·운행·직전 노드의 시각과 동일한 시작/종료 시각은 자동 생략(`""`)하도록 중복 제거 조건을 확장함.
+  - `TodayWorkScreen.kt`, `ScheduleScreen.kt`, `DiaLookupScreen.kt`, `DiaCaptureHelper.kt`의 스크린샷 아이콘(`✂️`)을 카메라(`📷`)로 변경함 (`.\gradlew.bat test assembleDebug` 통과 및 실기기 `R5CY54M5CDK` 설치 완료).
