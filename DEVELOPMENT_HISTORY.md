@@ -1280,3 +1280,8 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 - **원인 및 해결**:
   - 고정 좌표 오프셋만으로는 긴 대기 라벨이 직전 `RUN` 구간의 하단 시각(`y + 18`)과 2D 평면상에서 겹치는 경우가 남아 있었음.
   - `RouteDiagramView.kt`와 `CrewMate-Alpha/app-runtime.js`에 2D 바운딩 박스(`occupiedRects`) 선등록 + `topBuf`/`botBuf` 안전 버퍼 + `placeAvoiding`/`placeAvoidingY` 충돌 회피 알고리즘을 적용하여 어떤 라벨/시각도 서로 겹치지 않도록 수정함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
+### STEP 89: 앱 행로도 전면 재작성(무테두리·1dp 수직 실선·다크모드) & 웹 요약/SW 캐시 최신화 (`v1.0.62`)
+- **주요 구현 내용**:
+  - `RouteDiagramView.kt`를 전면 삭제 후 새로 작성하여, 최하단 `1dp` 수직 실선(`#E2E8F0`/다크 `#334155`), 기준역 1개 `#1E3A8A` 알약 강조, `2dp` 수평선+점선 편승, 무테두리 순수 `Text` + 마지막 열 좌측 정렬(`softWrap = false`) + 2D 충돌 회피 + 수직 밀도 압축 + 라이트/다크 모드 대응을 구현함.
+  - `CrewMate-Alpha`(`app-runtime.js`, `sw.js`, `index.html`)에서 행로도 하단 요약 전체 항목(`운용요일`~`총사업거리`)을 타임라인과 동일하게 맞추고, `CACHE_NAME`을 `crewmate-alpha-v8.33`으로 올려 브라우저 캐시로 인한 구버전 겹침 현상을 해소함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).

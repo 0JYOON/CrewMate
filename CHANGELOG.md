@@ -4,6 +4,19 @@
 
 ---
 
+## [v1.0.62] - 2026-11-16
+### 앱 행로도 전면 재작성(무테두리·1dp 수직 실선·다크모드) & 웹 요약/캐시 최신화
+- **앱 승무 행로도 전면 재작성** ([RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt)):
+  - 기존 뱃지형(`Card`/`Surface`/`RoundedCornerShape`/`Modifier.border`) 렌더링 코드를 전면 삭제하고 스펙에 맞춰 새로 작성함.
+  - 최하단 레이어에 상단 역명 헤더부터 하단 퇴근 지점까지 끊김 없는 `1dp` 수직 실선(`#E2E8F0` / 다크 `#334155`) 배경 그리드 배치.
+  - 상단 역명 헤더에서 기준/출발 역 1개만 `#1E3A8A` 알약(Pill) 흰색 글씨로 강조하고 나머지 역은 무테두리 일반 `Text`로 표기.
+  - `2dp` 수평 운행선(`#1D4ED8` / 다크 `#60A5FA`) 양 끝 점·선 위 열번, 편승/도보 점선, 모든 시각 및 상태 텍스트에 배경/테두리 없는 순수 `Text` + 마지막 열 좌측 정렬(`softWrap = false`) + 2D 충돌 회피 + 수직 밀도 압축 + 라이트/다크 모드 대응을 적용함.
+- **웹 (`CrewMate-Alpha`) 요약 전체 표출 & SW 캐시 최신화**:
+  - `app-runtime.js`: 행로도 선택 시 하단 `사업시간/거리 요약 보기`에서도 목록(타임라인)과 동일하게 `운용요일`, `시행기간`, `준비`, `운전/승무`, `감시`, `휴게`, `승계`, `총사업시간`, `총사업거리` 전체 항목이 표출되도록 통일하고, 대기 라벨 안전 구역 하한을 보강함.
+  - `sw.js`, `index.html`: Service Worker 캐시 버전(`crewmate-alpha-v8.33`) 및 런타임 쿼리(`?v=0.8.33`)를 갱신해 웹페이지에 구버전 캐시가 남아 겹쳐 보이던 현상을 차단함.
+
+---
+
 ## [v1.0.61] - 2026-11-16
 ### 승무 행로도 2D 공간 점유·충돌 회피(Collision Avoidance) 배치 엔진 적용
 - **수정 이유**:
