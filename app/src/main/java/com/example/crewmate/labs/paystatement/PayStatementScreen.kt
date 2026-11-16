@@ -254,23 +254,27 @@ private fun MonthSelectorBar(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (autoRefresh) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
                     )
                 }
                 Surface(
                     onClick = { if (!isLoading && !isOfflineMode) onRefresh() },
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (isOfflineMode) 0.4f else 0.9f),
-                    modifier = Modifier.size(28.dp)
+                    color = if (isOfflineMode) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isOfflineMode) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                    ),
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                         } else {
                             Text(
                                 text = "🔄",
-                                fontSize = 13.sp,
-                                color = if (isOfflineMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSecondaryContainer
+                                fontSize = 14.sp,
+                                color = if (isOfflineMode) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary
                             )
                         }
                     }

@@ -4,6 +4,27 @@
 
 ---
 
+## [v1.0.59] - 2026-11-16
+### CrewMate 생태계(앱·웹) 실무 종합 개선 (Phase 0~5)
+- **Phase 0 (`AGENTS.md` 필수 수칙 보강)**:
+  - 코어 로직 공유 + 앱/웹 각 플랫폼별 UI/UX 최적화 원칙, 임의 팁 삽입 및 스크롤 침범 금지, 실험실 기능 보수적 기본값 유지, 배포 산출물 난독화·무결성 유지 원칙을 [AGENTS.md](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/AGENTS.md)에 명문화함.
+- **Phase 1 (핵심 버그 수정)**:
+  - [AppUpdateManager.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/util/AppUpdateManager.kt), [AppNavigation.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/navigation/AppNavigation.kt): 자동 업데이트 체크 성공 시에만 시각·날짜를 기록하고, 날짜 변경/6시간 경과 시 기동 및 `ON_RESUME` 복귀 시 재확인하도록 수정함.
+  - [DiaDetailCard.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/schedule/DiaDetailCard.kt): 다이아 상세 화면 기본값을 `'타임라인'`으로 고정(`rememberSaveable`)해 자동 행로도 전환 증상을 제거함.
+  - [HandoverCrewResolver.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewResolver.kt), `CrewMate-Alpha/app-runtime.js`: 교대 승무원 릴레이 매칭 시 해당 일자 승무원 배정이 없는 `'미배정'` 다이아 혼입을 차단해 정확한 직전/교대 승무원만 판정하도록 수정함.
+- **Phase 2 (교대 승무원 UX 개편)**:
+  - [TodayWorkScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/schedule/TodayWorkScreen.kt), [DiaDetailCard.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/schedule/DiaDetailCard.kt), `app-runtime.js`: 교대 승무원 조회를 `'오늘의 근무'` 메뉴에서만 허용하고, 앱은 `👥` 뱃지 대신 행 터치로 호출하도록 개선함.
+  - [HandoverCrewDialog.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewDialog.kt), `app-runtime.js`: 팝업 제목에서 `'열차'` 단어 제거 및 1줄 고정, 직전/교대 승무원 1행 2열 배치, 전체 열차 릴레이 기본 접기/펼쳐보기를 적용함.
+- **Phase 3 (실험실 UI/UX & 수집기 & 동료 필터)**:
+  - `xcrew_bridge_snippet.js`, `app-runtime.js`: 1·2번 수집 시 `개인근무명세서` 진행률 반영 및 실험실 ON일 때만 실험실 보관 통계를 표출하고, 설정 실험실 카드의 중복 `'실험실'` 뱃지를 제거함.
+  - [PayStatementScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/paystatement/PayStatementScreen.kt), [ColleagueCompareScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt): 우측 상단 `자동/수동` 뱃지 슬림화 및 `🔄` 버튼 시인성 강화, 수동 추가 3탭(`🔁 순환 패턴`, `📷 사진 OCR`, `🤖 AI 일괄`) 중앙 정렬 및 가시성 복구, 셀 여백 축소, 승무원 이름 필터(`🔍 필터`)를 앱·웹에 추가함.
+- **Phase 4 (승무 행로도 전면 개편)**:
+  - [RouteDiagramBuilder.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramBuilder.kt), [RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt), `app-runtime.js`: 앱·웹 모두 가로 잘림 없는 화면 폭 맞춤(Fit-to-width)과 상하 여백 확대, 앱 요약 세부시간 오표기 수정, `감시`/`출고준비` 세로선 노드(점) 추가 및 시각 조건부 표기 규칙을 적용함.
+- **Phase 5 (다이아 평가 전용 편집기 & 연동)**:
+  - `CrewMate-Alpha/dia-rating-editor.html` 신설(기초자료 1차 자동 가공: 운전 비율·절대시간·구간별 승무 패턴·취침역 → 2차 편집 및 등급/라벨 지정 → JSON 내보내기) 및 앱([DiaRatingModels.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingModels.kt), [DiaRatingStorage.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingStorage.kt), [DiaRatingEvaluator.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingEvaluator.kt), [DiaRatingDialogs.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/diarating/DiaRatingDialogs.kt))·웹 평가 자료 등록/매칭을 연동함.
+
+---
+
 ## [v1.0.58] - 2026-11-15
 ### 웹·Android 리버스 엔지니어링(REA) 방지 및 난독화·무결성 검증 적용
 - **웹 (`CrewMate-Alpha`) 난독화 빌드 파이프라인 구축**:

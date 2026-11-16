@@ -315,7 +315,8 @@ private fun TodayWorkContent(
                             DiaDetailCard(
                                 schedule = item.schedule,
                                 detail = item.detail,
-                                workDate = result.workDate
+                                workDate = result.workDate,
+                                enableHandoverLookup = true
                             )
                             if (index < result.dias.lastIndex) Spacer(Modifier.height(14.dp))
                         }

@@ -18,6 +18,7 @@ object DiaRatingEvaluator {
         if (cleanDia.isEmpty() || cleanDia == "S" || cleanDia == "연차") return null
 
         val manual = rules.customOverrides[cleanDia]
+        val imported = rules.importedRatings[cleanDia]
         val driveMinutes = extractDriveMinutes(detail)
         val totalMinutes = extractTotalMinutes(detail, schedule)
         val sleepStation = extractSleepStation(detail)
@@ -29,7 +30,26 @@ object DiaRatingEvaluator {
                 sleepStation = sleepStation,
                 driveMinutes = driveMinutes,
                 totalMinutes = totalMinutes,
-                isManualOverride = true
+                isManualOverride = true,
+                customLabel = imported?.customLabel?.takeIf { it.isNotEmpty() }
+            )
+        }
+
+        if (imported != null) {
+            val impReasons = buildList {
+                add("편집기 평가 자료 매칭 (${imported.customLabel.ifEmpty { imported.grade.label }})")
+                if (imported.pattern.isNotEmpty()) add("패턴: ${imported.pattern}")
+                if (imported.driveRatioPct > 0.0) add("운전 비율: ${imported.driveRatioPct}%")
+                if (imported.note.isNotEmpty()) add("메모: ${imported.note}")
+            }
+            return DiaRatingResult(
+                grade = imported.grade,
+                reasons = impReasons,
+                sleepStation = sleepStation,
+                driveMinutes = driveMinutes,
+                totalMinutes = totalMinutes,
+                isManualOverride = false,
+                customLabel = imported.customLabel.takeIf { it.isNotEmpty() }
             )
         }
 

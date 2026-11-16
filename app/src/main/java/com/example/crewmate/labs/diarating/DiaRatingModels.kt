@@ -12,6 +12,14 @@ enum class DiaRatingGrade(
     AVOID("기피", "⚠️", 0xFF991B1B)
 }
 
+data class ImportedDiaRating(
+    val grade: DiaRatingGrade,
+    val customLabel: String = "",
+    val pattern: String = "",
+    val driveRatioPct: Double = 0.0,
+    val note: String = ""
+)
+
 data class DiaRatingRules(
     val lightMaxDriveMinutes: Int = 240,
     val heavyMinDriveMinutes: Int = 360,
@@ -19,7 +27,8 @@ data class DiaRatingRules(
     val preferredSleepStations: Set<String> = emptySet(),
     val heavySleepStations: Set<String> = emptySet(),
     val customOverrides: Map<String, DiaRatingGrade> = emptyMap(),
-    val showCellTint: Boolean = true
+    val showCellTint: Boolean = true,
+    val importedRatings: Map<String, ImportedDiaRating> = emptyMap()
 )
 
 data class DiaRatingResult(
@@ -28,5 +37,6 @@ data class DiaRatingResult(
     val sleepStation: String? = null,
     val driveMinutes: Int = 0,
     val totalMinutes: Int = 0,
-    val isManualOverride: Boolean = false
+    val isManualOverride: Boolean = false,
+    val customLabel: String? = null
 )

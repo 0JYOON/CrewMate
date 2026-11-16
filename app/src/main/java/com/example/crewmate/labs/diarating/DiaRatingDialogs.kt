@@ -220,10 +220,63 @@ fun DiaRatingRulesDialog(
                         }
                     }
                 }
+                Text(
+                    text = "편집기 평가 자료 (${initial.importedRatings.size}건 등록됨)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                var pasteJson by remember { mutableStateOf("") }
+                var importStatus by remember { mutableStateOf<String?>(null) }
+                OutlinedTextField(
+                    value = pasteJson,
+                    onValueChange = { pasteJson = it },
+                    label = { Text("편집기 JSON 붙여넣기 (CREWMATE_DIA_RATING_PACK_V1)", fontSize = 11.sp) },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            DiaRatingStorage.importPackJson(context, pasteJson)
+                                .onSuccess { cnt ->
+                                    importStatus = "✅ ${cnt}개 다이아 평가 자료 등록 완료"
+                                    pasteJson = ""
+                                }
+                                .onFailure { err ->
+                                    importStatus = "⚠️ ${err.message}"
+                                }
+                        },
+                        enabled = pasteJson.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("📥 평가 자료 등록", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://crewmate-alpha.pages.dev/dia-rating-editor.html")
+                                )
+                                context.startActivity(intent)
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("🛠️ 웹 편집기 열기", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (importStatus != null) {
+                    Text(importStatus!!, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
+                val latestImported = DiaRatingStorage.getRules(context).importedRatings
                 val next = DiaRatingRules(
                     lightMaxDriveMinutes = lightMaxDrive,
                     heavyMinDriveMinutes = heavyMinDrive,
@@ -231,7 +284,8 @@ fun DiaRatingRulesDialog(
                     preferredSleepStations = preferredStationsText.split(",", " ").map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
                     heavySleepStations = heavyStationsText.split(",", " ").map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
                     customOverrides = overrides,
-                    showCellTint = showCellTint
+                    showCellTint = showCellTint,
+                    importedRatings = latestImported
                 )
                 DiaRatingStorage.saveRules(context, next)
                 onDismiss()

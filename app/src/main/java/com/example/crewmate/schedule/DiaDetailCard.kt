@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import java.util.Locale
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +60,7 @@ fun DiaDetailCard(
     workDate: LocalDate? = null,
     forceShowAllDetails: Boolean? = null,
     isCaptureMode: Boolean = false,
+    enableHandoverLookup: Boolean = false,
 ) {
     val diaPrefix = if (schedule.isContinuation) "~" else ""
     val diaText = "$diaPrefix${schedule.diaNo.orEmpty()}"
@@ -85,8 +87,8 @@ fun DiaDetailCard(
     LaunchedEffect(context) {
         com.example.crewmate.labs.diarating.DiaRatingStorage.getRules(context)
     }
-    var showRouteDiagram by remember(routeDiagramLabEnabled, isCaptureMode) {
-        mutableStateOf(routeDiagramLabEnabled && !isCaptureMode)
+    var showRouteDiagram by rememberSaveable(schedule.diaNo, isCaptureMode) {
+        mutableStateOf(false)
     }
     var selectedHandoverSegment by remember { mutableStateOf<DiaDetailSegment?>(null) }
     var showDiaRatingDetail by remember { mutableStateOf(false) }
@@ -132,7 +134,8 @@ fun DiaDetailCard(
                             modifier = Modifier.clickable { showDiaRatingDetail = true }
                         ) {
                             Text(
-                                text = "${diaRatingResult.grade.shortBadge} ${diaRatingResult.grade.label}",
+                                text = diaRatingResult.customLabel?.takeIf { it.isNotBlank() }
+                                    ?: "${diaRatingResult.grade.shortBadge} ${diaRatingResult.grade.label}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = badgeColor,
@@ -241,25 +244,25 @@ fun DiaDetailCard(
 
                         val isSandwiched = item.isSandwichedGamsi && hideSandwichedGamsi
                         val isHiddenItem = isRank3 || isSandwiched
-                        val showHandoverBtn = handoverCrewLabEnabled && !isCaptureMode &&
+                        val allowHandoverClick = enableHandoverLookup && handoverCrewLabEnabled && !isCaptureMode &&
                             trn.isNotEmpty() && trn != "도보" && trn.any(Char::isDigit)
 
                         if (isHiddenItem) {
                             if (isCaptureMode) {
                                 if (showHiddenDetails) {
-                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, allowHandoverClick) {
                                         selectedHandoverSegment = seg
                                     }
                                 }
                             } else {
                                 AnimatedVisibility(visible = showHiddenDetails) {
-                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                                    SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, allowHandoverClick) {
                                         selectedHandoverSegment = seg
                                     }
                                 }
                             }
                         } else {
-                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, showHandoverBtn) {
+                            SegmentRow(item, isRank1, isRank3, cat, trn, index == categorizedSegments.lastIndex, workDate, allowHandoverClick) {
                                 selectedHandoverSegment = seg
                             }
                         }
@@ -291,7 +294,7 @@ fun DiaDetailCard(
     }
 
     val targetSeg = selectedHandoverSegment
-    if (targetSeg != null && handoverCrewLabEnabled && !isCaptureMode) {
+    if (targetSeg != null && enableHandoverLookup && handoverCrewLabEnabled && !isCaptureMode) {
         com.example.crewmate.labs.handovercrew.HandoverCrewDialog(
             workDate = workDate ?: LocalDate.now(),
             currentDiaNo = schedule.diaNo.orEmpty(),
@@ -483,6 +486,7 @@ private fun SegmentRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(rowBg, RoundedCornerShape(8.dp))
+            .then(if (showHandoverButton) Modifier.clickable(onClick = onHandoverClick) else Modifier)
             .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -561,19 +565,6 @@ private fun SegmentRow(
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                             maxLines = 1
                         )
-                    }
-                    if (showHandoverButton) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.clickable(onClick = onHandoverClick)
-                        ) {
-                            Text(
-                                text = "👥",
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
                     }
                 }
             } else if (cat.isNotEmpty()) {

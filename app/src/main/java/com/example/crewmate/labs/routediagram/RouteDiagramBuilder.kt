@@ -33,7 +33,9 @@ sealed interface RouteStep {
         val durationMinutes: Int,
         val isBlueCore: Boolean,
         val dptTm: String,
-        val arvTm: String
+        val arvTm: String,
+        val isWatchOrPrepNode: Boolean = false,
+        val displayStartTime: String = ""
     ) : RouteStep
 
     data class End(
@@ -151,6 +153,17 @@ object RouteDiagramBuilder {
             val label = formatDwellBadgeLabel(dwellGroup)
             val totalMins = dwellGroup.sumOf { it.pjtTnum ?: 0 }
             val isBlueCore = dwellGroupIsBlueCore == true
+            val hasWatch = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("감시") }
+            val hasPrep = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("출고") }
+            val isWatchOrPrepNode = hasWatch || hasPrep
+            val rawDpt = dptTime ?: dwellGroup.first().dptTm.orEmpty()
+            val rawArv = arvTime ?: dwellGroup.last().arvTm ?: rawDpt
+            val dispTime = if (hasPrep) {
+                formatTimeDisplay(rawDpt)
+            } else if (hasWatch) {
+                // 감시 시각이 직전 도착과 같으면 일단 마킹해두고 아래 후처리에서 직후 출발과도 비교
+                formatTimeDisplay(rawDpt)
+            } else ""
             if (label.isNotEmpty() || totalMins > 0) {
                 steps.add(
                     RouteStep.Dwell(
@@ -159,8 +172,10 @@ object RouteDiagramBuilder {
                         label = label,
                         durationMinutes = totalMins,
                         isBlueCore = isBlueCore,
-                        arvTm = arvTime ?: dwellGroup.first().arvTm ?: dwellGroup.first().dptTm.orEmpty(),
-                        dptTm = dptTime ?: dwellGroup.last().dptTm.orEmpty()
+                        arvTm = rawArv,
+                        dptTm = rawDpt,
+                        isWatchOrPrepNode = isWatchOrPrepNode,
+                        displayStartTime = dispTime
                     )
                 )
             }
@@ -243,6 +258,23 @@ object RouteDiagramBuilder {
             )
         )
 
+        // 감시(감) 시각이 앞뒤 운행 구간 시각과 겹치면 시각 표기 생략
+        val finalSteps = steps.mapIndexed { idx, step ->
+            if (step is RouteStep.Dwell && step.displayStartTime.isNotEmpty() && step.label.contains("감") && !step.label.contains("출고")) {
+                val prevRun = steps.subList(0, idx).lastOrNull { it is RouteStep.Run } as? RouteStep.Run
+                val nextRun = steps.subList(idx + 1, steps.size).firstOrNull { it is RouteStep.Run } as? RouteStep.Run
+                val dptFmt = formatTimeDisplay(step.dptTm)
+                val arvFmt = formatTimeDisplay(step.arvTm)
+                val prevArvFmt = formatTimeDisplay(prevRun?.arvTm)
+                val nextDptFmt = formatTimeDisplay(nextRun?.dptTm)
+                val overlaps = (dptFmt.isNotEmpty() && (dptFmt == prevArvFmt || dptFmt == nextDptFmt)) ||
+                    (arvFmt.isNotEmpty() && arvFmt == nextDptFmt)
+                if (overlaps) step.copy(displayStartTime = "") else step
+            } else {
+                step
+            }
+        }
+
         val totalMinutes = detail.summaries.firstOrNull()?.totWrkTnum
             ?: rawSegments.sumOf { it.pjtTnum ?: 0 }
         val totalDist = detail.summaries.firstOrNull()?.totPjtDst ?: 0.0
@@ -254,7 +286,7 @@ object RouteDiagramBuilder {
             totalTimeMinutes = totalMinutes,
             totalDistanceKm = totalDist,
             stations = stations,
-            steps = steps
+            steps = finalSteps
         )
     }
 }

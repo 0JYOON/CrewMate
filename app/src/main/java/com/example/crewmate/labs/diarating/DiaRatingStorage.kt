@@ -82,6 +82,20 @@ object DiaRatingStorage {
                     if (grade != null) overrides[key] = grade
                 }
             }
+            val importedMap = mutableMapOf<String, ImportedDiaRating>()
+            obj.optJSONObject("importedRatings")?.let { impObj ->
+                impObj.keys().forEach { key ->
+                    val item = impObj.optJSONObject(key) ?: return@forEach
+                    val grade = runCatching { DiaRatingGrade.valueOf(item.optString("grade")) }.getOrNull() ?: return@forEach
+                    importedMap[key] = ImportedDiaRating(
+                        grade = grade,
+                        customLabel = item.optString("customLabel", "").trim(),
+                        pattern = item.optString("pattern", "").trim(),
+                        driveRatioPct = item.optDouble("driveRatioPct", 0.0),
+                        note = item.optString("note", "").trim()
+                    )
+                }
+            }
             DiaRatingRules(
                 lightMaxDriveMinutes = obj.optInt("lightMaxDriveMinutes", 240).coerceIn(60, 600),
                 heavyMinDriveMinutes = obj.optInt("heavyMinDriveMinutes", 360).coerceIn(120, 720),
@@ -89,9 +103,35 @@ object DiaRatingStorage {
                 preferredSleepStations = preferred,
                 heavySleepStations = heavyStations,
                 customOverrides = overrides,
-                showCellTint = obj.optBoolean("showCellTint", true)
+                showCellTint = obj.optBoolean("showCellTint", true),
+                importedRatings = importedMap
             )
         }.getOrDefault(DiaRatingRules())
+    }
+
+    fun importPackJson(context: Context, rawJson: String): Result<Int> = runCatching {
+        val root = JSONObject(rawJson.trim())
+        val itemsObj = root.optJSONObject("items") ?: error("유효한 다이아 평가 자료(items)가 없습니다.")
+        val parsed = mutableMapOf<String, ImportedDiaRating>()
+        itemsObj.keys().forEach { key ->
+            val cleanDia = key.trim().removePrefix("~")
+            val item = itemsObj.optJSONObject(key) ?: return@forEach
+            val gradeStr = item.optString("grade", "NORMAL").trim().uppercase()
+            val grade = runCatching { DiaRatingGrade.valueOf(gradeStr) }.getOrDefault(DiaRatingGrade.NORMAL)
+            if (cleanDia.isNotEmpty()) {
+                parsed[cleanDia] = ImportedDiaRating(
+                    grade = grade,
+                    customLabel = item.optString("customLabel", "").trim(),
+                    pattern = item.optString("pattern", "").trim(),
+                    driveRatioPct = item.optDouble("driveRatioPct", 0.0),
+                    note = item.optString("note", "").trim()
+                )
+            }
+        }
+        require(parsed.isNotEmpty()) { "등록할 다이아 평가 항목이 0건입니다." }
+        val current = getRules(context)
+        saveRules(context, current.copy(importedRatings = parsed))
+        parsed.size
     }
 
     private fun toJson(rules: DiaRatingRules): String {
@@ -105,6 +145,17 @@ object DiaRatingStorage {
                 rules.customOverrides.forEach { (k, v) -> put(k, v.name) }
             })
             put("showCellTint", rules.showCellTint)
+            put("importedRatings", JSONObject().apply {
+                rules.importedRatings.forEach { (k, v) ->
+                    put(k, JSONObject().apply {
+                        put("grade", v.grade.name)
+                        put("customLabel", v.customLabel)
+                        put("pattern", v.pattern)
+                        put("driveRatioPct", v.driveRatioPct)
+                        put("note", v.note)
+                    })
+                }
+            })
         }.toString()
     }
 }

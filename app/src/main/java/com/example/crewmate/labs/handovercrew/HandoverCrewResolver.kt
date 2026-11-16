@@ -89,6 +89,7 @@ object HandoverCrewResolver {
                     isCurrentDia = isCurrent
                 )
             }
+            .filter { it.isCurrentDia || it.crewMembers.isNotEmpty() }
 
         val hasNight = rawRelays.any { (parseHour(it.dptTm) ?: -1) in 18..23 }
         val hasEarlyMorning = rawRelays.any { (parseHour(it.dptTm) ?: -1) in 0..6 }

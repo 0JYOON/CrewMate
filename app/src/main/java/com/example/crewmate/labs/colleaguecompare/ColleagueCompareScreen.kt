@@ -46,8 +46,14 @@ fun ColleagueCompareScreen(
 
     var showAddColleagueDialog by remember { mutableStateOf(false) }
     var showAddVirtualDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var hiddenPersonIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var editingVirtualPerson by remember { mutableStateOf<ComparePerson?>(null) }
     var editingCell by remember { mutableStateOf<Triple<ComparePerson, String, CompareDayCell?>?>(null) }
+
+    val visiblePeople = remember(state.people, hiddenPersonIds) {
+        state.people.filter { it.id !in hiddenPersonIds }
+    }
 
     val daysInMonth = state.selectedMonth.lengthOfMonth()
     val dateList = remember(state.selectedMonth) {
@@ -121,20 +127,21 @@ fun ColleagueCompareScreen(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (autoRef) Color(0xFF166534) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
                         )
                     }
                     Surface(
                         onClick = { if (!state.isLoading) viewModel.refreshAllOnline() },
                         shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                        modifier = Modifier.size(28.dp)
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             if (state.isLoading) {
-                                CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                             } else {
-                                Text(text = "🔄", fontSize = 13.sp)
+                                Text(text = "🔄", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -144,7 +151,7 @@ fun ColleagueCompareScreen(
 
         Spacer(Modifier.height(6.dp))
 
-        // 액션 버튼 바: 승무원 추가 / 수동 추가
+        // 액션 버튼 바: 승무원 추가 / 수동 추가 / 필터
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -165,6 +172,22 @@ fun ColleagueCompareScreen(
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text("+ 수동 추가", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            if (state.people.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { showFilterDialog = true },
+                    modifier = Modifier.height(34.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                ) {
+                    val activeCnt = visiblePeople.size
+                    val totalCnt = state.people.size
+                    Text(
+                        text = if (hiddenPersonIds.isNotEmpty()) "🔍 $activeCnt/$totalCnt" else "🔍 필터",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
             }
         }
 
@@ -239,7 +262,7 @@ fun ColleagueCompareScreen(
         Spacer(Modifier.height(8.dp))
 
         val cellWidth = if (state.displayOptions.showCommuteTimes) 74.dp else 56.dp
-        val rowHeight = if (state.displayOptions.showCommuteTimes) 50.dp else 38.dp
+        val rowHeight = if (state.displayOptions.showCommuteTimes) 42.dp else 34.dp
         val nameColWidth = 92.dp
         val dateColWidth = 70.dp
 
@@ -316,7 +339,7 @@ fun ColleagueCompareScreen(
                             )
                         }
 
-                        items(items = state.people, key = { it.id }) { person ->
+                        items(items = visiblePeople, key = { it.id }) { person ->
                             val isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON
                             CompareMatrixRow(
                                 name = person.name,
@@ -379,7 +402,7 @@ fun ColleagueCompareScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            state.people.forEach { person ->
+                            visiblePeople.forEach { person ->
                                 val isVirtual = person.type == CompareEntryType.VIRTUAL_PERSON
                                 Row(
                                     modifier = Modifier
@@ -463,7 +486,7 @@ fun ColleagueCompareScreen(
                                         rowHeight = rowHeight,
                                         onClick = null
                                     )
-                                    state.people.forEach { person ->
+                                    visiblePeople.forEach { person ->
                                         val cell = person.cellForDate(ymKey, d.toString())
                                         CompareCellBox(
                                             cell = cell,
@@ -482,6 +505,20 @@ fun ColleagueCompareScreen(
                 }
             }
         }
+    }
+
+    // 승무원 표시 필터 팝업
+    if (showFilterDialog) {
+        ColleagueFilterDialog(
+            people = state.people,
+            hiddenPersonIds = hiddenPersonIds,
+            onTogglePerson = { id ->
+                hiddenPersonIds = if (id in hiddenPersonIds) hiddenPersonIds - id else hiddenPersonIds + id
+            },
+            onSelectAll = { hiddenPersonIds = emptySet() },
+            onDeselectAll = { hiddenPersonIds = state.people.map { it.id }.toSet() },
+            onDismiss = { showFilterDialog = false }
+        )
     }
 
     // 승무원 추가 팝업
@@ -707,11 +744,13 @@ private fun CompareCellBox(
         }
         Column(
             modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((-1).dp)
         ) {
             Text(
                 text = dia.ifBlank { "-" },
                 fontSize = 11.sp,
+                lineHeight = 13.sp,
                 fontWeight = if (isRest || dia.isBlank()) FontWeight.Medium else FontWeight.Bold,
                 color = when {
                     dia.isBlank() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
@@ -728,6 +767,7 @@ private fun CompareCellBox(
                     Text(
                         text = timeText,
                         fontSize = 8.5.sp,
+                        lineHeight = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
@@ -735,6 +775,90 @@ private fun CompareCellBox(
             }
         }
     }
+}
+
+@Composable
+private fun ColleagueFilterDialog(
+    people: List<ComparePerson>,
+    hiddenPersonIds: Set<String>,
+    onTogglePerson: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(people, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) people else people.filter { it.name.lowercase().contains(q) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🔍 승무원 표시 필터", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("승무원 이름 검색...", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = onSelectAll,
+                        modifier = Modifier.weight(1f).height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("전체 선택", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onDeselectAll,
+                        modifier = Modifier.weight(1f).height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("전체 해제", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    filtered.forEach { person ->
+                        val checked = person.id !in hiddenPersonIds
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onTogglePerson(person.id) }
+                                .padding(vertical = 4.dp, horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { onTogglePerson(person.id) },
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = person.name,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("닫기") }
+        }
+    )
 }
 
 @Composable
@@ -920,13 +1044,30 @@ private fun ManualPersonAddDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("순환 패턴", "📷 스크린샷", "🤖 AI 일괄").forEachIndexed { idx, label ->
-                        FilterChip(
-                            selected = selectedTab == idx,
+                    listOf("🔁 순환 패턴", "📷 사진 OCR", "🤖 AI 일괄").forEachIndexed { idx, label ->
+                        val isSel = selectedTab == idx
+                        Surface(
                             onClick = { selectedTab = idx },
-                            label = { Text(label, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, maxLines = 1) },
-                            modifier = Modifier.weight(1f)
-                        )
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSel) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f) else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier.weight(1f).height(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
+                                Text(
+                                    text = label,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
 

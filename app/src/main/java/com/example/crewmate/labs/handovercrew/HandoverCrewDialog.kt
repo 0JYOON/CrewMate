@@ -1,6 +1,7 @@
 package com.example.crewmate.labs.handovercrew
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.crewmate.data.remote.xcrew.DiaDetailSegment
@@ -86,13 +88,17 @@ fun HandoverCrewDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "👥 $trainLabel 열차 교대승무원",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    text = "👥 $trainLabel 교대승무원",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -102,6 +108,7 @@ fun HandoverCrewDialog(
                         text = "🧪 실험실",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
@@ -216,73 +223,96 @@ fun HandoverCrewDialog(
                                 }
                             }
 
-                            // 직전 승무원
-                            RelayPersonCard(
-                                badge = "직전 승무원 (인계)",
-                                badgeColor = Color(0xFF0369A1),
-                                item = report.previousCrew,
-                                emptyMessage = "직전 교대 승무원이 없습니다. (시발/기점 구간 또는 미조회)"
-                            )
-
-                            // 교대 승무원
-                            RelayPersonCard(
-                                badge = "교대 승무원 (후속)",
-                                badgeColor = Color(0xFF047857),
-                                item = report.nextCrew,
-                                emptyMessage = "후속 교대 승무원이 없습니다. (종착 구간 또는 미조회)"
-                            )
-
-                            // 전체 릴레이가 2개 이상이면 요약 표출
-                            if (report.allRelays.size > 1) {
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                Text(
-                                    text = "전체 열차 릴레이 (${report.allRelays.size}개 구간)",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            // 직전 승무원 · 교대 승무원 한 줄(2열) 배치
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                RelayPersonCard(
+                                    badge = "직전 승무원",
+                                    badgeColor = Color(0xFF0369A1),
+                                    item = report.previousCrew,
+                                    emptyMessage = "없음 (시발/미조회)",
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    report.allRelays.forEach { relay ->
-                                        val crewText = if (relay.crewMembers.isNotEmpty()) {
-                                            relay.crewMembers.joinToString(", ")
-                                        } else {
-                                            "미배정"
-                                        }
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            color = if (relay.isCurrentDia) {
-                                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                RelayPersonCard(
+                                    badge = "교대 승무원",
+                                    badgeColor = Color(0xFF047857),
+                                    item = report.nextCrew,
+                                    emptyMessage = "없음 (종착/미조회)",
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            // 전체 릴레이가 2개 이상이면 기본 접기 + 펼쳐보기 지원
+                            if (report.allRelays.size > 1) {
+                                var showAllRelays by remember(report) { mutableStateOf(false) }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showAllRelays = !showAllRelays }
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "전체 열차 릴레이 (${report.allRelays.size}개 구간)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = if (showAllRelays) "접기 ▲" else "펼쳐보기 ▼",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (showAllRelays) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        report.allRelays.forEach { relay ->
+                                            val crewText = if (relay.crewMembers.isNotEmpty()) {
+                                                relay.crewMembers.joinToString(", ")
                                             } else {
-                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                                            },
-                                            shape = RoundedCornerShape(6.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                "미배정"
+                                            }
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                color = if (relay.isCurrentDia) {
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                                },
+                                                shape = RoundedCornerShape(6.dp)
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = "${relay.pdiaNo} DIA · $crewText",
-                                                        fontSize = 11.sp,
-                                                        fontWeight = if (relay.isCurrentDia) FontWeight.ExtraBold else FontWeight.SemiBold
-                                                    )
-                                                    Text(
-                                                        text = "${relay.dptStnNm} ${formatTime(relay.dptTm)} → ${relay.arvStnNm} ${formatTime(relay.arvTm)}",
-                                                        fontSize = 10.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                if (relay.isCurrentDia) {
-                                                    Text(
-                                                        text = "내 근무",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "${relay.pdiaNo} DIA · $crewText",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = if (relay.isCurrentDia) FontWeight.ExtraBold else FontWeight.SemiBold
+                                                        )
+                                                        Text(
+                                                            text = "${relay.dptStnNm} ${formatTime(relay.dptTm)} → ${relay.arvStnNm} ${formatTime(relay.arvTm)}",
+                                                            fontSize = 10.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    if (relay.isCurrentDia) {
+                                                        Text(
+                                                            text = "내 근무",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -320,18 +350,19 @@ private fun RelayPersonCard(
     badge: String,
     badgeColor: Color,
     item: HandoverRelayItem?,
-    emptyMessage: String
+    emptyMessage: String,
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(Modifier.padding(10.dp)) {
+        Column(Modifier.padding(8.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Surface(
                     color = badgeColor.copy(alpha = 0.14f),
@@ -339,44 +370,51 @@ private fun RelayPersonCard(
                 ) {
                     Text(
                         text = badge,
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                         color = badgeColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                     )
                 }
                 if (item != null) {
                     Text(
-                        text = "${item.pdiaNo} DIA",
-                        fontSize = 11.sp,
+                        text = item.pdiaNo,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(5.dp))
             if (item == null) {
                 Text(
                     text = emptyMessage,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 val crewText = if (item.crewMembers.isNotEmpty()) {
                     item.crewMembers.joinToString(", ")
                 } else {
-                    "승무원 배정 정보 없음"
+                    "배정 정보 없음"
                 }
                 Text(
                     text = crewText,
-                    fontSize = 15.sp,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "${item.dptStnNm} ${formatTime(item.dptTm)} → ${item.arvStnNm} ${formatTime(item.arvTm)}",
-                    fontSize = 12.sp,
+                    text = "${item.dptStnNm} ${formatTime(item.dptTm)}→${item.arvStnNm} ${formatTime(item.arvTm)}",
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

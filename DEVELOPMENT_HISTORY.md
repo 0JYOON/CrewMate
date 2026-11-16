@@ -1257,3 +1257,14 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `CrewMate-Alpha` (`package.json`, `build.js`): `terser` + `javascript-obfuscator` 파이프라인을 구축하여 `dist/` 내 JS(`app-runtime.js`, `railway-master-data.js`, `xcrew_bridge_snippet.js`) 및 `dev-master.html` 인라인 스크립트를 압축·난독화(주석 제거, 식별자 치환, 문자열 배열 Base64 인코딩·분할) 처리함.
   - Android (`app/build.gradle.kts`, `app/proguard-rules.pro`): `release` 빌드에 `isMinifyEnabled = true`, `isShrinkResources = true`, `-repackageclasses 'o'`, `SourceFile`/`LineNumberTable` 제거 및 `Log.v/d/i/w` 스트립을 활성화함.
   - Android (`SecurityGuard.kt`, `MainActivity.kt`): Release 빌드 실행 시 공식 배포 키(`crewmate-release-key.jks`) SHA-256 서명 검증 및 디버거 부착 탐지 가드를 추가함 (`./gradlew.bat test assembleDebug assembleRelease` 및 `node build.js` 통과).
+
+### STEP 86: CrewMate 생태계(앱·웹) 실무 종합 개선 Phase 0~5 완료 (`v1.0.59`)
+- **배경 및 목표**:
+  - 실무 사용 중 도출된 13개 피드백 항목(자동 업데이트, 행로도 기본값/레이아웃/감시·출고준비 노드, 교대승무원 정확도·UX, 동료비교 필터·여백·수동추가 버튼, 웹 수집기 통계, 다이아 평가 전용 편집기)을 Phase 0~5로 나누어 앱·웹 동시 개선함.
+- **주요 구현 내용**:
+  - `AGENTS.md`: 플랫폼별 맞춤형 UI 원칙, 임의 팁/스크롤 침범 금지, 실험실 보수적 기본값, 난독화 유지 수칙 추가.
+  - `AppUpdateManager.kt`, `AppNavigation.kt`: 성공 시 체크 시각/날짜 기록 및 `ON_RESUME` 재확인 보강.
+  - `DiaDetailCard.kt`, `TodayWorkScreen.kt`, `HandoverCrewResolver.kt`, `HandoverCrewDialog.kt`: `'타임라인'` 기본값 고정, `'오늘의 근무'` 한정 행 터치 교대승무원 호출, `'미배정'` 릴레이 필터링, 1행 2열 카드 및 릴레이 접기 적용.
+  - `PayStatementScreen.kt`, `ColleagueCompareScreen.kt`, `xcrew_bridge_snippet.js`: 상단 버튼/수동추가 3탭/셀 여백 개선, 승무원 이름 필터(`🔍 필터`), 수집기 개인근무명세 진행률 및 실험실 ON 조건부 통계 표출.
+  - `RouteDiagramBuilder.kt`, `RouteDiagramView.kt`, `app-runtime.js`: 화면 폭 맞춤(Fit-to-width), 여백 확대, 요약 수치 수정, `감시`/`출고준비` 세로선 노드(점) 및 조건부 시각 표기 적용.
+  - `dia-rating-editor.html`, `DiaRating*.kt`, `app-runtime.js`: 다이아 기초자료 1차 가공 + 2차 편집기 구축 및 `CREWMATE_DIA_RATING_PACK_V1` 등록·매칭 연동 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).

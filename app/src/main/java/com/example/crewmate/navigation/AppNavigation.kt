@@ -229,8 +229,10 @@ fun AppNavigation(initialTargetRoute: String? = null) {
 
         if (AppUpdateManager.shouldCheckAutoUpdate(appContext, isOfflineMode)) {
             withContext(Dispatchers.IO) {
-                AppUpdateManager.recordAutoUpdateCheck(appContext)
                 val result = AppUpdateManager.checkForUpdate()
+                if (result !is AppUpdateManager.UpdateCheckResult.Error) {
+                    AppUpdateManager.recordAutoUpdateCheck(appContext)
+                }
                 if (result is AppUpdateManager.UpdateCheckResult.UpdateAvailable) {
                     if (!AppUpdateManager.isDismissedToday(appContext, result.latestVersion)) {
                         withContext(Dispatchers.Main) {
@@ -242,7 +244,7 @@ fun AppNavigation(initialTargetRoute: String? = null) {
         }
     }
 
-    // 장시간 백그라운드 방치 후 포그라운드 복귀(ON_RESUME) 시 절전된 WebView를 즉시 깨우고 만료 세션을 선제 갱신
+    // 장시간 백그라운드 방치 후 포그라운드 복귀(ON_RESUME) 시 절전된 WebView를 즉시 깨우고 만료 세션을 선제 갱신 + 하루 1회 자동 업데이트 확인
     @Suppress("DEPRECATION")
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, xcrewSession, isOfflineMode) {
@@ -254,6 +256,17 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     if (!isOfflineMode && !xcrewSession.isSessionCurrentlyValid() && !xcrewSession.isMockReviewSession && credentialStore.hasSavedCredentials()) {
                         withContext(Dispatchers.IO) {
                             xcrewSession.trySilentRelogin(xcrewSession.authenticationEpoch())
+                        }
+                    }
+                    if (AppUpdateManager.shouldCheckAutoUpdate(appContext, isOfflineMode)) {
+                        val result = withContext(Dispatchers.IO) { AppUpdateManager.checkForUpdate() }
+                        if (result !is AppUpdateManager.UpdateCheckResult.Error) {
+                            AppUpdateManager.recordAutoUpdateCheck(appContext)
+                        }
+                        if (result is AppUpdateManager.UpdateCheckResult.UpdateAvailable &&
+                            !AppUpdateManager.isDismissedToday(appContext, result.latestVersion)
+                        ) {
+                            autoUpdateInfo = result
                         }
                     }
                 }

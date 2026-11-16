@@ -38,10 +38,11 @@ object AppUpdateManager {
 
     private const val PREFS_NAME = "crewmate_update_prefs"
     private const val KEY_LAST_AUTO_CHECK_TIME = "last_auto_check_timestamp"
+    private const val KEY_LAST_AUTO_CHECK_DATE = "last_auto_check_date"
     private const val KEY_DISMISSED_VERSION = "dismissed_version"
     private const val KEY_DISMISSED_DATE = "dismissed_date"
 
-    private const val AUTO_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L // 12시간
+    private const val AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L // 6시간 (또는 날짜 변경 시 즉시 체크)
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
@@ -170,24 +171,31 @@ object AppUpdateManager {
     }
 
     /**
-     * 앱 시작 시 자동 업데이트 체크가 필요한지 판정.
+     * 앱 시작/포그라운드 복귀 시 자동 업데이트 체크가 필요한지 판정.
      * - 오프라인 모드인 경우 false
-     * - 마지막 체크 후 12시간 미경과 시 false
+     * - 날짜가 바뀌었거나 마지막 성공 체크 후 6시간 경과 시 true
      */
     fun shouldCheckAutoUpdate(context: Context, isOfflineMode: Boolean): Boolean {
         if (isOfflineMode) return false
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val todayStr = SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date())
+        val lastDate = prefs.getString(KEY_LAST_AUTO_CHECK_DATE, null)
+        if (lastDate != todayStr) return true
         val lastCheck = prefs.getLong(KEY_LAST_AUTO_CHECK_TIME, 0L)
         val now = System.currentTimeMillis()
         return (now - lastCheck) >= AUTO_CHECK_INTERVAL_MS
     }
 
     /**
-     * 자동 업데이트 체크 실행 시각 기록.
+     * 자동 업데이트 체크 성공 시각 및 날짜 기록.
      */
     fun recordAutoUpdateCheck(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putLong(KEY_LAST_AUTO_CHECK_TIME, System.currentTimeMillis()).apply()
+        val todayStr = SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date())
+        prefs.edit()
+            .putLong(KEY_LAST_AUTO_CHECK_TIME, System.currentTimeMillis())
+            .putString(KEY_LAST_AUTO_CHECK_DATE, todayStr)
+            .apply()
     }
 
     /**
