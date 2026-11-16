@@ -1285,3 +1285,12 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 - **주요 구현 내용**:
   - `RouteDiagramView.kt`를 전면 삭제 후 새로 작성하여, 최하단 `1dp` 수직 실선(`#E2E8F0`/다크 `#334155`), 기준역 1개 `#1E3A8A` 알약 강조, `2dp` 수평선+점선 편승, 무테두리 순수 `Text` + 마지막 열 좌측 정렬(`softWrap = false`) + 2D 충돌 회피 + 수직 밀도 압축 + 라이트/다크 모드 대응을 구현함.
   - `CrewMate-Alpha`(`app-runtime.js`, `sw.js`, `index.html`)에서 행로도 하단 요약 전체 항목(`운용요일`~`총사업거리`)을 타임라인과 동일하게 맞추고, `CACHE_NAME`을 `crewmate-alpha-v8.33`으로 올려 브라우저 캐시로 인한 구버전 겹침 현상을 해소함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
+### STEP 90: WebView 기반 승무 행로도(`diagram.html`) 전면 전환 및 행로도 이미지 저장 추가 (`v1.0.63`)
+- **배경 및 목표**:
+  - Android Compose Canvas로 구현하던 승무 행로도의 폰트·여백·렌더링 차이를 완전히 없애고 웹(`CrewMate-Alpha`)과 100% 동일한 다이어그램을 제공하기 위해 로컬 HTML/JS/SVG 기반 WebView 컴포넌트로 전환하고, 행로도 PNG 이미지 저장 기능을 추가함.
+- **주요 구현 내용**:
+  - `app/build.gradle.kts`: `androidx.webkit:webkit:1.11.0` 의존성 추가 (`WebViewFeature.FORCE_DARK`, `WebSettingsCompat.setForceDark(..., FORCE_DARK_OFF)` 지원).
+  - `app/src/main/assets/diagram.html`: 라이트/다크 모드 CSS 변수(`body.is-dark`), 투명 배경, 플랫 텍스트(테두리·칩 제거), 2D 충돌 회피, `renderDiagram(data, isDarkMode)` 및 `AndroidDiagramBridge.onHeightMeasured(h)` 동적 높이 측정을 구현한 로컬 SVG 렌더러 신설.
+  - `RouteDiagramView.kt`: 기존 Compose Canvas 코드를 전면 폐기하고 `AndroidView(WebView)` + `FORCE_DARK_OFF` + `Color.TRANSPARENT` + `isSystemInDarkTheme()` 연동 + `measuredHeightDp` 동적 높이 조절로 재작성.
+  - `DiaCaptureHelper.kt`, `DiaCaptureRenderer.kt`: 실험실 `LabFeature.ROUTE_DIAGRAM` 활성화 시에만 `DiaCaptureOption.ROUTE_DIAGRAM` (`🧪 승무 행로도 이미지 저장`) 옵션을 노출하고 1440px 고해상도 행로도 비트맵 렌더링(`renderRouteDiagramToBitmap`) 추가 (`.\gradlew.bat test assembleDebug` 통과 및 실기기 `R5CY54M5CDK` 설치 완료).

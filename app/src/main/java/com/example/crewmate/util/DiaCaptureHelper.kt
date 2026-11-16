@@ -42,7 +42,8 @@ enum class DiaCaptureOption(
     val showAll: Boolean
 ) {
     TIMELINE_SUMMARY("타임라인 요약", "CrewMate_타임라인요약", showAll = false),
-    TIMELINE_FULL("타임라인 전체", "CrewMate_타임라인전체", showAll = true);
+    TIMELINE_FULL("타임라인 전체", "CrewMate_타임라인전체", showAll = true),
+    ROUTE_DIAGRAM("🧪 승무 행로도 이미지 저장", "CrewMate_행로도", showAll = false);
 
     companion object {
         fun fromName(name: String?): DiaCaptureOption = entries.find { it.name == name } ?: TIMELINE_SUMMARY
@@ -190,11 +191,13 @@ fun DiaCaptureOptionDialog(
             )
         },
         text = {
+            val routeDiagramLabEnabled = com.example.crewmate.labs.rememberLabEnabled(com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM)
+            val options = DiaCaptureOption.entries.filter { it != DiaCaptureOption.ROUTE_DIAGRAM || routeDiagramLabEnabled }
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                DiaCaptureOption.entries.forEach { option ->
+                options.forEach { option ->
                     OutlinedButton(
                         onClick = { onOptionSelected(option) },
                         modifier = Modifier.fillMaxWidth(),

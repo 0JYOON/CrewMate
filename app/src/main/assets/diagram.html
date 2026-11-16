@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    :root {
+      --bg-color: transparent;
+      --grid-line: #E5E7EB;
+      --text-primary: #1E293B;
+      --text-secondary: #64748B;
+      --run-blue: #1D4ED8;
+      --deadhead-purple: #7C3AED;
+      --start-green: #15803D;
+      --end-red: #DC2626;
+      --pill-bg: #F1F5F9;
+      --pill-text: #1E293B;
+      --pill-active-bg: #1D4ED8;
+      --pill-active-text: #FFFFFF;
+    }
+
+    body.is-dark {
+      --bg-color: transparent;
+      --grid-line: #334155;
+      --text-primary: #E2E8F0;
+      --text-secondary: #94A3B8;
+      --run-blue: #60A5FA;
+      --deadhead-purple: #A78BFA;
+      --start-green: #4ADE80;
+      --end-red: #F87171;
+      --pill-bg: #1E293B;
+      --pill-text: #E2E8F0;
+      --pill-active-bg: #2563EB;
+      --pill-active-text: #FFFFFF;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      background: var(--bg-color);
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #diagram-root {
+      width: 100%;
+      background: transparent;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="diagram-root"></div>
+  <script>
+    (function () {
+      'use strict';
+
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+
+      function el(tag, attrs, textContent) {
+        const node = document.createElementNS(SVG_NS, tag);
+        if (attrs) {
+          for (const k in attrs) {
+            if (Object.prototype.hasOwnProperty.call(attrs, k) && attrs[k] !== undefined && attrs[k] !== null) {
+              node.setAttribute(k, String(attrs[k]));
+            }
+          }
+        }
+        if (textContent !== undefined && textContent !== null) {
+          node.textContent = String(textContent);
+        }
+        return node;
+      }
+
+      function formatTime(raw) {
+        const digits = String(raw || '').replace(/\D/g, '');
+        if (digits.length >= 4) return digits.slice(0, 2) + ':' + digits.slice(2, 4);
+        return String(raw || '').trim();
+      }
+
+      function estimateWidth(txt, pxSize) {
+        let w = 0;
+        const s = String(txt || '');
+        for (let i = 0; i < s.length; i++) {
+          const ch = s.charCodeAt(i);
+          w += (ch >= 0x3131 && ch <= 0xD79D) ? pxSize * 0.95 : pxSize * 0.6;
+        }
+        return Math.max(16, w + 4);
+      }
+
+      window.renderDiagram = function (data, isDarkMode) {
+        if (isDarkMode) {
+          document.body.classList.add('is-dark');
+        } else {
+          document.body.classList.remove('is-dark');
+        }
+
+        const root = document.getElementById('diagram-root');
+        root.innerHTML = '';
+
+        const model = typeof data === 'string' ? JSON.parse(data) : (data || {});
+        const stations = Array.isArray(model.stations) ? model.stations : [];
+        const steps = Array.isArray(model.steps) ? model.steps : [];
+
+        if (stations.length === 0 || steps.length === 0) {
+          notifyHeight();
+          return;
+        }
+
+        const colCount = Math.max(stations.length, 2);
+        const padX = 48;
+        const colWidth = colCount <= 4 ? 104 : 92;
+        const badgeWidth = Math.min(80, colWidth - 12);
+        const width = padX * 2 + (colCount - 1) * colWidth;
+
+        const getX = (stn) => {
+          const idx = stations.indexOf(String(stn || '').trim());
+          if (idx === -1) return padX;
+          return padX + idx * colWidth;
+        };
+
+        const stationHeaderY = 20;
+        const timelineStartY = 52;
+
+        let curY = timelineStartY;
+        const stepYMap = [];
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i];
+          const prevStep = steps[i - 1];
+          const nextStep = steps[i + 1];
+          if (step.type === 'START') {
+            stepYMap.push({ startY: curY, endY: curY, topBuf: 0, botBuf: 0 });
+            if (nextStep && nextStep.type === 'RUN') {
+              curY += 28;
+            }
+          } else if (step.type === 'DWELL') {
+            const topBuf = (prevStep && prevStep.type === 'RUN') ? 26 : 8;
+            const botBuf = (nextStep && nextStep.type === 'RUN') ? 24 : 8;
+            const h = topBuf + 42 + botBuf;
+            stepYMap.push({ startY: curY, endY: curY + h, topBuf, botBuf });
+            curY += h;
+          } else if (step.type === 'RUN') {
+            stepYMap.push({ startY: curY, endY: curY, topBuf: 0, botBuf: 0 });
+            if (!nextStep || nextStep.type === 'RUN' || nextStep.type === 'END') {
+              curY += 56;
+            }
+          } else if (step.type === 'END') {
+            stepYMap.push({ startY: curY, endY: curY, topBuf: 0, botBuf: 0 });
+            curY += 20;
+          }
+        }
+        const totalHeight = curY + 6;
+
+        const startStn = (steps.find((s) => s.type === 'START')?.station || '').trim();
+        const endStn = (steps.slice().reverse().find((s) => s.type === 'END')?.station || '').trim();
+
+        const svg = el('svg', {
+          viewBox: `0 0 ${width} ${totalHeight}`,
+          width: '100%',
+        });
+
+        // 1. 수직 점선 기준선 & 상단 역명 헤더
+        stations.forEach((stn) => {
+          const x = getX(stn);
+          const isKeyStn = (stn === startStn || stn === endStn);
+          svg.appendChild(el('line', {
+            x1: x,
+            y1: stationHeaderY + 13,
+            x2: x,
+            y2: totalHeight - 10,
+            stroke: 'var(--grid-line)',
+            'stroke-width': 1.5,
+            'stroke-dasharray': '3 3',
+          }));
+          svg.appendChild(el('rect', {
+            x: x - badgeWidth / 2,
+            y: stationHeaderY - 12,
+            width: badgeWidth,
+            height: 24,
+            rx: 12,
+            fill: isKeyStn ? 'var(--pill-active-bg)' : 'var(--pill-bg)',
+          }));
+          svg.appendChild(el('text', {
+            x: x,
+            y: stationHeaderY + 4,
+            'text-anchor': 'middle',
+            fill: isKeyStn ? 'var(--pill-active-text)' : 'var(--pill-text)',
+            'font-size': 11,
+            'font-weight': isKeyStn ? 800 : 700,
+          }, stn));
+        });
+
+        // 2D 충돌 회피
+        const occupiedRects = [];
+        function makeRect(x, baselineY, anchor, text, pxSize) {
+          const w = estimateWidth(text, pxSize);
+          let x1 = x;
+          if (anchor === 'middle') x1 = x - w / 2;
+          else if (anchor === 'end') x1 = x - w;
+          return { x1, y1: baselineY - pxSize, x2: x1 + w, y2: baselineY + 4 };
+        }
+        function intersectsAny(r) {
+          return occupiedRects.some((o) =>
+            !(r.x2 + 3 <= o.x1 || r.x1 >= o.x2 + 3 || r.y2 + 2 <= o.y1 || r.y1 >= o.y2 + 2)
+          );
+        }
+        function reserveRect(x, baselineY, anchor, text, pxSize) {
+          occupiedRects.push(makeRect(x, baselineY, anchor, text, pxSize));
+        }
+        function placeAvoiding(x, baselineY, anchor, text, pxSize, minY, maxY) {
+          const offsets = [0, 14, -14, 24, -24, 34, -34];
+          for (let i = 0; i < offsets.length; i++) {
+            const candY = baselineY + offsets[i];
+            if (minY !== null && candY - pxSize < minY) continue;
+            if (maxY !== null && candY + 4 > maxY) continue;
+            const r = makeRect(x, candY, anchor, text, pxSize);
+            if (!intersectsAny(r)) {
+              occupiedRects.push(r);
+              return candY;
+            }
+          }
+          occupiedRects.push(makeRect(x, baselineY, anchor, text, pxSize));
+          return baselineY;
+        }
+
+        // 1차 패스: 고정 텍스트 점유 영역 선등록
+        steps.forEach((step, idx) => {
+          const yInfo = stepYMap[idx];
+          if (step.type === 'START') {
+            const x = getX(step.station);
+            const y = yInfo.startY;
+            const isLeftmost = stations.indexOf(step.station) === 0;
+            const tStr = formatTime(model.startTime || step.dptTm);
+            reserveRect(isLeftmost ? x + 8 : x - 8, isLeftmost ? y - 6 : y + 4, isLeftmost ? 'start' : 'end', '출근 ' + tStr, 12);
+          } else if (step.type === 'RUN') {
+            const x1 = getX(step.fromStation);
+            const x2 = getX(step.toStation);
+            const y = yInfo.startY;
+            const isL2R = x2 > x1;
+            const midX = (x1 + x2) / 2;
+            reserveRect(midX, y - 10, 'middle', String(step.trnNo || '0000') + ' ▶', 12);
+            const dptStr = formatTime(step.dptTm);
+            const arvStr = formatTime(step.arvTm);
+            if (dptStr) reserveRect(isL2R ? x1 + 6 : x1 - 6, y + 18, isL2R ? 'start' : 'end', dptStr, 12);
+            if (arvStr) reserveRect(isL2R ? x2 - 6 : x2 + 6, y + 18, isL2R ? 'end' : 'start', arvStr, 12);
+          } else if (step.type === 'END') {
+            const x = getX(step.station);
+            const y = yInfo.startY;
+            const isRightmost = stations.indexOf(step.station) === stations.length - 1;
+            const tStr = formatTime(model.endTime || step.arvTm);
+            reserveRect(isRightmost ? x - 8 : x + 8, y + 4, isRightmost ? 'end' : 'start', '퇴근 ' + tStr, 12);
+          }
+        });
+
+        // 2차 패스: 선, 노드, 무테두리 순수 텍스트 렌더링
+        steps.forEach((step, idx) => {
+          const yInfo = stepYMap[idx];
+          const nextStep = steps[idx + 1];
+          const nextYInfo = stepYMap[idx + 1];
+
+          if (step.type === 'START') {
+            const x = getX(step.station);
+            const y = yInfo.startY;
+            const isLeftmost = stations.indexOf(step.station) === 0;
+            const tStr = formatTime(model.startTime || step.dptTm);
+            if (nextStep && nextStep.type === 'RUN' && nextYInfo && nextYInfo.startY > y) {
+              svg.appendChild(el('line', {
+                x1: x, y1: y, x2: x, y2: nextYInfo.startY,
+                stroke: 'var(--text-secondary)', 'stroke-width': 1.6, 'stroke-dasharray': '3 3', 'stroke-linecap': 'round'
+              }));
+            }
+            svg.appendChild(el('circle', { cx: x, cy: y, r: 4.5, fill: 'var(--start-green)' }));
+            svg.appendChild(el('text', {
+              x: isLeftmost ? x + 8 : x - 8,
+              y: isLeftmost ? y - 6 : y + 4,
+              'text-anchor': isLeftmost ? 'start' : 'end',
+              fill: 'var(--start-green)',
+              'font-size': 12,
+              'font-weight': 800,
+            }, '출근 ' + tStr));
+          } else if (step.type === 'RUN') {
+            const x1 = getX(step.fromStation);
+            const x2 = getX(step.toStation);
+            const y = yInfo.startY;
+            const isL2R = x2 > x1;
+            const midX = (x1 + x2) / 2;
+
+            if (nextStep && (nextStep.type === 'RUN' || nextStep.type === 'END') && nextYInfo && nextYInfo.startY > y) {
+              svg.appendChild(el('line', {
+                x1: x2, y1: y, x2: x2, y2: nextYInfo.startY,
+                stroke: 'var(--text-secondary)', 'stroke-width': 1.6, 'stroke-dasharray': '3 3', 'stroke-linecap': 'round'
+              }));
+            }
+
+            const strokeCol = step.isDeadhead ? 'var(--deadhead-purple)' : 'var(--run-blue)';
+            const strokeW = step.isDeadhead ? 2.2 : 2.8;
+            const dash = step.isDeadhead ? '5 4' : undefined;
+
+            svg.appendChild(el('line', {
+              x1: x1, y1: y, x2: x2, y2: y,
+              stroke: strokeCol, 'stroke-width': strokeW, 'stroke-dasharray': dash, 'stroke-linecap': 'round'
+            }));
+            svg.appendChild(el('circle', { cx: x1, cy: y, r: 3.5, fill: strokeCol }));
+            svg.appendChild(el('circle', { cx: x2, cy: y, r: 3.5, fill: strokeCol }));
+
+            const prefix = step.isDeadhead ? '편) ' : '';
+            const rawTrn = String(step.trnNo || '').trim();
+            const label = isL2R ? (prefix + rawTrn + ' ▶') : ('◀ ' + prefix + rawTrn);
+            svg.appendChild(el('text', {
+              x: midX,
+              y: y - 10,
+              'text-anchor': 'middle',
+              fill: strokeCol,
+              'font-size': 12,
+              'font-weight': 800,
+            }, label.trim()));
+
+            const dptStr = formatTime(step.dptTm);
+            const arvStr = formatTime(step.arvTm);
+            if (dptStr) {
+              svg.appendChild(el('text', {
+                x: isL2R ? x1 + 6 : x1 - 6,
+                y: y + 18,
+                'text-anchor': isL2R ? 'start' : 'end',
+                fill: 'var(--run-blue)',
+                'font-size': 12,
+                'font-weight': 800,
+              }, dptStr));
+            }
+            if (arvStr) {
+              svg.appendChild(el('text', {
+                x: isL2R ? x2 - 6 : x2 + 6,
+                y: y + 18,
+                'text-anchor': isL2R ? 'end' : 'start',
+                fill: 'var(--text-primary)',
+                'font-size': 12,
+                'font-weight': 800,
+              }, arvStr));
+            }
+          } else if (step.type === 'DWELL') {
+            const x = getX(step.station);
+            const y1 = yInfo.startY;
+            const y2 = yInfo.endY;
+            const stnIdx = stations.indexOf(step.station);
+            const isLeftmost = stnIdx === 0;
+            const isRightmost = stnIdx === stations.length - 1;
+
+            const prevRun = steps.slice(0, idx).reverse().find((s) => s.type === 'RUN');
+            const nextRun = steps.slice(idx + 1).find((s) => s.type === 'RUN');
+            let hasLeft = false;
+            let hasRight = false;
+            if (prevRun && prevRun.toStation === step.station) {
+              const pX = getX(prevRun.fromStation);
+              if (pX < x) hasLeft = true; else if (pX > x) hasRight = true;
+            }
+            if (nextRun && nextRun.fromStation === step.station) {
+              const nX = getX(nextRun.toStation);
+              if (nX < x) hasLeft = true; else if (nX > x) hasRight = true;
+            }
+            let labelOnRight = true;
+            if (isLeftmost) labelOnRight = true;
+            else if (isRightmost) labelOnRight = false;
+            else if (hasLeft && !hasRight) labelOnRight = true;
+            else if (!hasLeft && hasRight) labelOnRight = false;
+            else if (hasLeft && hasRight) labelOnRight = !(prevRun && getX(prevRun.fromStation) > x);
+
+            const isBlueCore = Boolean(step.isBlueCore);
+            svg.appendChild(el('line', {
+              x1: x, y1: y1, x2: x, y2: y2,
+              stroke: isBlueCore ? 'var(--run-blue)' : 'var(--text-secondary)',
+              'stroke-width': 1.6,
+              'stroke-dasharray': isBlueCore ? undefined : '3 3',
+              'stroke-linecap': 'round',
+            }));
+
+            if (step.isWatchOrPrepNode) {
+              svg.appendChild(el('circle', { cx: x, cy: y1, r: 3.5, fill: 'var(--run-blue)' }));
+              svg.appendChild(el('circle', { cx: x, cy: y2, r: 3.5, fill: 'var(--run-blue)' }));
+            }
+
+            const safeTop = y1 + yInfo.topBuf;
+            const safeBot = y2 - yInfo.botBuf;
+            const midSafeY = (safeTop + safeBot) / 2;
+            const labelPx = isBlueCore ? 12 : 10;
+            const lblAnchor = labelOnRight ? 'start' : 'end';
+            const lblX = labelOnRight ? x + 8 : x - 8;
+            if (step.label) {
+              const placedY = placeAvoiding(lblX, midSafeY + 3.5, lblAnchor, step.label, labelPx, y1 + yInfo.topBuf, y2 - yInfo.botBuf + 8);
+              svg.appendChild(el('text', {
+                x: lblX,
+                y: placedY,
+                'text-anchor': lblAnchor,
+                fill: isBlueCore ? 'var(--run-blue)' : 'var(--text-secondary)',
+                'font-size': labelPx,
+                'font-weight': isBlueCore ? 800 : 600,
+              }, step.label));
+            }
+
+            const tmAnchor = labelOnRight ? 'end' : 'start';
+            const tmX = labelOnRight ? x - 8 : x + 8;
+            if (step.displayStartTime) {
+              const placedSY = placeAvoiding(tmX, y1 + 4, tmAnchor, step.displayStartTime, 12, y1 - 8, y2 + 8);
+              svg.appendChild(el('text', {
+                x: tmX,
+                y: placedSY,
+                'text-anchor': tmAnchor,
+                fill: 'var(--text-primary)',
+                'font-size': 12,
+                'font-weight': 800,
+              }, step.displayStartTime));
+            }
+            if (step.displayEndTime) {
+              const placedEY = placeAvoiding(tmX, y2 + 4, tmAnchor, step.displayEndTime, 12, y1 - 8, y2 + 8);
+              svg.appendChild(el('text', {
+                x: tmX,
+                y: placedEY,
+                'text-anchor': tmAnchor,
+                fill: 'var(--text-primary)',
+                'font-size': 12,
+                'font-weight': 800,
+              }, step.displayEndTime));
+            }
+          } else if (step.type === 'END') {
+            const x = getX(step.station);
+            const y = yInfo.startY;
+            const isRightmost = stations.indexOf(step.station) === stations.length - 1;
+            const tStr = formatTime(model.endTime || step.arvTm);
+            svg.appendChild(el('circle', { cx: x, cy: y, r: 4.5, fill: 'var(--end-red)' }));
+            svg.appendChild(el('text', {
+              x: isRightmost ? x - 8 : x + 8,
+              y: y + 4,
+              'text-anchor': isRightmost ? 'end' : 'start',
+              fill: 'var(--end-red)',
+              'font-size': 12,
+              'font-weight': 800,
+            }, '퇴근 ' + tStr));
+          }
+        });
+
+        root.appendChild(svg);
+        requestAnimationFrame(notifyHeight);
+      };
+
+      function notifyHeight() {
+        const h = Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 0);
+        if (h > 0 && window.AndroidDiagramBridge && typeof window.AndroidDiagramBridge.onHeightMeasured === 'function') {
+          window.AndroidDiagramBridge.onHeightMeasured(h);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

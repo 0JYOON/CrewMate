@@ -41,6 +41,17 @@ object DiaCaptureRenderer {
         reserveTopEndSpaceDp: Float = 0f
     ): Bitmap? {
         if (dias.isEmpty()) return null
+        if (option == DiaCaptureOption.ROUTE_DIAGRAM) {
+            return renderRouteDiagramToBitmap(
+                context = context,
+                headerTitle = headerTitle,
+                workDate = workDate,
+                dias = dias,
+                width = width,
+                isDark = isDark,
+                badgeText = badgeText
+            )
+        }
 
         val prefs = context.getSharedPreferences("crewmate_prefs", Context.MODE_PRIVATE)
         val hideSandwichedGamsi = prefs.getBoolean("hide_sandwiched_gamsi", true)
@@ -495,6 +506,305 @@ object DiaCaptureRenderer {
             if (cIdx < cardDataList.lastIndex) {
                 curY += cardGap
             }
+        }
+
+        return bitmap
+    }
+
+    private fun renderRouteDiagramToBitmap(
+        context: Context,
+        headerTitle: String,
+        workDate: LocalDate,
+        dias: List<DiaCaptureItem>,
+        width: Int,
+        isDark: Boolean,
+        badgeText: String?
+    ): Bitmap? {
+        val density = width / 480f
+        fun dp(v: Float) = v * density
+        fun sp(v: Float) = v * density
+        val typefaceBold = context.getCanvasTypeface(700, 0)
+        val typefaceExtraBold = context.getCanvasTypeface(800, 0)
+
+        val canvasBg = if (isDark) Color.parseColor("#0B0F17") else Color.parseColor("#F6F8FC")
+        val cardBg = if (isDark) Color.parseColor("#0D111E") else Color.WHITE
+        val cardBorder = if (isDark) Color.parseColor("#1E293B") else Color.parseColor("#E2E8F0")
+        val gridLineColor = if (isDark) Color.parseColor("#334155") else Color.parseColor("#E5E7EB")
+        val primaryText = if (isDark) Color.parseColor("#E2E8F0") else Color.parseColor("#1E293B")
+        val secondaryText = if (isDark) Color.parseColor("#94A3B8") else Color.parseColor("#64748B")
+        val runBlue = if (isDark) Color.parseColor("#60A5FA") else Color.parseColor("#1D4ED8")
+        val deadheadPurple = if (isDark) Color.parseColor("#A78BFA") else Color.parseColor("#7C3AED")
+        val startGreen = if (isDark) Color.parseColor("#4ADE80") else Color.parseColor("#15803D")
+        val endRed = if (isDark) Color.parseColor("#F87171") else Color.parseColor("#DC2626")
+        val pillBg = if (isDark) Color.parseColor("#1E293B") else Color.parseColor("#F1F5F9")
+        val pillActiveBg = if (isDark) Color.parseColor("#2563EB") else Color.parseColor("#1D4ED8")
+
+        val master = com.example.crewmate.labs.routediagram.RailwayMasterRepository.loadMergedMaster(context)
+        val builtModels = dias.map { item ->
+            Triple(
+                item,
+                com.example.crewmate.labs.routediagram.RouteDiagramBuilder.build(item.detail, item.schedule, master),
+                item.detail
+            )
+        }
+
+        val outerPad = dp(14f)
+        val topHeaderH = dp(44f)
+        val cardPad = dp(12f)
+        val cardGap = dp(12f)
+        val cardHeaderH = dp(34f)
+        val stationHeaderH = dp(30f)
+
+        data class StepPos(val y1: Float, val y2: Float, val topBuf: Float, val botBuf: Float)
+        val cardLayouts = builtModels.map { (item, model, _) ->
+            var cy = dp(38f)
+            val positions = model.steps.mapIndexed { idx, step ->
+                val prev = model.steps.getOrNull(idx - 1)
+                val next = model.steps.getOrNull(idx + 1)
+                val topBuf = if (step is com.example.crewmate.labs.routediagram.RouteStep.Dwell && prev is com.example.crewmate.labs.routediagram.RouteStep.Run) dp(24f) else 0f
+                val botBuf = if (step is com.example.crewmate.labs.routediagram.RouteStep.Dwell && next is com.example.crewmate.labs.routediagram.RouteStep.Run) dp(22f) else 0f
+                val h = when (step) {
+                    is com.example.crewmate.labs.routediagram.RouteStep.Start -> if (next is com.example.crewmate.labs.routediagram.RouteStep.Run) dp(26f) else 0f
+                    is com.example.crewmate.labs.routediagram.RouteStep.Run -> if (next == null || next is com.example.crewmate.labs.routediagram.RouteStep.Run || next is com.example.crewmate.labs.routediagram.RouteStep.End) dp(52f) else 0f
+                    is com.example.crewmate.labs.routediagram.RouteStep.Dwell -> topBuf + dp(38f) + botBuf
+                    is com.example.crewmate.labs.routediagram.RouteStep.End -> dp(22f)
+                }
+                val sp = StepPos(cy, cy + h, topBuf, botBuf)
+                cy += h
+                sp
+            }
+            val diagramH = cy + dp(10f)
+            val totalCardH = cardPad * 2 + cardHeaderH + stationHeaderH + diagramH
+            Triple(item, model, positions to totalCardH)
+        }
+
+        val totalHeight = (outerPad * 2 + topHeaderH + cardLayouts.sumOf { it.third.second.toDouble() }.toFloat() +
+            (cardLayouts.size - 1).coerceAtLeast(0) * cardGap).toInt().coerceAtLeast(200)
+
+        val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(canvasBg)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val dashEffect = DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
+
+        // 상단 헤더
+        paint.color = if (isDark) Color.parseColor("#38BDF8") else Color.parseColor("#0A1E3F")
+        paint.textSize = sp(18f)
+        paint.typeface = typefaceExtraBold
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText(headerTitle, outerPad, outerPad + dp(24f), paint)
+
+        val dateStr = workDate.format(DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN))
+        paint.color = secondaryText
+        paint.textSize = sp(12f)
+        paint.typeface = typefaceBold
+        paint.textAlign = Paint.Align.RIGHT
+        val rightLabel = listOfNotNull(badgeText, dateStr).joinToString(" · ")
+        canvas.drawText(rightLabel, width - outerPad, outerPad + dp(24f), paint)
+
+        var curY = outerPad + topHeaderH
+        val cardLeft = outerPad
+        val cardRight = width - outerPad
+        val cardW = cardRight - cardLeft
+
+        cardLayouts.forEach { (item, model, pair) ->
+            val (positions, cardH) = pair
+            val rect = RectF(cardLeft, curY, cardRight, curY + cardH)
+            paint.style = Paint.Style.FILL
+            paint.color = cardBg
+            canvas.drawRoundRect(rect, dp(14f), dp(14f), paint)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = dp(1f)
+            paint.color = cardBorder
+            canvas.drawRoundRect(rect, dp(14f), dp(14f), paint)
+            paint.style = Paint.Style.FILL
+
+            // 카드 헤더
+            val diaPrefix = if (item.schedule.isContinuation) "~" else ""
+            paint.color = runBlue
+            paint.textSize = sp(15f)
+            paint.typeface = typefaceExtraBold
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText("$diaPrefix${item.schedule.diaNo.orEmpty()} DIA", cardLeft + cardPad, curY + cardPad + dp(20f), paint)
+
+            val stTime = item.schedule.startTime.toDisplayTime() ?: model.startTime
+            val enTime = item.schedule.endTime.toDisplayTime() ?: model.endTime
+            paint.color = secondaryText
+            paint.textSize = sp(12f)
+            paint.typeface = typefaceBold
+            paint.textAlign = Paint.Align.RIGHT
+            canvas.drawText("출근 $stTime / 퇴근 $enTime", cardRight - cardPad, curY + cardPad + dp(20f), paint)
+
+            val stations = model.stations
+            if (stations.isNotEmpty()) {
+                val diagLeft = cardLeft + cardPad
+                val diagW = cardW - cardPad * 2
+                val sidePad = dp(28f)
+                val colW = if (stations.size > 1) (diagW - sidePad * 2) / (stations.size - 1) else 0f
+                val stationIndexMap = stations.mapIndexed { idx, s -> s to idx }.toMap()
+                fun xFor(stn: String): Float {
+                    val idx = stationIndexMap[stn] ?: 0
+                    return if (stations.size <= 1) diagLeft + diagW / 2f else diagLeft + sidePad + colW * idx
+                }
+
+                val headerY = curY + cardPad + cardHeaderH + dp(14f)
+                val baseY = curY + cardPad + cardHeaderH + stationHeaderH
+                val startStn = (model.steps.firstOrNull { it is com.example.crewmate.labs.routediagram.RouteStep.Start } as? com.example.crewmate.labs.routediagram.RouteStep.Start)?.station.orEmpty()
+                val endStn = (model.steps.lastOrNull { it is com.example.crewmate.labs.routediagram.RouteStep.End } as? com.example.crewmate.labs.routediagram.RouteStep.End)?.station.orEmpty()
+                val endY = baseY + (positions.lastOrNull()?.y1 ?: dp(40f))
+
+                // 수직 점선 & 역명 헤더
+                val pillW = minOf(dp(74f), (if (colW > 0f) colW - dp(8f) else dp(74f)))
+                stations.forEach { stn ->
+                    val x = xFor(stn)
+                    val isKey = stn == startStn || stn == endStn
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = dp(1.2f)
+                    paint.color = gridLineColor
+                    paint.pathEffect = dashEffect
+                    canvas.drawLine(x, headerY + dp(12f), x, endY, paint)
+                    paint.pathEffect = null
+                    paint.style = Paint.Style.FILL
+
+                    paint.color = if (isKey) pillActiveBg else pillBg
+                    canvas.drawRoundRect(RectF(x - pillW / 2f, headerY - dp(11f), x + pillW / 2f, headerY + dp(11f)), dp(11f), dp(11f), paint)
+
+                    paint.color = if (isKey) Color.WHITE else primaryText
+                    paint.textSize = sp(10.5f)
+                    paint.typeface = if (isKey) typefaceExtraBold else typefaceBold
+                    paint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(stn, x, headerY + dp(4f), paint)
+                }
+
+                // 스텝 렌더링
+                model.steps.forEachIndexed { idx, step ->
+                    val pos = positions[idx]
+                    val nextPos = positions.getOrNull(idx + 1)
+                    val y1 = baseY + pos.y1
+                    val y2 = baseY + pos.y2
+
+                    when (step) {
+                        is com.example.crewmate.labs.routediagram.RouteStep.Start -> {
+                            val x = xFor(step.station)
+                            val isLeftmost = stationIndexMap[step.station] == 0
+                            if (nextPos != null && model.steps.getOrNull(idx + 1) is com.example.crewmate.labs.routediagram.RouteStep.Run) {
+                                paint.style = Paint.Style.STROKE
+                                paint.strokeWidth = dp(1.4f)
+                                paint.color = secondaryText
+                                paint.pathEffect = dashEffect
+                                canvas.drawLine(x, y1, x, baseY + nextPos.y1, paint)
+                                paint.pathEffect = null
+                                paint.style = Paint.Style.FILL
+                            }
+                            paint.color = startGreen
+                            canvas.drawCircle(x, y1, dp(4f), paint)
+                            paint.textSize = sp(11.5f)
+                            paint.typeface = typefaceExtraBold
+                            paint.textAlign = if (isLeftmost) Paint.Align.LEFT else Paint.Align.RIGHT
+                            canvas.drawText("출근 ${com.example.crewmate.labs.routediagram.RouteDiagramBuilder.formatTimeDisplay(step.dptTm)}", if (isLeftmost) x + dp(7f) else x - dp(7f), y1 + dp(4f), paint)
+                        }
+                        is com.example.crewmate.labs.routediagram.RouteStep.Run -> {
+                            val x1 = xFor(step.fromStation)
+                            val x2 = xFor(step.toStation)
+                            val isL2R = x2 >= x1
+                            if (nextPos != null && (model.steps.getOrNull(idx + 1) is com.example.crewmate.labs.routediagram.RouteStep.Run || model.steps.getOrNull(idx + 1) is com.example.crewmate.labs.routediagram.RouteStep.End)) {
+                                paint.style = Paint.Style.STROKE
+                                paint.strokeWidth = dp(1.4f)
+                                paint.color = secondaryText
+                                paint.pathEffect = dashEffect
+                                canvas.drawLine(x2, y1, x2, baseY + nextPos.y1, paint)
+                                paint.pathEffect = null
+                                paint.style = Paint.Style.FILL
+                            }
+                            val col = if (step.isDeadhead) deadheadPurple else runBlue
+                            paint.style = Paint.Style.STROKE
+                            paint.strokeWidth = dp(if (step.isDeadhead) 2.0f else 2.5f)
+                            paint.color = col
+                            paint.pathEffect = if (step.isDeadhead) dashEffect else null
+                            canvas.drawLine(x1, y1, x2, y1, paint)
+                            paint.pathEffect = null
+                            paint.style = Paint.Style.FILL
+                            canvas.drawCircle(x1, y1, dp(3.2f), paint)
+                            canvas.drawCircle(x2, y1, dp(3.2f), paint)
+
+                            val prefix = if (step.isDeadhead) "편) " else ""
+                            val lbl = if (isL2R) "$prefix${step.trnNo} ▶" else "◀ $prefix${step.trnNo}"
+                            paint.color = col
+                            paint.textSize = sp(11.5f)
+                            paint.typeface = typefaceExtraBold
+                            paint.textAlign = Paint.Align.CENTER
+                            canvas.drawText(lbl.trim(), (x1 + x2) / 2f, y1 - dp(8f), paint)
+
+                            val dptStr = com.example.crewmate.labs.routediagram.RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
+                            val arvStr = com.example.crewmate.labs.routediagram.RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
+                            if (dptStr.isNotEmpty()) {
+                                paint.color = runBlue
+                                paint.textAlign = if (isL2R) Paint.Align.LEFT else Paint.Align.RIGHT
+                                canvas.drawText(dptStr, if (isL2R) x1 + dp(5f) else x1 - dp(5f), y1 + dp(15f), paint)
+                            }
+                            if (arvStr.isNotEmpty()) {
+                                paint.color = primaryText
+                                paint.textAlign = if (isL2R) Paint.Align.RIGHT else Paint.Align.LEFT
+                                canvas.drawText(arvStr, if (isL2R) x2 - dp(5f) else x2 + dp(5f), y1 + dp(15f), paint)
+                            }
+                        }
+                        is com.example.crewmate.labs.routediagram.RouteStep.Dwell -> {
+                            val x = xFor(step.station)
+                            val stnIdx = stationIndexMap[step.station] ?: 0
+                            val isLeftmost = stnIdx == 0
+                            val isRightmost = stnIdx == stations.lastIndex && stations.size > 1
+                            val labelOnRight = !isRightmost && (isLeftmost || true)
+                            paint.style = Paint.Style.STROKE
+                            paint.strokeWidth = dp(1.5f)
+                            paint.color = if (step.isBlueCore) runBlue else secondaryText
+                            paint.pathEffect = if (step.isBlueCore) null else dashEffect
+                            canvas.drawLine(x, y1, x, y2, paint)
+                            paint.pathEffect = null
+                            paint.style = Paint.Style.FILL
+                            if (step.isWatchOrPrepNode) {
+                                paint.color = runBlue
+                                canvas.drawCircle(x, y1, dp(3.2f), paint)
+                                canvas.drawCircle(x, y2, dp(3.2f), paint)
+                            }
+                            val midY = ((y1 + pos.topBuf) + (y2 - pos.botBuf)) / 2f
+                            if (step.label.isNotEmpty()) {
+                                paint.color = if (step.isBlueCore) runBlue else secondaryText
+                                paint.textSize = sp(if (step.isBlueCore) 11.5f else 9.5f)
+                                paint.typeface = if (step.isBlueCore) typefaceExtraBold else typefaceBold
+                                paint.textAlign = if (labelOnRight) Paint.Align.LEFT else Paint.Align.RIGHT
+                                canvas.drawText(step.label, if (labelOnRight) x + dp(7f) else x - dp(7f), midY + dp(4f), paint)
+                            }
+                            if (step.displayStartTime.isNotEmpty()) {
+                                paint.color = primaryText
+                                paint.textSize = sp(11.5f)
+                                paint.typeface = typefaceExtraBold
+                                paint.textAlign = if (labelOnRight) Paint.Align.RIGHT else Paint.Align.LEFT
+                                canvas.drawText(step.displayStartTime, if (labelOnRight) x - dp(7f) else x + dp(7f), y1 + dp(4f), paint)
+                            }
+                            if (step.displayEndTime.isNotEmpty()) {
+                                paint.color = primaryText
+                                paint.textSize = sp(11.5f)
+                                paint.typeface = typefaceExtraBold
+                                paint.textAlign = if (labelOnRight) Paint.Align.RIGHT else Paint.Align.LEFT
+                                canvas.drawText(step.displayEndTime, if (labelOnRight) x - dp(7f) else x + dp(7f), y2 + dp(4f), paint)
+                            }
+                        }
+                        is com.example.crewmate.labs.routediagram.RouteStep.End -> {
+                            val x = xFor(step.station)
+                            val isRightmost = stationIndexMap[step.station] == stations.lastIndex && stations.size > 1
+                            paint.color = endRed
+                            canvas.drawCircle(x, y1, dp(4f), paint)
+                            paint.textSize = sp(11.5f)
+                            paint.typeface = typefaceExtraBold
+                            paint.textAlign = if (isRightmost) Paint.Align.RIGHT else Paint.Align.LEFT
+                            canvas.drawText("퇴근 ${com.example.crewmate.labs.routediagram.RouteDiagramBuilder.formatTimeDisplay(step.arvTm)}", if (isRightmost) x - dp(7f) else x + dp(7f), y1 + dp(4f), paint)
+                        }
+                    }
+                }
+            }
+
+            curY += cardH + cardGap
         }
 
         return bitmap

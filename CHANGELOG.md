@@ -4,6 +4,18 @@
 
 ---
 
+## [v1.0.63] - 2026-11-16
+### ✨ WebView 기반 승무 행로도(`diagram.html`) 전면 전환 및 행로도 이미지 저장 추가
+- **로컬 HTML/JS/SVG WebView 기반 행로도 렌더링 (`app/src/main/assets/diagram.html`, `RouteDiagramView.kt`)**:
+  - 기존 Android Compose Canvas 기반 행로도 렌더링을 전면 폐기하고, 웹(`CrewMate-Alpha`)의 승무 행로도 SVG 엔진과 100% 동일한 시각·레이아웃을 구현하는 로컬 WebView 컴포넌트로 전환했습니다.
+  - 시스템 다크모드(`isSystemInDarkTheme()`)를 감지하여 `FORCE_DARK_OFF` 설정과 함께 `renderDiagram(data, isDarkMode)`로 전달하며, `body.is-dark` CSS 변수 기반으로 라이트/다크 테마를 완벽히 동기화합니다.
+  - WebView 배경을 투명(`TRANSPARENT`)으로 지정하고, `AndroidDiagramBridge.onHeightMeasured(h)`를 통해 콘텐츠 실제 높이만큼 Compose 높이를 동적 조절하여 이중 스크롤을 제거했습니다.
+  - 시각·대기/준비/휴게 텍스트에서 모든 테두리·배경 칩을 제거한 플랫 텍스트 렌더링과 2D 충돌 회피 배치를 적용했습니다.
+- **행로도 이미지 저장 버튼 추가 (`DiaCaptureHelper.kt`, `DiaCaptureRenderer.kt`)**:
+  - 실험실 `ROUTE_DIAGRAM` 기능이 활성화된 경우에만 스크린샷 옵션 다이얼로그(`DiaCaptureOptionDialog`)에 `🧪 승무 행로도 이미지 저장` 항목이 노출되도록 추가하고, 고해상도(1440px) PNG 렌더링(`renderRouteDiagramToBitmap`)을 구현했습니다.
+
+---
+
 ## [v1.0.62] - 2026-11-16
 ### 앱 행로도 전면 재작성(무테두리·1dp 수직 실선·다크모드) & 웹 요약/캐시 최신화
 - **앱 승무 행로도 전면 재작성** ([RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt)):
