@@ -309,6 +309,90 @@ fun RouteDiagramView(
 
                     // 3. 텍스트 & 뱃지 오버레이 (시각 강조 + 겹침 방지)
                     val surfaceBg = MaterialTheme.colorScheme.surface
+                    data class OccupiedRect(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
+                    val occupiedRects = mutableListOf<OccupiedRect>()
+                    fun estimateTextW(txt: String, spVal: Float): Float {
+                        var w = 0f
+                        val pxPerSp = with(density) { spVal.sp.toPx() }
+                        for (ch in txt) {
+                            w += if (ch in '\u3131'..'\uD79D') pxPerSp * 0.95f else pxPerSp * 0.6f
+                        }
+                        return maxOf(with(density) { 16.dp.toPx() }, w + with(density) { 4.dp.toPx() })
+                    }
+                    fun makeRect(x: Float, topY: Float, alignEnd: Boolean, alignCenter: Boolean, txt: String, spVal: Float): OccupiedRect {
+                        val w = estimateTextW(txt, spVal)
+                        val h = with(density) { (spVal + 4f).sp.toPx() }
+                        val x1 = when {
+                            alignCenter -> x - w / 2f
+                            alignEnd -> x - w
+                            else -> x
+                        }
+                        return OccupiedRect(x1, topY, x1 + w, topY + h)
+                    }
+                    fun intersectsAny(r: OccupiedRect): Boolean {
+                        val padX = with(density) { 3.dp.toPx() }
+                        val padY = with(density) { 2.dp.toPx() }
+                        return occupiedRects.any { o ->
+                            !(r.x2 + padX <= o.x1 || r.x1 >= o.x2 + padX || r.y2 + padY <= o.y1 || r.y1 >= o.y2 + padY)
+                        }
+                    }
+                    fun placeAvoidingY(x: Float, topY: Float, alignEnd: Boolean, txt: String, spVal: Float, minY: Float, maxY: Float): Float {
+                        val offsets = listOf(0f, 14f, -14f, 24f, -24f, 34f, -34f, 44f, -44f)
+                        for (dyDp in offsets) {
+                            val candY = topY + with(density) { dyDp.dp.toPx() }
+                            val r = makeRect(x, candY, alignEnd, false, txt, spVal)
+                            if (r.y1 < minY || r.y2 > maxY) continue
+                            if (!intersectsAny(r)) {
+                                occupiedRects.add(r)
+                                return candY
+                            }
+                        }
+                        val fallback = makeRect(x, topY, alignEnd, false, txt, spVal)
+                        occupiedRects.add(fallback)
+                        return topY
+                    }
+
+                    // 1차 패스: 고정 위치 요소(START, RUN, END) 점유 영역 선등록
+                    placedNodes.forEach { placed ->
+                        when (val step = placed.step) {
+                            is RouteStep.Start -> {
+                                val x = xForStation(step.station)
+                                val y = placed.yTopPx
+                                val isLeftmost = (stationIndexMap[step.station] ?: 0) == 0
+                                val timeStr = RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
+                                val xOff = if (isLeftmost) x + with(density) { 8.dp.toPx() } else x - with(density) { 8.dp.toPx() }
+                                occupiedRects.add(makeRect(xOff, y - with(density) { 9.dp.toPx() }, !isLeftmost, false, "출근 $timeStr", 12f))
+                            }
+                            is RouteStep.Run -> {
+                                val x1 = xForStation(step.fromStation)
+                                val x2 = xForStation(step.toStation)
+                                val yMid = placed.yTopPx
+                                val isRightward = x2 >= x1
+                                val midX = (x1 + x2) * 0.5f
+                                occupiedRects.add(makeRect(midX, yMid - with(density) { 21.dp.toPx() }, false, true, "${step.trnNo} ▶", 12f))
+                                val dptStr = RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
+                                val arvStr = RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
+                                if (dptStr.isNotEmpty()) {
+                                    val xOff = if (isRightward) x1 + with(density) { 4.dp.toPx() } else x1 - with(density) { 4.dp.toPx() }
+                                    occupiedRects.add(makeRect(xOff, yMid + with(density) { 7.dp.toPx() }, !isRightward, false, dptStr, 12f))
+                                }
+                                if (arvStr.isNotEmpty()) {
+                                    val xOff = if (isRightward) x2 - with(density) { 4.dp.toPx() } else x2 + with(density) { 4.dp.toPx() }
+                                    occupiedRects.add(makeRect(xOff, yMid + with(density) { 7.dp.toPx() }, isRightward, false, arvStr, 12f))
+                                }
+                            }
+                            is RouteStep.End -> {
+                                val x = xForStation(step.station)
+                                val y = placed.yTopPx
+                                val isRightmost = (stationIndexMap[step.station] ?: 0) == stations.lastIndex && stations.size > 1
+                                val timeStr = RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
+                                val xOff = if (isRightmost) x - with(density) { 8.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                occupiedRects.add(makeRect(xOff, y - with(density) { 9.dp.toPx() }, isRightmost, false, "퇴근 $timeStr", 12f))
+                            }
+                            else -> {}
+                        }
+                    }
+
                     placedNodes.forEachIndexed { idx, placed ->
                         when (val step = placed.step) {
                             is RouteStep.Start -> {
@@ -383,21 +467,36 @@ fun RouteDiagramView(
                                     else -> true
                                 }
 
-                                // 상단~중앙 영역에 배치해 아래쪽 RUN 열번과 겹침 원천 차단
-                                val labelY = placed.yTopPx + (placed.yBottomPx - placed.yTopPx - with(density) { 24.dp.toPx() }) * 0.5f
+                                // 이전/다음 RUN 시각·열번과의 겹침을 피해 2D 충돌 회피 좌표에 배치
+                                val prevStep = model.steps.getOrNull(idx - 1)
+                                val nextStep = model.steps.getOrNull(idx + 1)
+                                val topSafe = placed.yTopPx + if (prevStep is RouteStep.Run) with(density) { 26.dp.toPx() } else with(density) { 6.dp.toPx() }
+                                val botSafe = placed.yBottomPx - if (nextStep is RouteStep.Run) with(density) { 24.dp.toPx() } else with(density) { 6.dp.toPx() }
+                                val labelY = (topSafe + botSafe) * 0.5f
                                 val maxLabelW = 124.dp
                                 val maxLabelWPx = with(density) { maxLabelW.toPx() }
+                                val labelSp = if (step.isBlueCore) 12f else 10f
                                 if (step.label.isNotEmpty()) {
-                                    val xOffset = if (labelOnRight) x + with(density) { 8.dp.toPx() } else x - maxLabelWPx - with(density) { 8.dp.toPx() }
+                                    val anchorX = if (labelOnRight) x + with(density) { 8.dp.toPx() } else x - with(density) { 8.dp.toPx() }
+                                    val placedLblTopY = placeAvoidingY(
+                                        x = anchorX,
+                                        topY = labelY - with(density) { 8.dp.toPx() },
+                                        alignEnd = !labelOnRight,
+                                        txt = step.label,
+                                        spVal = labelSp,
+                                        minY = placed.yTopPx + with(density) { 2.dp.toPx() },
+                                        maxY = placed.yBottomPx - with(density) { 2.dp.toPx() }
+                                    )
+                                    val xOffset = if (labelOnRight) anchorX else anchorX - maxLabelWPx
                                     Box(
                                         modifier = Modifier
                                             .width(maxLabelW)
-                                            .offset { IntOffset(xOffset.roundToInt(), (labelY - 9.dp.toPx()).roundToInt()) },
+                                            .offset { IntOffset(xOffset.roundToInt(), placedLblTopY.roundToInt()) },
                                         contentAlignment = if (labelOnRight) Alignment.CenterStart else Alignment.CenterEnd
                                     ) {
                                         Text(
                                             text = step.label,
-                                            fontSize = if (step.isBlueCore) 12.sp else 10.sp,
+                                            fontSize = labelSp.sp,
                                             lineHeight = 14.sp,
                                             maxLines = 2,
                                             textAlign = if (labelOnRight) TextAlign.Start else TextAlign.End,
@@ -410,27 +509,47 @@ fun RouteDiagramView(
                                     }
                                 }
                                 if (step.displayStartTime.isNotEmpty()) {
-                                    val tOffset = if (labelOnRight) x - with(density) { 44.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                    val tmAnchorX = if (labelOnRight) x - with(density) { 8.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                    val placedTmTopY = placeAvoidingY(
+                                        x = tmAnchorX,
+                                        topY = placed.yTopPx - with(density) { 8.dp.toPx() },
+                                        alignEnd = labelOnRight,
+                                        txt = step.displayStartTime,
+                                        spVal = 12f,
+                                        minY = placed.yTopPx - with(density) { 12.dp.toPx() },
+                                        maxY = placed.yBottomPx + with(density) { 8.dp.toPx() }
+                                    )
+                                    val tOffset = if (labelOnRight) tmAnchorX - with(density) { 36.dp.toPx() } else tmAnchorX
                                     Text(
                                         text = step.displayStartTime,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier
-                                            .offset { IntOffset(tOffset.roundToInt(), (placed.yTopPx - 8.dp.toPx()).roundToInt()) }
+                                            .offset { IntOffset(tOffset.roundToInt(), placedTmTopY.roundToInt()) }
                                             .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                                             .padding(horizontal = 2.dp)
                                     )
                                 }
                                 if (step.displayEndTime.isNotEmpty()) {
-                                    val tOffset = if (labelOnRight) x - with(density) { 44.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                    val tmAnchorX = if (labelOnRight) x - with(density) { 8.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                    val placedTmTopY = placeAvoidingY(
+                                        x = tmAnchorX,
+                                        topY = placed.yBottomPx - with(density) { 8.dp.toPx() },
+                                        alignEnd = labelOnRight,
+                                        txt = step.displayEndTime,
+                                        spVal = 12f,
+                                        minY = placed.yTopPx - with(density) { 8.dp.toPx() },
+                                        maxY = placed.yBottomPx + with(density) { 12.dp.toPx() }
+                                    )
+                                    val tOffset = if (labelOnRight) tmAnchorX - with(density) { 36.dp.toPx() } else tmAnchorX
                                     Text(
                                         text = step.displayEndTime,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier
-                                            .offset { IntOffset(tOffset.roundToInt(), (placed.yBottomPx - 8.dp.toPx()).roundToInt()) }
+                                            .offset { IntOffset(tOffset.roundToInt(), placedTmTopY.roundToInt()) }
                                             .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                                             .padding(horizontal = 2.dp)
                                     )

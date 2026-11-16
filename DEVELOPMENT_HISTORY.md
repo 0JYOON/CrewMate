@@ -1275,3 +1275,8 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `LabFeature.HANDOVER_CREW`에 기초자료 선행 실행 안내를 추가하고, 앱·웹 동료비교의 `🔍 필터` 버튼을 항상 표출하도록 수정함.
   - `DiaDetailCard`의 `타임라인`/`행로도` 선택 칩을 최하단으로 내리고, `RouteDiagramView`의 마스터 문구 삭제 및 웹과 1:1 동일한 디자인으로 통일함.
   - `RouteDiagramBuilder`·`RouteDiagramView`·`app-runtime.js`에서 `감시`/`출고준비`/`입환` 원형 노드를 세로선 시작·끝 지점으로 이동하고 노드 옆 시각 표기(감시 등 인접 겹침 생략), `(입환00)` 명칭 통일, `12px`/`12sp` 글자 크기 통일 및 상하 여백 확대로 글자 겹침을 제거함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
+### STEP 88: 승무 행로도 2D 공간 점유·충돌 회피 배치 엔진 적용 (`v1.0.61`)
+- **원인 및 해결**:
+  - 고정 좌표 오프셋만으로는 긴 대기 라벨이 직전 `RUN` 구간의 하단 시각(`y + 18`)과 2D 평면상에서 겹치는 경우가 남아 있었음.
+  - `RouteDiagramView.kt`와 `CrewMate-Alpha/app-runtime.js`에 2D 바운딩 박스(`occupiedRects`) 선등록 + `topBuf`/`botBuf` 안전 버퍼 + `placeAvoiding`/`placeAvoidingY` 충돌 회피 알고리즘을 적용하여 어떤 라벨/시각도 서로 겹치지 않도록 수정함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).

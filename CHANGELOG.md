@@ -4,6 +4,17 @@
 
 ---
 
+## [v1.0.61] - 2026-11-16
+### 승무 행로도 2D 공간 점유·충돌 회피(Collision Avoidance) 배치 엔진 적용
+- **수정 이유**:
+  - 단순 세로 여백 확대만으로는 직전 운행 구간의 아래쪽 시각(`22:36`, `22:41`)과 대기 라벨(`(정10 휴03:36 승02:32)`) 등이 2D 평면에서 겹치는 문제를 원천 해결하기 위함.
+- **구현 내용**:
+  - [RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt) 및 `CrewMate-Alpha/app-runtime.js`:
+    - `START`·`RUN`(열번/출발시각/도착시각)·`END`의 실제 2D 바운딩 박스를 `occupiedRects`에 선등록함.
+    - `DWELL` 구간에 대해 이전/다음 `RUN`과의 상하 안전 버퍼(`topBuf = 26`, `botBuf = 24`)를 확보한 뒤, `placeAvoiding` / `placeAvoidingY`로 기존 점유 영역과 겹치지 않는 좌표를 찾아 배치하고 새 영역을 즉시 등록하도록 개편함.
+
+---
+
 ## [v1.0.60] - 2026-11-16
 ### 테스트 후속 개선 (교대승무원 릴레이 수정, 동료 필터 상시 표출, 행로도 노드·디자인 1:1 통일)
 - **교대승무원 안내 및 릴레이 조회 로직 수정**:
