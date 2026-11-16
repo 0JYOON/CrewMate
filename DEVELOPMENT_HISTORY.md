@@ -1268,3 +1268,10 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
   - `PayStatementScreen.kt`, `ColleagueCompareScreen.kt`, `xcrew_bridge_snippet.js`: 상단 버튼/수동추가 3탭/셀 여백 개선, 승무원 이름 필터(`🔍 필터`), 수집기 개인근무명세 진행률 및 실험실 ON 조건부 통계 표출.
   - `RouteDiagramBuilder.kt`, `RouteDiagramView.kt`, `app-runtime.js`: 화면 폭 맞춤(Fit-to-width), 여백 확대, 요약 수치 수정, `감시`/`출고준비` 세로선 노드(점) 및 조건부 시각 표기 적용.
   - `dia-rating-editor.html`, `DiaRating*.kt`, `app-runtime.js`: 다이아 기초자료 1차 가공 + 2차 편집기 구축 및 `CREWMATE_DIA_RATING_PACK_V1` 등록·매칭 연동 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).
+
+### STEP 87: 테스트 후속 개선 — 교대승무원 릴레이 수정 · 동료 필터 상시화 · 행로도 노드·디자인 1:1 통일 (`v1.0.60`)
+- **원인 및 해결**:
+  - `HandoverCrewRepository`가 온라인 조회 시 대표열차만 검사하는 V1 조회를 호출해 릴레이 다이아가 누락되던 문제를 `diaCensusDao.searchCensusByTrainNumber` + 실시간 배정 현황 결합으로 해결함.
+  - `LabFeature.HANDOVER_CREW`에 기초자료 선행 실행 안내를 추가하고, 앱·웹 동료비교의 `🔍 필터` 버튼을 항상 표출하도록 수정함.
+  - `DiaDetailCard`의 `타임라인`/`행로도` 선택 칩을 최하단으로 내리고, `RouteDiagramView`의 마스터 문구 삭제 및 웹과 1:1 동일한 디자인으로 통일함.
+  - `RouteDiagramBuilder`·`RouteDiagramView`·`app-runtime.js`에서 `감시`/`출고준비`/`입환` 원형 노드를 세로선 시작·끝 지점으로 이동하고 노드 옆 시각 표기(감시 등 인접 겹침 생략), `(입환00)` 명칭 통일, `12px`/`12sp` 글자 크기 통일 및 상하 여백 확대로 글자 겹침을 제거함 (`./gradlew.bat test assembleDebug` 및 `node build.js` 통과).

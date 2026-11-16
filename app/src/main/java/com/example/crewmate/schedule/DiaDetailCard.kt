@@ -161,25 +161,6 @@ fun DiaDetailCard(
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
             } else {
-                if (routeDiagramLabEnabled && !isCaptureMode) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        androidx.compose.material3.FilterChip(
-                            selected = !showRouteDiagram,
-                            onClick = { showRouteDiagram = false },
-                            label = { Text("타임라인", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                        )
-                        androidx.compose.material3.FilterChip(
-                            selected = showRouteDiagram,
-                            onClick = { showRouteDiagram = true },
-                            label = { Text("🧪 행로도", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                        )
-                    }
-                }
                 if (routeDiagramLabEnabled && showRouteDiagram && !isCaptureMode) {
                     com.example.crewmate.labs.LabSafeContainer(
                         feature = com.example.crewmate.labs.LabFeature.ROUTE_DIAGRAM,
@@ -288,6 +269,24 @@ fun DiaDetailCard(
                         }
                     }
                 }
+                }
+                if (routeDiagramLabEnabled && !isCaptureMode) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        androidx.compose.material3.FilterChip(
+                            selected = !showRouteDiagram,
+                            onClick = { showRouteDiagram = false },
+                            label = { Text("타임라인", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        androidx.compose.material3.FilterChip(
+                            selected = showRouteDiagram,
+                            onClick = { showRouteDiagram = true },
+                            label = { Text("🧪 행로도", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                    }
                 }
             }
         }

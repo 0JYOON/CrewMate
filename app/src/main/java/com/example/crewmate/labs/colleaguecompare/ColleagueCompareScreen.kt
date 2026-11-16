@@ -173,21 +173,19 @@ fun ColleagueCompareScreen(
             ) {
                 Text("+ 수동 추가", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            if (state.people.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = { showFilterDialog = true },
-                    modifier = Modifier.height(34.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                ) {
-                    val activeCnt = visiblePeople.size
-                    val totalCnt = state.people.size
-                    Text(
-                        text = if (hiddenPersonIds.isNotEmpty()) "🔍 $activeCnt/$totalCnt" else "🔍 필터",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
+            OutlinedButton(
+                onClick = { showFilterDialog = true },
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+                val activeCnt = visiblePeople.size
+                val totalCnt = state.people.size
+                Text(
+                    text = if (hiddenPersonIds.isNotEmpty() && totalCnt > 0) "🔍 $activeCnt/$totalCnt" else "🔍 필터",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
             }
         }
 

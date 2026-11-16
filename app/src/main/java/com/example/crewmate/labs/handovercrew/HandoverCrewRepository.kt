@@ -45,8 +45,27 @@ class HandoverCrewRepository(private val context: Context) {
         val session = XcrewSessionRegistry.current() ?: XcrewSessionRegistry.rawCurrent()
 
         if (!isOfflineMode && session != null) {
+            val dataSource = XcrewWebViewXhrDataSource(session, XcrewWorkScheduleParser())
+            val censusResults = runCatching {
+                searchFromCensusWithAssignments(
+                    segmentDate = segmentDate,
+                    targetDateStr = targetDateStr,
+                    normalizedTrain = normalizedTrain,
+                    onlineDataSource = dataSource
+                )
+            }.getOrDefault(emptyList())
+            if (censusResults.isNotEmpty()) {
+                return@withContext HandoverCrewResolver.resolveHandover(
+                    trainNumber = rawTrainNo,
+                    targetDate = targetDateStr,
+                    currentDiaNo = currentDiaNo,
+                    currentSegment = targetSegment,
+                    results = censusResults,
+                    fromOfflineCache = false
+                )
+            }
+
             val onlineAttempt = runCatching {
-                val dataSource = XcrewWebViewXhrDataSource(session, XcrewWorkScheduleParser())
                 val repo = TrainCrewSearchRepository(
                     crewWorkStatusDataSource = dataSource,
                     diaDetailDataSource = dataSource,
@@ -88,6 +107,63 @@ class HandoverCrewRepository(private val context: Context) {
             results = cachedResults,
             fromOfflineCache = true
         )
+    }
+
+    private suspend fun searchFromCensusWithAssignments(
+        segmentDate: LocalDate,
+        targetDateStr: String,
+        normalizedTrain: String,
+        onlineDataSource: XcrewWebViewXhrDataSource
+    ): List<TrainCrewSearchResult> {
+        val censusEntities = runCatching {
+            database.diaCensusDao().searchCensusByTrainNumber(normalizedTrain)
+        }.getOrDefault(emptyList())
+        if (censusEntities.isEmpty()) return emptyList()
+
+        val prevDateStr = HandoverCrewResolver.formatApiDate(segmentDate.minusDays(1))
+        val diaDetails = censusEntities.mapNotNull { entity ->
+            runCatching {
+                val parsed = diaDetailParser.parse(entity.detailJson)
+                if (parsed.segments.isNotEmpty()) entity.pdiaNo.trim() to parsed else null
+            }.getOrNull()
+        }
+        if (diaDetails.isEmpty()) return emptyList()
+
+        val assignToday = runCatching { onlineDataSource.fetchCrewWorkStatus(targetDateStr) }
+            .getOrElse { loadCachedAssignments(targetDateStr) }
+        val assignPrev = runCatching { onlineDataSource.fetchCrewWorkStatus(prevDateStr) }
+            .getOrElse { loadCachedAssignments(prevDateStr) }
+
+        val resToday = TrainCrewSearchMatcher.match(
+            sourceDt = targetDateStr,
+            targetDt = targetDateStr,
+            searchTrainNumber = normalizedTrain,
+            diaDetailsInApiOrder = diaDetails,
+            assignmentsByDia = assignToday.groupBy { it.pdiaNo.trim() }
+        )
+        val resPrev = TrainCrewSearchMatcher.match(
+            sourceDt = prevDateStr,
+            targetDt = targetDateStr,
+            searchTrainNumber = normalizedTrain,
+            diaDetailsInApiOrder = diaDetails,
+            assignmentsByDia = assignPrev.groupBy { it.pdiaNo.trim() }
+        )
+        return (resPrev + resToday).distinctBy {
+            "${it.pjtDt}|${it.pdiaNo}|${it.segment.dptTm}|${it.segment.arvTm}"
+        }
+    }
+
+    private suspend fun loadCachedAssignments(dt: String): List<CrewAssignment> {
+        return database.crewAssignmentDao().getAssignmentsForDate(dt).map { entity ->
+            CrewAssignment(
+                pdiaNo = entity.pdiaNo,
+                repTrn1No = entity.repTrn1No,
+                repTrn2No = entity.repTrn2No,
+                gwkTm = entity.gwkTm,
+                loiwTm = entity.loiwTm,
+                crewMembers = entity.crewMembers
+            )
+        }
     }
 
     private suspend fun searchFromLocalCache(

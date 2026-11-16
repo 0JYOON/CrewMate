@@ -69,7 +69,7 @@ enum class LabFeature(
     HANDOVER_CREW(
         id = "handover_crew",
         title = "교대승무원 확인",
-        description = "오늘의 근무 열번 뱃지 옆 버튼으로 직전 승무원 및 교대 승무원 정보를 팝업으로 조회합니다.",
+        description = "오늘의 근무 열차 행을 터치해 직전 승무원 및 교대 승무원 정보를 팝업으로 조회합니다. ※ 정확한 릴레이 조회를 위해 [열차 승무원 조회] 메뉴에서 기초자료 조사를 먼저 실행해 주세요.",
         stage = LabStage.EXPERIMENTAL,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,

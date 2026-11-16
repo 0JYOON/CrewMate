@@ -94,10 +94,10 @@ fun RouteDiagramView(
 
     val density = LocalDensity.current
     val topHeaderHeightDp = 38.dp
-    val startRowHeightDp = 36.dp
-    val runRowHeightDp = 72.dp
-    val dwellRowHeightDp = 54.dp
-    val endRowHeightDp = 36.dp
+    val startRowHeightDp = 30.dp
+    val runRowHeightDp = 68.dp
+    val dwellRowHeightDp = 76.dp
+    val endRowHeightDp = 32.dp
 
     data class PlacedNode(
         val step: RouteStep,
@@ -113,10 +113,16 @@ fun RouteDiagramView(
 
     val placedNodes = remember(model.steps, density) {
         var cursorY = topHeaderPx + with(density) { 14.dp.toPx() }
-        model.steps.map { step ->
+        model.steps.mapIndexed { idx, step ->
             val h = when (step) {
-                is RouteStep.Start -> startRowPx
-                is RouteStep.Run -> runRowPx
+                is RouteStep.Start -> {
+                    val next = model.steps.getOrNull(idx + 1)
+                    if (next is RouteStep.Run) startRowPx else 0f
+                }
+                is RouteStep.Run -> {
+                    val next = model.steps.getOrNull(idx + 1)
+                    if (next == null || next is RouteStep.Run || next is RouteStep.End) runRowPx else 0f
+                }
                 is RouteStep.Dwell -> dwellRowPx
                 is RouteStep.End -> endRowPx
             }
@@ -126,32 +132,28 @@ fun RouteDiagramView(
         }
     }
     val totalHeightDp = with(density) {
-        ((placedNodes.lastOrNull()?.yBottomPx ?: (topHeaderPx + 80f)) + with(density) { 18.dp.toPx() }).toDp()
+        ((placedNodes.lastOrNull()?.yBottomPx ?: (topHeaderPx + 80f)) + with(density) { 14.dp.toPx() }).toDp()
     }
 
     val stationIndexMap = remember(stations) {
         stations.mapIndexed { idx, name -> name to idx }.toMap()
     }
+    val startStn = remember(model.steps) {
+        (model.steps.firstOrNull { it is RouteStep.Start } as? RouteStep.Start)?.station.orEmpty()
+    }
+    val endStn = remember(model.steps) {
+        (model.steps.lastOrNull { it is RouteStep.End } as? RouteStep.End)?.station.orEmpty()
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // 상단 미니 툴바 (마스터 버전 표출)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp),
-            horizontalArrangement = Arrangement.Start,
-            verticalAlignment = Alignment.CenterVertically
+        // 화면 폭에 맞춘 행로도 캔버스 + 오버레이 텍스트 (웹 디자인과 1:1 동일)
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "🧪 승무 행로도 (마스터 v${master.version})",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // 화면 폭에 맞춘 행로도 캔버스 + 오버레이 텍스트 (가로 잘림 없이 한눈에 표출)
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             val sidePadDp = 8.dp
             val colWidthDp = ((maxWidth - sidePadDp * 2) / stations.size).coerceAtLeast(54.dp)
             val totalDiagramWidthDp = (colWidthDp * stations.size + sidePadDp * 2).coerceAtLeast(maxWidth)
@@ -182,22 +184,23 @@ fun RouteDiagramView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         stations.forEach { stn ->
+                            val isKeyStn = (stn == startStn || stn == endStn)
                             Box(
                                 modifier = Modifier
                                     .width(colWidthDp)
-                                    .padding(horizontal = 3.dp),
+                                    .padding(horizontal = 2.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    shape = RoundedCornerShape(7.dp),
+                                    color = if (isKeyStn) Color(0xFF1E40AF) else MaterialTheme.colorScheme.surfaceVariant,
+                                    border = if (isKeyStn) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Text(
                                         text = stn,
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = if (isKeyStn) FontWeight.Black else FontWeight.Bold,
+                                        color = if (isKeyStn) Color.White else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,
@@ -224,22 +227,30 @@ fun RouteDiagramView(
                             )
                         }
 
-                        placedNodes.forEach { placed ->
+                        placedNodes.forEachIndexed { idx, placed ->
+                            val nextPlaced = placedNodes.getOrNull(idx + 1)
                             when (val step = placed.step) {
                                 is RouteStep.Start -> {
                                     val x = xForStation(step.station)
-                                    val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                    val y = placed.yTopPx
+                                    if (nextPlaced != null && nextPlaced.step is RouteStep.Run && nextPlaced.yTopPx > y) {
+                                        drawLine(
+                                            color = dwellNeutralColor,
+                                            start = Offset(x, y),
+                                            end = Offset(x, nextPlaced.yTopPx),
+                                            strokeWidth = 1.6.dp.toPx(),
+                                            pathEffect = dash
+                                        )
+                                    }
                                     drawCircle(color = COLOR_START_GREEN, radius = 4.5.dp.toPx(), center = Offset(x, y))
                                 }
                                 is RouteStep.End -> {
                                     val x = xForStation(step.station)
-                                    val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                    val y = placed.yTopPx
                                     drawCircle(color = COLOR_END_RED, radius = 4.5.dp.toPx(), center = Offset(x, y))
                                 }
                                 is RouteStep.Dwell -> {
                                     val x = xForStation(step.station)
-                                    val yMid = (placed.yTopPx + placed.yBottomPx) * 0.5f
-                                    // 감시·출고준비·입환은 파란색 실선(1.6dp), 정리·승계·준비·휴게·입고정리는 점선(1.6dp)
                                     val strokeColor = if (step.isBlueCore) COLOR_RUN_BLUE else dwellNeutralColor
                                     val effect = if (step.isBlueCore) null else dash
                                     drawLine(
@@ -253,19 +264,33 @@ fun RouteDiagramView(
                                         drawCircle(
                                             color = COLOR_RUN_BLUE,
                                             radius = 3.5.dp.toPx(),
-                                            center = Offset(x, yMid)
+                                            center = Offset(x, placed.yTopPx)
+                                        )
+                                        drawCircle(
+                                            color = COLOR_RUN_BLUE,
+                                            radius = 3.5.dp.toPx(),
+                                            center = Offset(x, placed.yBottomPx)
                                         )
                                     }
                                 }
                                 is RouteStep.Run -> {
                                     val x1 = xForStation(step.fromStation)
                                     val x2 = xForStation(step.toStation)
-                                    val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                    val y = placed.yTopPx
+                                    if (nextPlaced != null && (nextPlaced.step is RouteStep.Run || nextPlaced.step is RouteStep.End) && nextPlaced.yTopPx > y) {
+                                        drawLine(
+                                            color = dwellNeutralColor,
+                                            start = Offset(x2, y),
+                                            end = Offset(x2, nextPlaced.yTopPx),
+                                            strokeWidth = 1.6.dp.toPx(),
+                                            pathEffect = dash
+                                        )
+                                    }
                                     val lineColor = when {
                                         step.isDeadhead -> COLOR_DEADHEAD_PURPLE
                                         else -> COLOR_RUN_BLUE
                                     }
-                                    val strokeWidth = if (step.isWatch || step.isShunt) 1.8.dp.toPx() else 3.2.dp.toPx()
+                                    val strokeWidth = if (step.isWatch || step.isShunt) 1.8.dp.toPx() else 3.0.dp.toPx()
                                     val effect = if (step.isDeadhead) PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f) else null
 
                                     drawLine(
@@ -284,60 +309,99 @@ fun RouteDiagramView(
 
                     // 3. 텍스트 & 뱃지 오버레이 (시각 강조 + 겹침 방지)
                     val surfaceBg = MaterialTheme.colorScheme.surface
-                    placedNodes.forEach { placed ->
+                    placedNodes.forEachIndexed { idx, placed ->
                         when (val step = placed.step) {
                             is RouteStep.Start -> {
                                 val x = xForStation(step.station)
-                                val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                val y = placed.yTopPx
+                                val isLeftmost = (stationIndexMap[step.station] ?: 0) == 0
                                 val timeStr = RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
-                                Text(
-                                    text = "출근 $timeStr",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = COLOR_START_GREEN,
+                                Box(
                                     modifier = Modifier
-                                        .offset { IntOffset((x + 8.dp.toPx()).roundToInt(), (y - 9.dp.toPx()).roundToInt()) }
-                                        .background(surfaceBg.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 3.dp)
-                                )
+                                        .width(86.dp)
+                                        .offset {
+                                            val xOff = if (isLeftmost) x + 8.dp.toPx() else x - 94.dp.toPx()
+                                            IntOffset(xOff.roundToInt(), (y - 9.dp.toPx()).roundToInt())
+                                        },
+                                    contentAlignment = if (isLeftmost) Alignment.CenterStart else Alignment.CenterEnd
+                                ) {
+                                    Text(
+                                        text = "출근 $timeStr",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = COLOR_START_GREEN,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                             is RouteStep.End -> {
                                 val x = xForStation(step.station)
-                                val y = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                val y = placed.yTopPx
+                                val isRightmost = (stationIndexMap[step.station] ?: 0) == stations.lastIndex && stations.size > 1
                                 val timeStr = RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
-                                Text(
-                                    text = "퇴근 $timeStr",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = COLOR_END_RED,
+                                Box(
                                     modifier = Modifier
-                                        .offset { IntOffset((x + 8.dp.toPx()).roundToInt(), (y - 9.dp.toPx()).roundToInt()) }
-                                        .background(surfaceBg.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 3.dp)
-                                )
+                                        .width(86.dp)
+                                        .offset {
+                                            val xOff = if (isRightmost) x - 94.dp.toPx() else x + 8.dp.toPx()
+                                            IntOffset(xOff.roundToInt(), (y - 9.dp.toPx()).roundToInt())
+                                        },
+                                    contentAlignment = if (isRightmost) Alignment.CenterEnd else Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = "퇴근 $timeStr",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = COLOR_END_RED,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                             is RouteStep.Dwell -> {
                                 val x = xForStation(step.station)
-                                val yMid = (placed.yTopPx + placed.yBottomPx) * 0.5f
                                 val stnIdx = stationIndexMap[step.station] ?: 0
+                                val isLeftmost = stnIdx == 0
                                 val isRightmost = stnIdx == stations.lastIndex && stations.size > 1
-                                val maxLabelW = 108.dp
+                                val prevRun = model.steps.subList(0, idx).lastOrNull { it is RouteStep.Run } as? RouteStep.Run
+                                val nextRun = model.steps.subList(idx + 1, model.steps.size).firstOrNull { it is RouteStep.Run } as? RouteStep.Run
+                                var hasLeftTrack = false
+                                var hasRightTrack = false
+                                if (prevRun != null && prevRun.toStation == step.station) {
+                                    val pX = xForStation(prevRun.fromStation)
+                                    if (pX < x) hasLeftTrack = true else if (pX > x) hasRightTrack = true
+                                }
+                                if (nextRun != null && nextRun.fromStation == step.station) {
+                                    val nX = xForStation(nextRun.toStation)
+                                    if (nX < x) hasLeftTrack = true else if (nX > x) hasRightTrack = true
+                                }
+                                val labelOnRight = when {
+                                    isLeftmost -> true
+                                    isRightmost -> false
+                                    hasLeftTrack && !hasRightTrack -> true
+                                    !hasLeftTrack && hasRightTrack -> false
+                                    hasLeftTrack && hasRightTrack -> (prevRun?.fromStation?.let(::xForStation) ?: 0f) <= x
+                                    else -> true
+                                }
+
+                                // 상단~중앙 영역에 배치해 아래쪽 RUN 열번과 겹침 원천 차단
+                                val labelY = placed.yTopPx + (placed.yBottomPx - placed.yTopPx - with(density) { 24.dp.toPx() }) * 0.5f
+                                val maxLabelW = 124.dp
                                 val maxLabelWPx = with(density) { maxLabelW.toPx() }
                                 if (step.label.isNotEmpty()) {
-                                    val xOffset = if (isRightmost) x - maxLabelWPx - with(density) { 6.dp.toPx() } else x + with(density) { 6.dp.toPx() }
+                                    val xOffset = if (labelOnRight) x + with(density) { 8.dp.toPx() } else x - maxLabelWPx - with(density) { 8.dp.toPx() }
                                     Box(
                                         modifier = Modifier
                                             .width(maxLabelW)
-                                            .offset { IntOffset(xOffset.roundToInt(), (yMid - 9.dp.toPx()).roundToInt()) },
-                                        contentAlignment = if (isRightmost) Alignment.CenterEnd else Alignment.CenterStart
+                                            .offset { IntOffset(xOffset.roundToInt(), (labelY - 9.dp.toPx()).roundToInt()) },
+                                        contentAlignment = if (labelOnRight) Alignment.CenterStart else Alignment.CenterEnd
                                     ) {
                                         Text(
                                             text = step.label,
-                                            fontSize = 10.sp,
-                                            lineHeight = 12.sp,
+                                            fontSize = if (step.isBlueCore) 12.sp else 10.sp,
+                                            lineHeight = 14.sp,
                                             maxLines = 2,
-                                            textAlign = if (isRightmost) TextAlign.End else TextAlign.Start,
-                                            fontWeight = if (step.isBlueCore) FontWeight.Bold else FontWeight.Medium,
+                                            textAlign = if (labelOnRight) TextAlign.Start else TextAlign.End,
+                                            fontWeight = if (step.isBlueCore) FontWeight.ExtraBold else FontWeight.SemiBold,
                                             color = if (step.isBlueCore) COLOR_RUN_BLUE else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier
                                                 .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(4.dp))
@@ -346,16 +410,27 @@ fun RouteDiagramView(
                                     }
                                 }
                                 if (step.displayStartTime.isNotEmpty()) {
-                                    val timeOnLeft = !isRightmost && stnIdx > 0
-                                    val tOffset = if (timeOnLeft) x - with(density) { 42.dp.toPx() } else x + with(density) { 6.dp.toPx() }
-                                    val tY = if (timeOnLeft) yMid - with(density) { 8.dp.toPx() } else yMid + with(density) { 9.dp.toPx() }
+                                    val tOffset = if (labelOnRight) x - with(density) { 44.dp.toPx() } else x + with(density) { 8.dp.toPx() }
                                     Text(
                                         text = step.displayStartTime,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier
-                                            .offset { IntOffset(tOffset.roundToInt(), tY.roundToInt()) }
+                                            .offset { IntOffset(tOffset.roundToInt(), (placed.yTopPx - 8.dp.toPx()).roundToInt()) }
+                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
+                                            .padding(horizontal = 2.dp)
+                                    )
+                                }
+                                if (step.displayEndTime.isNotEmpty()) {
+                                    val tOffset = if (labelOnRight) x - with(density) { 44.dp.toPx() } else x + with(density) { 8.dp.toPx() }
+                                    Text(
+                                        text = step.displayEndTime,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .offset { IntOffset(tOffset.roundToInt(), (placed.yBottomPx - 8.dp.toPx()).roundToInt()) }
                                             .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                                             .padding(horizontal = 2.dp)
                                     )
@@ -364,7 +439,7 @@ fun RouteDiagramView(
                             is RouteStep.Run -> {
                                 val x1 = xForStation(step.fromStation)
                                 val x2 = xForStation(step.toStation)
-                                val yMid = placed.yTopPx + (placed.yBottomPx - placed.yTopPx) * 0.5f
+                                val yMid = placed.yTopPx
                                 val isRightward = x2 >= x1
                                 val arrow = if (isRightward) "▶" else "◀"
                                 val textColor = if (step.isDeadhead) COLOR_DEADHEAD_PURPLE else COLOR_RUN_BLUE
@@ -372,11 +447,10 @@ fun RouteDiagramView(
                                 val trainLabel = if (isRightward) "$prefix${step.trnNo} $arrow" else "$arrow $prefix${step.trnNo}"
 
                                 val midX = (x1 + x2) * 0.5f
-                                val labelW = with(density) { 84.dp.toPx() }
-                                // 열차번호: 뱃지 없이 행로 선 위에 시각과 동일한 크기(12.sp)로 표기
+                                val labelW = with(density) { 88.dp.toPx() }
                                 Box(
                                     modifier = Modifier
-                                        .width(84.dp)
+                                        .width(88.dp)
                                         .offset { IntOffset((midX - labelW / 2f).roundToInt(), (yMid - 21.dp.toPx()).roundToInt()) },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -392,38 +466,50 @@ fun RouteDiagramView(
                                     )
                                 }
 
-                                // 출발·도착 시각: 선 아래(yMid + 8.dp)에 큰 글씨(12.sp)로 배치해 선·열번과 겹침 방지
+                                // 출발·도착 시각: 선 아래(yMid + 7.dp) 구간 안쪽에 12.sp로 배치
                                 val dptStr = RouteDiagramBuilder.formatTimeDisplay(step.dptTm)
                                 val arvStr = RouteDiagramBuilder.formatTimeDisplay(step.arvTm)
+                                val timeW = with(density) { 44.dp.toPx() }
                                 if (dptStr.isNotEmpty()) {
-                                    Text(
-                                        text = dptStr,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                    val dptOff = if (isRightward) x1 + with(density) { 4.dp.toPx() } else x1 - timeW - with(density) { 4.dp.toPx() }
+                                    Box(
                                         modifier = Modifier
-                                            .offset { IntOffset((x1 - 18.dp.toPx()).roundToInt(), (yMid + 8.dp.toPx()).roundToInt()) }
-                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
-                                            .padding(horizontal = 2.dp)
-                                    )
+                                            .width(44.dp)
+                                            .offset { IntOffset(dptOff.roundToInt(), (yMid + 7.dp.toPx()).roundToInt()) },
+                                        contentAlignment = if (isRightward) Alignment.CenterStart else Alignment.CenterEnd
+                                    ) {
+                                        Text(
+                                            text = dptStr,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = COLOR_RUN_BLUE,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                                 if (arvStr.isNotEmpty()) {
-                                    Text(
-                                        text = arvStr,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                    val arvOff = if (isRightward) x2 - timeW - with(density) { 4.dp.toPx() } else x2 + with(density) { 4.dp.toPx() }
+                                    Box(
                                         modifier = Modifier
-                                            .offset { IntOffset((x2 - 18.dp.toPx()).roundToInt(), (yMid + 8.dp.toPx()).roundToInt()) }
-                                            .background(surfaceBg.copy(alpha = 0.92f), RoundedCornerShape(3.dp))
-                                            .padding(horizontal = 2.dp)
-                                    )
+                                            .width(44.dp)
+                                            .offset { IntOffset(arvOff.roundToInt(), (yMid + 7.dp.toPx()).roundToInt()) },
+                                        contentAlignment = if (isRightward) Alignment.CenterEnd else Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            text = arvStr,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
         }
 
         // 하단 접이식 사업시간/거리 요약 보기 (접어둔 상태가 기본)

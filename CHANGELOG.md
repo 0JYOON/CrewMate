@@ -4,6 +4,21 @@
 
 ---
 
+## [v1.0.60] - 2026-11-16
+### 테스트 후속 개선 (교대승무원 릴레이 수정, 동료 필터 상시 표출, 행로도 노드·디자인 1:1 통일)
+- **교대승무원 안내 및 릴레이 조회 로직 수정**:
+  - [LabFeature.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/LabFeature.kt): `교대승무원 확인` 설명에 `[열차 승무원 조회]` 기초자료 선행 실행 안내 문구 추가.
+  - [HandoverCrewRepository.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/handovercrew/HandoverCrewRepository.kt): 온라인 조회 시에도 대표열차(`repTrn1No`/`repTrn2No`)만 검사하는 구형 V1 조회 대신 `diaCensusDao.searchCensusByTrainNumber` + 실시간 배정 현황(`fetchCrewWorkStatus`) 결합 방식으로 변경해 릴레이 누락 버그 해결.
+- **동료 이름 필터(`🔍 필터`) 상시 표출**:
+  - [ColleagueCompareScreen.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/colleaguecompare/ColleagueCompareScreen.kt) 및 `CrewMate-Alpha/app-runtime.js`: 등록된 동료 수와 무관하게 상단 액션 바에 `🔍 필터` 버튼을 항상 표시하도록 수정.
+- **승무 행로도 노드·라벨·여백 & 앱 디자인 1:1 통일**:
+  - [DiaDetailCard.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/schedule/DiaDetailCard.kt): `타임라인`/`🧪 행로도` 선택 칩을 카드 최하단(`사업시간/거리 요약 보기` 아래)으로 이동.
+  - [RouteDiagramBuilder.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramBuilder.kt), [RouteDiagramView.kt](file:///C:/Users/joon1/.gemini/antigravity/worktrees/CrewMate/add_labs_feature_framework/app/src/main/java/com/example/crewmate/labs/routediagram/RouteDiagramView.kt), `app-runtime.js`:
+    - `"🧪 승무 행로도 (마스터 v1)"` 문구 삭제 및 앱 행로도 디자인(시점/종점 역 진한 파란 명패, 선 아래 안쪽 시각, 시작/끝 노드 배치)을 웹과 1:1 동일하게 통일.
+    - `감시`/`출고준비`/`입환` 세로선의 **시작·끝 지점**에 원형 노드(점) 및 시각 표기(겹치는 인접 시각 생략), `(환00)` → `(입환00)` 변경, `감시`/`출고준비`/`입환` 글자 크기를 열번과 동일한 `12px`/`12sp`로 통일하고 상하 여백을 확대해 글자 겹침 제거.
+
+---
+
 ## [v1.0.59] - 2026-11-16
 ### CrewMate 생태계(앱·웹) 실무 종합 개선 (Phase 0~5)
 - **Phase 0 (`AGENTS.md` 필수 수칙 보강)**:

@@ -35,7 +35,8 @@ sealed interface RouteStep {
         val dptTm: String,
         val arvTm: String,
         val isWatchOrPrepNode: Boolean = false,
-        val displayStartTime: String = ""
+        val displayStartTime: String = "",
+        val displayEndTime: String = ""
     ) : RouteStep
 
     data class End(
@@ -84,7 +85,7 @@ object RouteDiagramBuilder {
                 name.contains("출고") -> "출고"
                 name.contains("정리") || name.contains("입고") -> "정"
                 name.contains("준비") -> "준"
-                name.contains("입환") -> "환"
+                name.contains("입환") -> "입환"
                 name.contains("감시") -> "감"
                 name.contains("휴게") || name.contains("식사") -> "휴"
                 name.contains("승계") || name.contains("대기") -> "승"
@@ -155,15 +156,12 @@ object RouteDiagramBuilder {
             val isBlueCore = dwellGroupIsBlueCore == true
             val hasWatch = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("감시") }
             val hasPrep = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("출고") }
-            val isWatchOrPrepNode = hasWatch || hasPrep
+            val hasShunt = dwellGroup.any { it.pjtHrDvNm.orEmpty().contains("입환") }
+            val isWatchOrPrepNode = hasWatch || hasPrep || hasShunt
             val rawDpt = dptTime ?: dwellGroup.first().dptTm.orEmpty()
             val rawArv = arvTime ?: dwellGroup.last().arvTm ?: rawDpt
-            val dispTime = if (hasPrep) {
-                formatTimeDisplay(rawDpt)
-            } else if (hasWatch) {
-                // 감시 시각이 직전 도착과 같으면 일단 마킹해두고 아래 후처리에서 직후 출발과도 비교
-                formatTimeDisplay(rawDpt)
-            } else ""
+            val dispStart = if (isWatchOrPrepNode) formatTimeDisplay(rawDpt) else ""
+            val dispEnd = if (isWatchOrPrepNode) formatTimeDisplay(rawArv) else ""
             if (label.isNotEmpty() || totalMins > 0) {
                 steps.add(
                     RouteStep.Dwell(
@@ -175,7 +173,8 @@ object RouteDiagramBuilder {
                         arvTm = rawArv,
                         dptTm = rawDpt,
                         isWatchOrPrepNode = isWatchOrPrepNode,
-                        displayStartTime = dispTime
+                        displayStartTime = dispStart,
+                        displayEndTime = dispEnd
                     )
                 )
             }
@@ -258,18 +257,20 @@ object RouteDiagramBuilder {
             )
         )
 
-        // 감시(감) 시각이 앞뒤 운행 구간 시각과 겹치면 시각 표기 생략
+        // 감시·출고준비·입환 시작/끝 시각 중 인접 운행 시각과 겹치는 항목 생략
         val finalSteps = steps.mapIndexed { idx, step ->
-            if (step is RouteStep.Dwell && step.displayStartTime.isNotEmpty() && step.label.contains("감") && !step.label.contains("출고")) {
+            if (step is RouteStep.Dwell && step.isWatchOrPrepNode) {
                 val prevRun = steps.subList(0, idx).lastOrNull { it is RouteStep.Run } as? RouteStep.Run
                 val nextRun = steps.subList(idx + 1, steps.size).firstOrNull { it is RouteStep.Run } as? RouteStep.Run
-                val dptFmt = formatTimeDisplay(step.dptTm)
-                val arvFmt = formatTimeDisplay(step.arvTm)
                 val prevArvFmt = formatTimeDisplay(prevRun?.arvTm)
                 val nextDptFmt = formatTimeDisplay(nextRun?.dptTm)
-                val overlaps = (dptFmt.isNotEmpty() && (dptFmt == prevArvFmt || dptFmt == nextDptFmt)) ||
-                    (arvFmt.isNotEmpty() && arvFmt == nextDptFmt)
-                if (overlaps) step.copy(displayStartTime = "") else step
+                val isPureWatch = step.label.contains("감") && !step.label.contains("출고") && !step.label.contains("입환")
+                val nextStart = if (isPureWatch && step.displayStartTime == prevArvFmt) ""
+                    else if (!isPureWatch && step.displayStartTime == prevArvFmt) ""
+                    else step.displayStartTime
+                val nextEnd = if (step.displayEndTime == nextDptFmt || step.displayEndTime == nextStart) ""
+                    else step.displayEndTime
+                step.copy(displayStartTime = nextStart, displayEndTime = nextEnd)
             } else {
                 step
             }
