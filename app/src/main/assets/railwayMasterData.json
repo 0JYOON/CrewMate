@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "updatedAt": "2026-11-18",
   "aliases": {
     "4서울": "서울",
@@ -74,6 +74,10 @@
     },
     "문산차": {
       "parent": "문산",
+      "position": "after"
+    },
+    "능곡": {
+      "parent": "대곡",
       "position": "after"
     }
   },
