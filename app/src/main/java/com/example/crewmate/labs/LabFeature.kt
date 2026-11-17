@@ -43,7 +43,7 @@ enum class LabFeature(
         description = "Xcrew 개인근무명세서(시간·거리·휴일·연장·야간) 합계 및 예상 승무여비·승무수당 충족 여부를 확인합니다.",
         stage = LabStage.BETA,
         entryType = LabEntryType.STANDALONE_SCREEN,
-        requiresOnline = true,
+        requiresOnline = false,
         route = "lab-pay-statement",
         isImplemented = true
     ),
@@ -79,6 +79,15 @@ enum class LabFeature(
         id = "dia_rating",
         title = "다이아 평가",
         description = "경/중사업, 야간 취침역, 운전시간 등 조건에 따라 다이아를 뱃지·음영으로 구분 표시합니다.",
+        stage = LabStage.EXPERIMENTAL,
+        entryType = LabEntryType.INLINE_ENHANCEMENT,
+        requiresOnline = false,
+        isImplemented = true
+    ),
+    DIA_LOOKUP_DEFAULT_NO(
+        id = "dia_lookup_default_no",
+        title = "승무다이아 조회 기본 번호 설정",
+        description = "승무 다이아 조회 메뉴 진입 시 다이아 번호 입력칸에 사용자가 지정한 기본 숫자를 미리 입력해 둡니다.",
         stage = LabStage.EXPERIMENTAL,
         entryType = LabEntryType.INLINE_ENHANCEMENT,
         requiresOnline = false,

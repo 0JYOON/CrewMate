@@ -1305,3 +1305,14 @@ ememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())을
 - **주요 구현 내용**:
   - `LabFeature.kt` & `CrewMate-Alpha/app-runtime.js`: `승무 행로도 시각화 뷰`(`ROUTE_DIAGRAM`)와 `교대승무원 확인`(`HANDOVER_CREW`)을 `LabStage.BETA`로 승격하고, 기존 베타 기능(`PAY_STATEMENT`, `COLLEAGUE_COMPARE`) 아래·`실험 중` 기능 위에 배치되도록 앱/웹 정렬을 일치시킴.
   - `app/build.gradle.kts`: GitHub Releases 버전 체계에 맞춰 `versionCode = 44`, `versionName = "1.0.44"`로 상향하고 `.\gradlew.bat test assembleDebug assembleRelease` 통과 후 `CrewMate_v1.0.44.apk`를 GitHub Releases에 배포함.
+
+### STEP 93: 생태계(앱·웹·뷰) 개인정보 보안·면책 고지, 종합 안내서(`guide.html`), 오프라인 개인근무명세서 활성화, 다이아 조회 기본 번호 실험실 추가 및 웹 클라우드 `소속/성명/ID` 보안 강화 (`v1.0.45`)
+- **배경 및 목표**:
+  - 철도 승무원 실무 데이터 특성상 개인정보 보안이 중요하나 비개발자 개인(바이브 코딩) 제작에 따른 보안 대응 한계를 투명하게 고지·면책하고, 앱·웹·뷰 통합 설치/사용 안내서를 구축함.
+  - 앱 오프라인 모드에서 개인근무명세서 캐시 열람을 허용하고, 앱·웹 실험실에 승무다이아 조회 기본 번호 설정을 추가하며, 웹 클라우드 저장 안내 현행화 및 `소속/성명/ID` 보안을 전면 점검·강화함.
+- **주요 구현 내용**:
+  - `AppInfoDialog.kt`, `SettingsScreen.kt`, `CrewMate-Alpha/app-runtime.js`, `crewmate-view/src/ui/shell.js`: `[필독] 개인정보 보안 한계 및 면책 고지` 카드 신설 및 `📘 CrewMate 생태계 종합 안내서` 진입 버튼 연동.
+  - `crewmate-view/guide/view-guide.html` & `CrewMate-Alpha/guide.html`: 앱(APK 최신 릴리즈 자동 다운로드 링크 및 사용법)·웹(Alpha 접속, 160자 수집기 복사 및 사용법)·뷰(Userscripts/Tampermonkey/북마클릿 설치 및 사용법)·보안 면책 고지를 총망라한 반응형 종합 안내서 제작.
+  - `LabFeature.kt`, `PayStatementViewModel.kt`, `AppNavigation.kt`: `PAY_STATEMENT.requiresOnline = false` 변경 및 온/오프라인 전환 즉시 동기화(`syncOfflineMode`).
+  - `LabFeature.kt`, `LabsManager.kt`, `LabsSettingsScreen.kt`, `DiaLookupScreen.kt`, `CrewMate-Alpha/app-runtime.js`: `DIA_LOOKUP_DEFAULT_NO` (`dia_lookup_default_no`) 실험실 기능 및 사용자 지정 기본값 번호 저장/입력칸 자동 채움(커서 끝 위치 보정 포함) 구현.
+  - `CrewMate-Alpha/app-runtime.js`, `xcrew_bridge_snippet.js`, `supabase_schema.sql`: 설정 안내 문구 현행화(`온디바이스 우선 보관 & E2EE 암호화 클라우드 보호`), 클라우드 `user_id` Salted SHA-256 해시화(`acct_v2_<hash>`, `data_v2_<hash>`) 및 구형 평문 행 자동 마이그레이션/삭제, `identityVault` 2중 `AES-256-GCM` 암호화, 수집기 `epno` 등 민감 키 즉시 제거, 로컬 백업 JSON 내 암호화 키/계정 정보 제외 적용.

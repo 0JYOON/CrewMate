@@ -58,6 +58,12 @@ class PayStatementViewModel(
         }
     }
 
+    fun syncOfflineMode(isOffline: Boolean) {
+        if (_uiState.value.isOfflineMode != isOffline) {
+            loadMonth(_uiState.value.selectedMonth, forceRefresh = false)
+        }
+    }
+
     fun refresh() {
         if (isOfflineModeProvider()) {
             _uiState.update {

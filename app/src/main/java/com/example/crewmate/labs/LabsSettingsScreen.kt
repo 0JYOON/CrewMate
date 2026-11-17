@@ -18,10 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -44,8 +49,10 @@ fun LabsSettingsScreen(
 ) {
     val context = LocalContext.current
     val labStates = rememberAllLabStates()
+    val diaLookupDefaultValue = rememberDiaLookupDefaultValue()
     val scrollState = rememberScrollState()
     var showDiaRatingRulesDialog by remember { mutableStateOf(false) }
+    var showDiaDefaultInputDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -109,19 +116,117 @@ fun LabsSettingsScreen(
                     val stateMsg = if (next) "활성화" else "비활성화"
                     Toast.makeText(context, "${feature.title} $stateMsg", Toast.LENGTH_SHORT).show()
                 },
-                extraAction = if (feature == LabFeature.DIA_RATING && enabled) {
-                    {
-                        TextButton(onClick = { showDiaRatingRulesDialog = true }) {
-                            Text("⚙️ 평가 기준 설정", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                extraAction = when {
+                    feature == LabFeature.DIA_RATING && enabled -> {
+                        {
+                            TextButton(onClick = { showDiaRatingRulesDialog = true }) {
+                                Text("⚙️ 평가 기준 설정", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
-                } else null
+                    feature == LabFeature.DIA_LOOKUP_DEFAULT_NO && enabled -> {
+                        {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = if (diaLookupDefaultValue.isNotBlank()) {
+                                        "기본값 번호: $diaLookupDefaultValue"
+                                    } else {
+                                        "기본값 번호: 미지정"
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                TextButton(onClick = { showDiaDefaultInputDialog = true }) {
+                                    Text("⚙️ 기본값 번호 지정", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    else -> null
+                }
             )
         }
 
         if (showDiaRatingRulesDialog) {
             com.example.crewmate.labs.diarating.DiaRatingRulesDialog(
                 onDismiss = { showDiaRatingRulesDialog = false }
+            )
+        }
+
+        if (showDiaDefaultInputDialog) {
+            var draftValue by remember(diaLookupDefaultValue) { mutableStateOf(diaLookupDefaultValue) }
+            AlertDialog(
+                onDismissRequest = { showDiaDefaultInputDialog = false },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = {
+                    Text(
+                        text = "🔢 승무다이아 조회 기본 번호 지정",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "승무 다이아 조회 메뉴에 들어갔을 때 다이아 번호 입력칸에 미리 채워 넣을 기본 숫자(예: 사업소 앞자리 16, 160 또는 특정 다이아 번호)를 입력하세요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = draftValue,
+                            onValueChange = { next ->
+                                draftValue = next.filter { it.isDigit() }.take(10)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("기본 입력 숫자") },
+                            placeholder = { Text("예: 16, 160, 16301") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val cleaned = draftValue.trim().filter { it.isDigit() }
+                            LabsManager.setDiaLookupDefaultValue(context, cleaned)
+                            showDiaDefaultInputDialog = false
+                            val msg = if (cleaned.isNotEmpty()) {
+                                "다이아 조회 기본 번호가 '$cleaned'(으)로 설정되었습니다."
+                            } else {
+                                "다이아 조회 기본 번호가 해제되었습니다."
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("저장", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        if (draftValue.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    LabsManager.setDiaLookupDefaultValue(context, "")
+                                    showDiaDefaultInputDialog = false
+                                    Toast.makeText(context, "다이아 조회 기본 번호를 비웠습니다.", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text("비우기", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        TextButton(onClick = { showDiaDefaultInputDialog = false }) {
+                            Text("취소")
+                        }
+                    }
+                }
             )
         }
 
