@@ -4,6 +4,23 @@
 
 ---
 
+## [v1.0.45] - 2026-11-17
+### 🔒 생태계(앱·웹·뷰) 개인정보 보안·면책 고지, 종합 안내서(`guide.html`), 오프라인 개인근무명세서 활성화, 다이아 조회 기본 번호 실험실 추가 및 웹 클라우드 `소속/성명/ID` 보안 강화
+- **[앱·웹·뷰] 개인정보 보안 한계 및 면책 고지 추가 (`AppInfoDialog.kt`, `CrewMate-Alpha/app-runtime.js`, `crewmate-view/src/ui/shell.js`)**:
+  - 비개발자(바이브 코딩) 개인 제작 특성상 발생할 수 있는 보안 대응 한계, 기기 내 암호화 및 단방향 해시 보호 현황, 사용자 자율 판단 및 예기치 못한 정보 유출/오류에 대한 면책 조항을 앱·웹·뷰의 이용 유의사항 모달 및 종합 안내서(`#security-disclaimer`)에 추가했습니다.
+- **[앱·웹·뷰] CrewMate 생태계 종합 안내서 신설 (`crewmate-view/guide/view-guide.html`, `CrewMate-Alpha/guide.html`, `SettingsScreen.kt`)**:
+  - 앱(Android `.apk` GitHub Releases 최신 직통 다운로드 및 6대 기능/실험실 사용법), 웹(CrewMate Alpha 접속·홈 바로가기·160자 수집기 원클릭 복사 및 사용법), 뷰(CrewMate View iOS/Android/PC 설치 및 7대 메뉴 사용법)를 한 페이지에서 안내하는 종합 안내서를 구축하고 앱·웹·뷰 모두에서 바로 열람할 수 있도록 연결했습니다.
+- **[앱] 오프라인 모드에서 개인근무명세서 메뉴 활성화 (`LabFeature.kt`, `PayStatementViewModel.kt`, `AppNavigation.kt`)**:
+  - `LabFeature.PAY_STATEMENT`의 `requiresOnline`을 `false`로 변경하여 오프라인 모드에서도 햄버거 메뉴의 `🧪 개인근무명세서 조회` 진입을 허용하고, 로컬 캐시(`PayStatementStorage`)에 저장된 명세서를 열람할 수 있도록 개선했습니다.
+- **[앱 + 웹] 승무다이아 조회 기본 번호 설정 실험실 기능 추가 (`LabFeature.kt`, `LabsManager.kt`, `LabsSettingsScreen.kt`, `DiaLookupScreen.kt`, `AppNavigation.kt`, `CrewMate-Alpha/app-runtime.js`)**:
+  - 실험실에 `승무다이아 조회 기본 번호 설정`(`DIA_LOOKUP_DEFAULT_NO` / `diaLookupDefaultNo`)을 추가하고, 실험실 화면에서 사용자가 기본 입력 숫자(예: `16`, `160` 등)를 직접 지정하면 승무 다이아 조회 진입 시 입력칸에 미리 채워지도록 구현했습니다.
+- **[웹] 설정 클라우드 보관 안내 문구 현행화 및 `소속/성명/ID` 클라우드·수집·백업 보안 강화 (`CrewMate-Alpha/app-runtime.js`, `xcrew_bridge_snippet.js`, `supabase_schema.sql`)**:
+  - 설정 상단 문구를 `'🛡️ 온디바이스 우선 보관 & E2EE 암호화 클라우드 보호'`로 현행화했습니다.
+  - 클라우드 사물함(`crewmate_user_lockers`)의 `user_id`를 평문 아이디 대신 `Salted SHA-256` 단방향 해시(`acct_v2_<hash>`, `data_v2_<hash>`)로 전환(구형 평문 행 자동 마이그레이션 및 파기 포함)하고, 계정 행 `payload`에서 평문 `emailId`·`fullEmail`을 제거했습니다.
+  - 클라우드 데이터 백업 시 `소속`(`affiliation`)과 `성명`(`userName`)을 별도 내부 암호화 봉투(`identityVault`)로 1차 암호화한 뒤 전체 데이터를 2차 `AES-256-GCM`으로 암호화(`AES-GCM-256-DOUBLE`)하고, 수집기(`xcrew_bridge_snippet.js`)에서 `epno` 등 민감 키를 즉시 스트립하며 로컬 JSON 백업에서 암호화 키(`localLockerKey`)와 계정 정보를 제외했습니다.
+
+---
+
 ## [v1.0.44] - 2026-11-16
 ### 🚀 승무 행로도·교대승무원 베타 승격 및 정렬, GitHub Release APK(`v1.0.44`) 배포
 - **실험실 베타 승격 및 정렬 반영 (`LabFeature.kt`, `CrewMate-Alpha/app-runtime.js`)**:

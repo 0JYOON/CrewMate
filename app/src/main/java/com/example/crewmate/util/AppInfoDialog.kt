@@ -1,6 +1,9 @@
 package com.example.crewmate.util
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,15 +22,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+const val CREWMATE_ECOSYSTEM_GUIDE_URL = "https://crewmate-alpha.pages.dev/guide.html"
 
 /**
  * 설정 화면 및 최초 로그인 시 공용으로 표시되는 '앱 정보 및 이용 유의사항' 모달 다이얼로그.
  */
 @Composable
 fun AppInfoAndTermsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -107,7 +114,7 @@ fun AppInfoAndTermsDialog(onDismiss: () -> Unit) {
                             )
                         }
                         Text(
-                            text = "본 앱에서 제공하는 모든 조회 결과 및 데이터는 참고용일 뿐입니다. 앱의  정보 오류로 인해 발생한 근태 문제나 불이익 등에 대해서도 제작자는 책임지지 않습니다.\n\n정확한 근무 내역은 반드시 공식 시스템을 통해 확인하시기 바랍니다.",
+                            text = "본 앱에서 제공하는 모든 조회 결과 및 데이터는 참고용일 뿐입니다. 앱의 정보 오류로 인해 발생한 근태 문제나 불이익 등에 대해서도 제작자는 책임지지 않습니다.\n\n정확한 근무 내역은 반드시 공식 시스템을 통해 확인하시기 바랍니다.",
                             fontSize = 12.sp,
                             color = warningTextColor,
                             lineHeight = 18.sp
@@ -115,7 +122,83 @@ fun AppInfoAndTermsDialog(onDismiss: () -> Unit) {
                     }
                 }
 
-                // 3. 문의사항 및 제작자 카드
+                // 3. 개인정보 보안 한계 및 면책 고지 카드 (비개발자 바이브 코딩 한계 명시)
+                val securityBg = if (isDark) Color(0xFF2A161E) else Color(0xFFFFF1F2)
+                val securityBorder = if (isDark) Color(0xFF6B2137) else Color(0xFFFECDD3)
+                val securityTitleColor = if (isDark) Color(0xFFFDA4AF) else Color(0xFF9F1239)
+                val securityTextColor = if (isDark) Color(0xFFFECDD3) else Color(0xFF881337)
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = securityBg,
+                    border = BorderStroke(1.dp, securityBorder)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("🔒", fontSize = 14.sp)
+                            Text(
+                                text = "[필독] 개인정보 보안 한계 및 면책 고지",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = securityTitleColor
+                            )
+                        }
+                        Text(
+                            text = "본 생태계(CrewMate 앱 · Alpha 웹 · View)는 보안 전문 기업이 아닌, 개발·보안 전문 지식이 없는 현직 승무원 개인이 AI 보조 도구(바이브 코딩)를 활용해 제작한 비공식 프로젝트입니다.\n\n사번·비밀번호·근무 정보에 대해 기기 내 암호화(AES-256) 및 단방향 해시 처리 등 최선을 다해 보호 조치를 적용하고 있으나, 최근 빈번한 사이버 침해 사고나 OS·브라우저·외부 인프라의 취약점 등 비전문가 개인이 통제·대응하기 어려운 보안적 한계가 존재할 수 있습니다.\n\n따라서 사용자는 이러한 보안적 한계를 충분히 인지하고 본인의 자율적 판단과 책임하에 이용해야 하며, 예기치 못한 정보 유출이나 데이터 손실·오류 등으로 인해 발생하는 직·간접적 손해에 대해 제작자는 법적·실무적 책임을 지지 않습니다.",
+                            fontSize = 12.sp,
+                            color = securityTextColor,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                // 4. CrewMate 생태계 종합 안내서 바로가기 카드
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(CREWMATE_ECOSYSTEM_GUIDE_URL))
+                                context.startActivity(intent)
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "📘 CrewMate 생태계 종합 안내서 열기",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "앱 · 웹(Alpha) · 뷰(View) 설치파일 다운로드 및 사용법 총정리",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = "↗",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // 5. 문의사항 및 제작자 카드
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

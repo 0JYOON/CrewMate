@@ -123,4 +123,19 @@ class LabsManagerTest {
         assertTrue(success.isSuccess)
         assertEquals(42, success.getOrNull())
     }
+
+    @Test
+    fun `pay statement supports offline mode and dia lookup default number persists and resets`() {
+        assertFalse(LabFeature.PAY_STATEMENT.requiresOnline)
+        assertEquals(LabFeature.DIA_LOOKUP_DEFAULT_NO, LabFeature.fromId("dia_lookup_default_no"))
+
+        val prefs = FakeSharedPreferences()
+        assertEquals("", LabsManager.getDiaLookupDefaultValue(prefs))
+
+        LabsManager.setDiaLookupDefaultValue(prefs, " 160-abc ")
+        assertEquals("160", LabsManager.getDiaLookupDefaultValue(prefs))
+
+        LabsManager.resetAll(prefs)
+        assertEquals("", LabsManager.getDiaLookupDefaultValue(prefs))
+    }
 }

@@ -724,8 +724,14 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     )
                 }
                 composable(Routes.DiaLookup) {
+                    val diaDefaultLabEnabled = com.example.crewmate.labs.rememberLabEnabled(
+                        com.example.crewmate.labs.LabFeature.DIA_LOOKUP_DEFAULT_NO
+                    )
+                    val diaDefaultLabValue = com.example.crewmate.labs.rememberDiaLookupDefaultValue()
+                    val effectiveDefaultPrefix = if (diaDefaultLabEnabled) diaDefaultLabValue else ""
                     com.example.crewmate.schedule.DiaLookupScreen(
                         diaDetailDataSource = sharedDiaDetailRepository,
+                        defaultDiaPrefix = effectiveDefaultPrefix,
                         censusManager = globalCensusManager
                     )
                 }
@@ -793,7 +799,7 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                     val payStorage = remember(appContext) {
                         com.example.crewmate.labs.paystatement.PayStatementStorage(appContext)
                     }
-                    val viewModel: com.example.crewmate.labs.paystatement.PayStatementViewModel =
+                        val viewModel: com.example.crewmate.labs.paystatement.PayStatementViewModel =
                         androidx.lifecycle.viewmodel.compose.viewModel(
                             factory = com.example.crewmate.labs.paystatement.PayStatementViewModelFactory(
                                 dataSource = dataSource,
@@ -801,6 +807,9 @@ fun AppNavigation(initialTargetRoute: String? = null) {
                                 isOfflineModeProvider = { isOfflineMode }
                             )
                         )
+                    LaunchedEffect(isOfflineMode) {
+                        viewModel.syncOfflineMode(isOfflineMode)
+                    }
                     com.example.crewmate.labs.LabSafeContainer(
                         feature = com.example.crewmate.labs.LabFeature.PAY_STATEMENT,
                         onDisable = { navController.popBackStack() }

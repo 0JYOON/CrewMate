@@ -17,9 +17,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -56,6 +58,12 @@ class DiaLookupViewModel(
 
     fun setDiaNo(newDia: String) {
         _diaNo.value = newDia
+    }
+
+    fun applyDefaultDiaPrefix(prefix: String) {
+        if (_uiState.value == null) {
+            _diaNo.value = prefix
+        }
     }
 
     fun search() {
@@ -98,6 +106,19 @@ fun DiaLookupScreen(
     val date by viewModel.date.collectAsState()
     val diaNo by viewModel.diaNo.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(defaultDiaPrefix) {
+        viewModel.applyDefaultDiaPrefix(defaultDiaPrefix)
+    }
+
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = diaNo, selection = TextRange(diaNo.length)))
+    }
+    LaunchedEffect(diaNo) {
+        if (textFieldValue.text != diaNo) {
+            textFieldValue = TextFieldValue(text = diaNo, selection = TextRange(diaNo.length))
+        }
+    }
     
     val context = LocalContext.current
     val censusState = censusManager?.progressState?.collectAsState()?.value
@@ -225,8 +246,11 @@ fun DiaLookupScreen(
                         )
                     }
                     OutlinedTextField(
-                        value = diaNo,
-                        onValueChange = viewModel::setDiaNo,
+                        value = textFieldValue,
+                        onValueChange = { nextField ->
+                            textFieldValue = nextField
+                            viewModel.setDiaNo(nextField.text)
+                        },
                         modifier = Modifier.weight(1f),
                         label = { Text("다이아 번호") },
                         placeholder = { Text("예: 16301") },

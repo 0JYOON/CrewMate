@@ -22,6 +22,7 @@ object LabsManager {
     const val PREFS_NAME = "crewmate_prefs"
     const val PREF_KEY_PREFIX = "lab_enabled_"
     const val PREF_KEY_LABS_UNLOCKED = "labs_menu_unlocked"
+    const val PREF_KEY_DIA_LOOKUP_DEFAULT_VALUE = "lab_dia_lookup_default_value"
 
     fun prefKey(feature: LabFeature): String = "$PREF_KEY_PREFIX${feature.id}"
 
@@ -66,6 +67,21 @@ object LabsManager {
     fun getAllStates(prefs: SharedPreferences): Map<LabFeature, Boolean> =
         LabFeature.entries.associateWith { isEnabled(prefs, it) }
 
+    fun getDiaLookupDefaultValue(context: Context): String =
+        getDiaLookupDefaultValue(getPrefs(context))
+
+    fun getDiaLookupDefaultValue(prefs: SharedPreferences): String =
+        prefs.getString(PREF_KEY_DIA_LOOKUP_DEFAULT_VALUE, "")?.trim().orEmpty()
+
+    fun setDiaLookupDefaultValue(context: Context, value: String) {
+        setDiaLookupDefaultValue(getPrefs(context), value)
+    }
+
+    fun setDiaLookupDefaultValue(prefs: SharedPreferences, value: String) {
+        val cleaned = value.trim().filter { it.isDigit() }
+        prefs.edit().putString(PREF_KEY_DIA_LOOKUP_DEFAULT_VALUE, cleaned).apply()
+    }
+
     fun resetAll(context: Context) {
         resetAll(getPrefs(context))
     }
@@ -75,6 +91,7 @@ object LabsManager {
         LabFeature.entries.forEach { feature ->
             editor.remove(prefKey(feature))
         }
+        editor.remove(PREF_KEY_DIA_LOOKUP_DEFAULT_VALUE)
         editor.apply()
     }
 
@@ -159,4 +176,28 @@ fun rememberLabsUnlocked(): Boolean {
         }
     }
     return unlocked
+}
+
+@Composable
+fun rememberDiaLookupDefaultValue(): String {
+    val context = LocalContext.current
+    val prefs = remember(context) {
+        context.applicationContext.getSharedPreferences(LabsManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var defaultVal by remember(prefs) {
+        mutableStateOf(LabsManager.getDiaLookupDefaultValue(prefs))
+    }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == null || key == LabsManager.PREF_KEY_DIA_LOOKUP_DEFAULT_VALUE) {
+                defaultVal = LabsManager.getDiaLookupDefaultValue(sharedPreferences)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+    return defaultVal
 }
