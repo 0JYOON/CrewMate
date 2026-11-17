@@ -4,6 +4,109 @@
 
 ---
 
+## [v0.3.4-view] - 2026-11-18
+### 🔧 캡쳐 기능 즉시 다운로드+미리보기 모달 보완, 야간 인디고 색상 조화 및 가이드 로고 적용
+- **캡쳐 기능 무동작 원인 해결 (`crewmate-view/src/core/capture.js`, `diaDetailView.js`, `monthlyScheduleView.js`)**:
+  - 기존 비동기 `canvas.toBlob` 콜백에서 `a.click()`을 호출해 브라우저·모바일 사용자 제스처 정책에 의해 다운로드가 차단되던 문제를 해결하기 위해, 동기식 `canvas.toDataURL('image/png')` + 즉시 다운로드로 전환했습니다.
+  - 더불어 Shadow Root 내부에 **이미지 미리보기 모달**(`openCapturePreviewModal`)을 함께 띄워, 자동 다운로드가 제한되는 모바일(iOS Safari/Android) 환경에서도 `[💾 이미지 다운로드]` 또는 길게 눌러 사진 앱 저장이 100% 가능하도록 개선했습니다.
+- **월별 승무근무표 야간근무 색상 조화 개선 (`styles.js`, `capture.js`)**:
+  - 주간근무(따뜻한 앰버 파스텔 `#fef3c7` / `#b45309`)와 시각적 톤을 맞추기 위해 야간근무(`.cm-dia-badge.night`)를 선명하고 조화로운 **쿨 인디고/남색 파스텔 계열(`#e0e7ff` / `#3730a3` / `#818cf8`)** 로 변경했습니다.
+- **설치 가이드 로고 교체 (`crewmate-view/guide/view-guide.html`, `build-view.js`)**:
+  - `view-guide.html` 상단 로고를 기존 Alpha 로고에서 `CrewMate View` 전용 로고(`view-logo.jpg`)로 교체 및 호스팅 동기화했습니다.
+
+## [v0.3.3-view] - 2026-11-18
+### 📷 다이아·행로도·월별 근무표 PNG 캡쳐 및 UI 문구·야간 네이비 색상 개선
+- **순수 Canvas 2D / SVG 오프라인 이미지 캡쳐 (`crewmate-view/src/core/capture.js`, `diaDetailView.js`, `monthlyScheduleView.js`)**:
+  - **다이아 조회 (`diaDetailView.js`)**: `"사업다이아 상세"` 및 `"승무 행로도 (참고용)"` 헤더 우측 끝에 `📷` 버튼을 추가해 날짜(`YYYY-MM-DD`)·다이아번호를 포함한 표/행로도를 고해상도 PNG 파일로 저장합니다.
+  - **월별 승무근무표 (`monthlyScheduleView.js`)**: 상단 바 우측에 `📷` 버튼을 추가해 현재 연·월 헤더와 달력/목록 전체를 PNG 이미지로 저장합니다.
+- **실무 용어 및 안내 문구 정비 (`diaDetailView.js`)**:
+  - 하단 전환 버튼 명칭을 `"📋 시정표 보기"` → `"📋 표로 보기"`로 변경했습니다.
+  - 행로도 보기 버튼 및 카드 헤더에 `"(참고용)"` 문구를 삽입했습니다.
+- **월별 승무근무표 야간근무 색상 개선 (`styles.js`, `capture.js`)**:
+  - 야간근무(`.cm-dia-badge.night`) 색상을 어두운 검정 계열에서 선명한 네이비 계열(`#1e3a8a`)로 변경했습니다.
+
+## [v0.3.2-view] - 2026-11-18
+### ☁️ 철도 노선·역명 별칭·기지 마스터 통합 동기화 (앱 · 웹 · 뷰 원클릭 배포)
+- **`dev-master.html` GitHub API 자동 커밋 연동 (`CrewMate-Alpha/dev-master.html`)**:
+  - `https://crewmate-alpha.pages.dev/dev-master`에서 특수 역명 별칭이나 기지/조차장을 추가·수정 후 GitHub PAT(브라우저 `localStorage` 보관)를 입력해 `[☁️ 지금 바로 GitHub에 배포하기]`를 누르면 `version`을 자동 증가시키고 `0JYOON/CrewMate-alpha`(`public/railwayMasterData.json`, `dist/railwayMasterData.json`) 및 `0JYOON/CrewMate`(`railwayMasterData.json`, `app/src/main/assets/railwayMasterData.json`)에 즉시 커밋·배포합니다.
+- **CrewMate Alpha / CrewMate View 원격 마스터 동적 동기화**:
+  - `CrewMate-Alpha/build.js` 및 `_headers`: `public/railwayMasterData.json`을 `dist/railwayMasterData.json`으로 복사하고 `Access-Control-Allow-Origin: *` 및 `Cache-Control: no-cache` 헤더를 적용했습니다.
+  - `CrewMate-Alpha/app-runtime.js`: 페이지 로드 시 `./railwayMasterData.json`을 조회해 별칭(`DEFAULT_STATION_ALIASES`), 기지(`DEPOT_PARENT_MAP`), 노선(`RAILWAY_LINES`)에 즉시 병합합니다.
+  - `crewmate-view/src/ui/views/routeDiagram.js`: 행로도 생성 시 `https://crewmate-alpha.pages.dev/railwayMasterData.json`을 조회·캐싱(`CREWMATE_VIEW_RAILWAY_MASTER_V1`)하여 앱·웹·뷰 3개 플랫폼 모두 동일한 최신 마스터 데이터로 동작합니다.
+
+## [v0.3.1-view] - 2026-11-18
+### 🔧 CrewMate View Phase 2 피드백 9건 반영 (`alcSpecDvCd` 색상, `rail.blue` K 보존, Shadow DOM 폰트 수정)
+- **상단 헤더 & 이용안내 문구 정리 (`shell.js`, `settingsView.js`)**:
+  - 최상단 헤더에서 소속·성명 표출을 제거하여 `[☰] [로고] [메뉴명]`만 남겼습니다.
+  - 이용안내 모달 제작/관리 문구를 **`안산승무사업소 윤영준`**으로 변경하고 `studio.yj.lab` 표기를 제거했습니다.
+- **월별 승무근무표 달력·색상·연도 개선 (`formatters.js`, `styles.js`, `monthlyScheduleView.js`)**:
+  - 달력 셀에 기존 `출`/`퇴` 시각 배지를 복구하고 그 밑에 대표열번 1·2를 표출했습니다.
+  - `alcSpecDvCd` 기반 다이아 색상 판정(`21` 보라색, `11` 다음날 `12`면 네이비/아니면 노랑, `12` 네이비, `02`/`01` 빨강)을 교정하여 모든 근무가 검정으로 나오던 버그를 해결했습니다.
+  - 연도 선택 범위를 `2000년 ~ 2040년`으로 확장했습니다(`monthlyScheduleView.js`, `workSpecView.js`, `nonOpView.js`).
+- **기타 메뉴 및 폰트 버그 수정**:
+  - `formatters.js`: `buildRailBlueUrl()`에서 앞 영문자(`K` 등)가 잘리던 버그를 수정했습니다.
+  - `crewStatusView.js`: 검색 팝업에서 `내 이름 입력` 버튼을 삭제했습니다.
+  - `nonOpView.js`: 기본 표출 모드를 `'요약'`(`SUMMARY`)으로 변경했습니다.
+  - `settingsStore.js`, `styles.js`, `shell.js`: 웹폰트 `<link>`를 Shadow Root 내부에 직접 주입하고 하위 전체 요소 폰트 상속을 강제하여 설정 내 글꼴 변경이 즉시 적용되도록 수정했습니다.
+
+---
+
+## [v0.3.0-view] - 2026-11-17
+### 🚀 CrewMate View Phase 2 UI/UX 전면 개편 및 본앱·Alpha 도메인 기능 통합
+- **메뉴 구성 및 상단/드로어/재접속/최초 안내모달 개편 (`shell.js`, `styles.js`, `settingsStore.js`, `domExtractor.js`)**:
+  - 최상단 좌측 `☰` 햄버거 슬라이드 드로어 메뉴로 6대 업무 메뉴, 테마/원본화면 전환, `⚙️ 설정` 진입을 일원화했습니다.
+  - 최상단 우측 `🔄 재접속` 버튼을 신설하여 백그라운드 세션 확인·화면 새로고침 및 만료 시 `loginView.do` 즉시 이동을 지원합니다.
+  - 최초 실행 시 3단 구성(`비공식 개발 안내`, `[필독] 데이터 참고 및 면책 공지`, `문의사항 및 제작자`) 이용안내 모달을 자동 표출하고 설정에서 재확인할 수 있도록 구현했습니다.
+- **6대 업무 메뉴 UI/UX 및 도메인 가공 고도화 (`views/*.js`, `formatters.js`)**:
+  - **월별 승무근무표 (`monthlyScheduleView.js`)**: `당월승무근무표`와 `개인승무근무표`를 통합하고, 연·월 선택기 + `오늘`/`달력`/`목록` 뱃지, 주간(노랑/주황)·야간(네이비/검정)·휴일(`휴` 빨간 뱃지) 구분, 달력형 대표열번 1·2 2줄 표출, 목록형 좌우 무스크롤 5열(`일자`, `다이아번호`, `대표열번`, `출근`, `퇴근`) 레이아웃을 적용했습니다.
+  - **다이아 조회 (`diaDetailView.js`, `routeDiagram.js`)**: 좌우 무스크롤 6열(`구분`, `열차번호`, `출발역`, `출발시각`, `도착역`, `도착시각`) 시정표, 열차번호 `rail.blue` 직통 연결, 1·2·3순위 구분 위계 개편, 다단 그리드 부분합, 운용요일 시행기간 줄바꿈 및 실험실 **승무 행로도 SVG 뷰**를 탑재했습니다.
+  - **소속승무원 현황 (`crewStatusView.js`)**: 검색 팝업 모달, 좌우 무스크롤 5열(`다이아`, `열차번호`, `출근`, `퇴근`, `승무원` 줄바꿈 허용), `출근`·`퇴근`·`승무원` 굵은 강조를 적용했습니다.
+  - **개인근무명세서 (`workSpecView.js`)**: `일자`(`16(월)`) + `다이아번호` 2개 열 좌측 고정(`sticky`), 상단 항목 헤더 고정(`sticky top`) 및 최하단 전 항목 **합계 행(`tfoot`)** 자동 계산을 구현했습니다.
+  - **비실동 현황 (`nonOpView.js`)**: 연도별 조회(`01-01 ~ 12-31`), 좌우 무스크롤 5열 `'표'` 뷰 및 항목별 접기/펼치기 아코디언 `'요약'` 뷰를 구현했습니다.
+  - **출무현황 (`attendanceView.js`)**: 하루 1~4건 특성에 맞춘 2단 모바일 카드형 레이아웃으로 전면 개편했습니다.
+- **맞춤 설정 화면 신설 (`settingsView.js`)**:
+  - 표 상하 여백(작게/보통/크게), 글자 크기(작게/보통/크게), 글꼴 4종(시스템/프리텐다드/SUIT/스포카 한 산스), 테마(시스템/라이트/다크), 실험실 승무 행로도 On/Off, 이용 안내사항 확인 및 최하단 버전(`v0.3.0`) 표기를 구현했습니다.
+
+---
+
+## [v0.2.1-view] - 2026-11-16
+### 🔒 CrewMate View 보안 점검 반영 (중복 API 호출 제거 · 루트 로그인 제외) 및 설치 가이드 개선
+- **중복 API 호출 제거 & 일일 캐시 적용 (`banGuard.js`, `rltmScheduleView.js`, `shell.js`)**:
+  - 로그인 직후 `당월승무근무표` 조회 시 응답의 `epno`를 `onEpnoResolved()`로 공유받아 `banGuard`가 동일 API를 중복 호출하지 않도록 통합했습니다.
+  - 정상 사용자의 경우 당일 1회 검증 이후 불필요한 원격 `blocked.json` 반복 조회를 생략합니다.
+- **루트 로그인 URL 제외 강화 (`build-view.js`)**:
+  - `@exclude https://xcrew.korail.com/`를 추가해 루트 경로로 로그인 페이지가 열릴 때도 확장앱이 실행되지 않도록 차단했습니다.
+- **설치 가이드 & 공유 이미지 개선 (`view-guide.html`, `crewmate-view-share-guide.png`)**:
+  - 아이폰 `Userscripts` 앱스토어 링크를 한국 스토어 URL(`.../kr/app/userscripts/id1463298887`)로 교정하고, 갤럭시에 `Firefox / Microsoft Edge` 병기 및 사내 보안 PC 유의사항을 추가했습니다.
+
+---
+
+## [v0.2.0-view] - 2026-11-16
+### 🛡️ CrewMate View 소스 비공개(로더 분리·고강도 난독화) 및 사번 해시 차단 가드 적용
+- **비공개 사번 해시 차단 가드 신설 (`crewmate-view/src/core/banGuard.js`, `shell.js`)**:
+  - 안드로이드 `EmployeeBanGuard.kt`와 동일한 `Salted SHA-256` 단방향 해시(`crewmate_salt_2026_xcrew_guard`) 및 원격 차단 목록(`config/blocked.json`) 조회 로직을 `CrewMate View`에 1:1 이식했습니다.
+  - Xcrew 로그인 후 `epno`를 해시 비교해 차단 대상이면 즉시 뷰 오버레이를 언마운트하고 `localStorage` 캐시에 기록합니다.
+- **초경량 로더 분리 & Terser/Obfuscator 난독화 및 `CrewMate-Alpha` 호스팅 자동 연동 (`crewmate-view/build-view.js`, `CrewMate-Alpha/build.js`, `_headers`, `AGENTS.md`)**:
+  - 사용자 기기(Tampermonkey / Userscripts)에는 본체 코드가 전혀 보이지 않는 10줄 로더(`dist/crewmate-view-loader.user.js`)만 배포하고, 실제 본체(`dist/crewmate-view.bundle.js`)는 `Terser` + `javascript-obfuscator`로 난독화해 호스팅하도록 개편했습니다.
+  - `build-view.js` 실행 시 `C:\Users\joon1\Documents\CrewMate-Alpha` 루트 및 `dist/`에 `crewmate-view.bundle.js`와 `crewmate-view-loader.user.js`가 자동 동기화되며, `_headers`에 `no-cache` 및 CORS 헤더를 적용하고 양쪽 `AGENTS.md`에 자동 업데이트 필수 수칙을 명문화했습니다.
+
+---
+
+## [v0.1.0-view] - 2026-11-16
+### ✨ CrewMate View (인페이지 실시간 모바일·PC 가독성 리스킨 뷰어) Phase 1 구축
+- **코어 API 및 원본/도메인 어댑터 신설 (`crewmate-view/src/core/`)**:
+  - `logoData.js` & `assets/logo.jpg`: 공식 `CrewMate View` 로고 이미지를 96×96 Base64 Data URI로 내장하여 외부 경로 의존성 없이 모든 브라우저 헤더/복귀 버튼에 즉시 표출.
+  - `xcrewApi.js`: `xcrew.korail.com` 7대 전체 메뉴의 동일 출처(Same-Origin) AJAX(`XMLHttpRequest`) 호출 및 `도중출무` 등록(`/extrCrewMg/regExtrGtwc.do`) 클라이언트 구현.
+  - `formatters.js`: Xcrew 원본 포맷 규칙(`formatMask`, `toHHMM`, `fnFrmtrDiaNo`, `fmtGtwcGubun`) 100% 재현 및 향후 `CrewMate` 본앱·`CrewMate Alpha`와 1:1 도메인 통합을 위한 `CrewMateDomainAdapter` 탑재.
+  - `domExtractor.js`: 로그인 후 좌측 프로필(`소속`, `성명`, `최근 접속 일시`) 및 `crwPlnDvCd` 직종 코드 자동 추출기 구현.
+- **Shadow DOM 인페이지 앱 셸 및 7대 메뉴 뷰어 구현 (`crewmate-view/src/ui/`)**:
+  - `shell.js` & `styles.js`: 로그인 화면(`/loginView.do`)은 원본 유지하고 로그인 후 모든 화면에서 Shadow DOM 격리 레이어, 모바일 뷰포트 자동 보정, 다크/라이트 모드, `[🖥️ 원본 화면 ↔ 🚄 CrewMate View]` 0.1초 즉시 전환 스위치 및 페이지 새로고침 없는 7대 메뉴 SPA 탭 네비게이션 구현.
+  - `views/*.js`: `당월승무근무표`, `승무다이아`(운용요일 15열+시정표 9열+부분합+타임라인 뷰), `승무근무표현황`, `개인근무명세서`(18열 고정표+모바일 카드), `비실동현황`, `개인승무근무표`, `출무현황`(`도중출무` 실행 지원) 7대 메뉴 전 항목 무가공 고가독성 렌더링 구현.
+- **Userscript 및 번들 빌더/단위 테스트 구축 (`crewmate-view/build-view.js`, `crewmate-view/test-view.js`)**:
+  - iPhone Safari(`Userscripts` 확장앱 1순위) 및 PC(`Tampermonkey`)용 `dist/crewmate-view.user.js`와 북마클릿/콘솔용 `dist/crewmate-view.bundle.js` 자동 패키징 및 단위 테스트 검증 완료.
+
+---
+
 ## [v1.0.44] - 2026-11-16
 ### 🚀 승무 행로도·교대승무원 베타 승격 및 정렬, GitHub Release APK(`v1.0.44`) 배포
 - **실험실 베타 승격 및 정렬 반영 (`LabFeature.kt`, `CrewMate-Alpha/app-runtime.js`)**:

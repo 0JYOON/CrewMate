@@ -43,3 +43,7 @@ AI 에이전트는 코드 수정 작업을 마치고 단위 테스트 및 빌드
    - 실험실 기능이 켜져 있더라도 기존 핵심 화면의 기본 뷰(예: 다이아 상세의 `'타임라인'` 기본 표출)를 침범하거나, 화면 진입 시 자동 온라인 새로고침을 강제하지 마십시오(`수동` 새로고침 기본값 유지).
 7. **배포 산출물 난독화·무결성 유지**:
    - 웹 배포 시 `node build.js`(`terser` + `javascript-obfuscator`)를 거친 `dist/` 산출물을 유지하고, Android Release 배포 시 R8 난독화(`isMinifyEnabled = true`) 및 `SecurityGuard.kt` 서명 무결성 검증을 유지하십시오.
+8. **`CrewMate View` 개발 시 자동 빌드·난독화 및 `CrewMate-Alpha` 호스팅 동기화 필수**:
+   - `crewmate-view/` 내 소스를 수정할 때마다 작업 완료 전 반드시 `node crewmate-view/build-view.js` 및 `node crewmate-view/test-view.js`를 실행하십시오.
+   - `build-view.js`는 `Terser` + `javascript-obfuscator` 난독화 본체(`crewmate-view.bundle.js`)와 10줄 로더(`crewmate-view-loader.user.js`)를 생성함과 동시에 `C:\Users\joon1\Documents\CrewMate-Alpha` 루트 및 `dist/` 폴더에 자동 동기화합니다.
+   - `CrewMate View`의 사번 차단 가드(`banGuard.js`)는 Android `EmployeeBanGuard.kt`와 동일한 `Salted SHA-256` 및 원격 `config/blocked.json` 체계를 항상 유지해야 합니다.

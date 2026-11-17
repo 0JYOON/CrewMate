@@ -1,0 +1,13 @@
+{
+  "name": "crewmate-view",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "build": "node build-view.js",
+    "test": "node test-view.js"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^5.10.1",
+    "terser": "^5.51.2"
+  }
+}
