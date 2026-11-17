@@ -11,3 +11,4 @@ local.properties
 *.keystore
 .env
 .env.*
+node_modules/

@@ -108,6 +108,7 @@ com.example.crewmate
 | `root` | [CHANGELOG.md](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/CHANGELOG.md) | **버전별 한 줄 패치노트**: 버전 업데이트 및 변경 내역 기록 문서 | **관리 문서** |
 | `root` | [RELEASE_GUIDE.md](file:///C:/Users/joon1/Documents/CrewMate/RELEASE_GUIDE.md) | **신규 버전 릴리즈 배포 가이드**: `0JYOON/CrewMate` GitHub Releases 등록, 서명 APK 빌드 및 인앱 자동 업데이트 배포 절차서 | **배포 가이드 (신규)** |
 | `root` | [AGENTS.md](file:///C:/Users/joon1/Documents/ChatGPT/CrewMate/AGENTS.md) | **AI 에이전트 작업 필수 수칙**: 코드 변경 후 빌드/테스트 및 문서 최적화 자동화 수칙 | **지침 문서** |
+| `crewmate-view/` | `assets/logo.jpg`, `src/core/*.js`, `src/ui/*.js`, `src/ui/views/*.js`, `build-view.js`, `dist/crewmate-view-loader.user.js` | **CrewMate View (Xcrew 인페이지 실시간 가독성 뷰어)**: `xcrew.korail.com` 로그인 후 7대 전체 메뉴를 모바일·PC 고가독성 화면으로 재표출 (초경량 로더 + 난독화 본체 + 사번 해시 차단 가드) | **활성 (신규)** |
 | `root` | `crewmate-release-key.jks` | **프로젝트 정식 서명 키스토어**: 유효기간 10,000일 release 서명 키 | **보안 키스토어** |
 | `network/` | `KorailClient.kt`, `KorailEndpoints.kt` | 초기 직접 연결 시도용 보존 파일 (현재 XHR 데이터 소스로 우회 사용 중) | *구버전 보존* |
 | `schedule/` | `TrainCrewLookupScreen.kt`, `TrainCrewSearch.kt` | 승무원 조회 V1 보존 파일 (현재 V2 전수조사 엔진 사용 중) | *구버전 보존* |
@@ -272,7 +273,15 @@ es/xml/network_security_config.xml의 <domain-config> 블록에 새 도메인을
   - `Type.kt` 및 `Theme.kt`에서 `AppFontOption`(`SYSTEM`, `PRETENDARD`, `SUIT`, `SPOQA`)과 `getCanvasTypeface()`를 관리합니다.
   - `EmployeeBanGuard.kt`의 `REMOTE_HASH_LIST_URL`(`config/blocked.json`) 및 `LOCAL_BANNED_HASHES`에 `hashEmployeeNumber(사번)`으로 생성한 64자리 SHA-256 해시를 등록하여 특정 사번을 비공개 차단합니다.
 
-### 17. 개인정보 보안·면책 고지, CrewMate 생태계 종합 안내서 및 승무다이아 조회 기본 번호 실험실 설정 위치
+### 17. CrewMate View (Xcrew 인페이지 실시간 가독성 뷰어) 유지보수 및 빌드 위치
+- **수정할 파일**: `crewmate-view/src/core/xcrewApi.js`, `crewmate-view/src/core/formatters.js`, `crewmate-view/src/core/settingsStore.js`, `crewmate-view/src/core/capture.js`, `crewmate-view/src/ui/shell.js`, `crewmate-view/src/ui/views/*.js`, `crewmate-view/build-view.js`
+- **수정 위치**:
+  - `xcrewApi.js`의 `XCREW_PATHS`에서 6대 통합 업무 메뉴(`월별 승무근무표`, `다이아 조회`, `소속승무원 현황`, `개인근무명세서`, `비실동 현황`, `출무현황`)의 `.do` API 경로를 관리합니다.
+  - `formatters.js`의 `XcrewRawFormatter`와 `CrewMateDomainAdapter`에서 주/야간 판정(`determineShiftType`), 휴일근무(`isHolidayWork`), 다이아 상세 3단계 위계(`classifySegmentPriority`), 레일블루 링크(`buildRailBlueUrl`), 명세서 합계 계산(`parseMinutes`/`formatTotalMinutes`)을 관리합니다.
+  - `settingsStore.js`에서 표 상하 여백(`rowPadding`), 글자 크기(`fontScale`), 테마(`themeMode`), 실험실 승무 행로도(`labRouteDiagram`) 및 버전 상수(`CREWMATE_VIEW_VERSION`)를 관리합니다.
+  - 소스 수정 후 `node crewmate-view/build-view.js` 및 `node crewmate-view/test-view.js`를 실행하면 `crewmate-view/dist/` 생성과 동시에 `C:\Users\joon1\Documents\CrewMate-Alpha`에 자동 동기화됩니다.
+
+### 18. 개인정보 보안·면책 고지, CrewMate 생태계 종합 안내서 및 승무다이아 조회 기본 번호 실험실 설정 위치
 - **수정할 파일**: [AppInfoDialog.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/util/AppInfoDialog.kt), [SettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/settings/SettingsScreen.kt), [LabFeature.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/labs/LabFeature.kt), [LabsManager.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/labs/LabsManager.kt), [LabsSettingsScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/labs/LabsSettingsScreen.kt), [DiaLookupScreen.kt](file:///C:/Users/joon1/Documents/CrewMate/app/src/main/java/com/example/crewmate/schedule/DiaLookupScreen.kt), `crewmate-view/guide/view-guide.html`
 - **수정 위치**:
   - `AppInfoDialog.kt`의 `CREWMATE_ECOSYSTEM_GUIDE_URL`(`https://crewmate-alpha.pages.dev/guide.html`)과 `[필독] 개인정보 보안 한계 및 면책 고지` 카드에서 보안 면책 문구 및 종합 안내서 연결 주소를 관리합니다.
