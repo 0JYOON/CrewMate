@@ -164,12 +164,16 @@ if (document.readyState === 'loading') {
   if (fs.existsSync(alphaRoot)) {
     const guideHtmlPath = path.join(ROOT, 'guide', 'view-guide.html');
     const viewLogoPath = path.join(ROOT, 'assets', 'logo.jpg');
+    const crewmateLogoPath = path.join(ROOT, 'assets', 'crewmate-logo.jpg');
     const syncFiles = [
       { src: bundleJsPath, name: 'crewmate-view.bundle.js' },
       { src: loaderJsPath, name: 'crewmate-view-loader.user.js' },
     ];
     if (fs.existsSync(viewLogoPath)) {
       syncFiles.push({ src: viewLogoPath, name: 'view-logo.jpg' });
+    }
+    if (fs.existsSync(crewmateLogoPath)) {
+      syncFiles.push({ src: crewmateLogoPath, name: 'crewmate-logo.jpg' });
     }
     if (fs.existsSync(guideHtmlPath)) {
       syncFiles.push({ src: guideHtmlPath, name: 'view-guide.html' });
