@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "message": "긴급공지 테스트중입니다",
+  "targets": {
+    "app": true,
+    "web": true,
+    "view": true
+  },
+  "actionLabel": "",
+  "actionUrl": "",
+  "updatedAt": "2026-11-26T13:04:20.936Z"
+}
