@@ -1,12 +1,12 @@
 {
   "enabled": false,
-  "message": "긴급공지 테스트중입니다",
+  "message": "",
   "targets": {
     "app": true,
     "web": true,
     "view": true
   },
-  "actionLabel": "핫픽스 버튼 테스트",
+  "actionLabel": "",
   "actionUrl": "",
-  "updatedAt": "2026-11-26T14:09:28.288Z"
+  "updatedAt": "2026-11-26T14:09:58.472Z"
 }
